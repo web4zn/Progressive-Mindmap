@@ -263,7 +263,7 @@ export default function ChatPage() {
   const renderContent = () => {
     if (!hasProviders) {
       return (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center h-full">
           <EmptyState
             icon={<MessageSquare className="w-16 h-16" />}
             title="欢迎使用 LLM Chat"
@@ -290,7 +290,7 @@ export default function ChatPage() {
 
     if (!activeConversation) {
       return (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center h-full">
           <EmptyState
             icon={<MessageSquare className="w-12 h-12" />}
             title="开始新对话"
@@ -306,7 +306,7 @@ export default function ChatPage() {
     }
 
     return (
-      <div className="flex flex-col min-h-0 min-w-0 w-full max-w-lg mx-auto">
+      <div className="flex flex-col min-h-0 min-w-0 max-w-lg">
           <div className="flex-1 min-h-0 relative">
             <MessageList
               messages={activeConversation.messages}
