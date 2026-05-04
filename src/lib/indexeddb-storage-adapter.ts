@@ -1,21 +1,4 @@
-import { openDB, type IDBPDatabase } from 'idb'
-
-let dbPromise: Promise<IDBPDatabase> | null = null
-
-function getDb(): Promise<IDBPDatabase> {
-  if (!dbPromise) {
-    dbPromise = openDB('progressive-mindmap', 5, {
-      upgrade(db, oldVersion) {
-        if (oldVersion < 5) {
-          if (!db.objectStoreNames.contains('zustand-persist')) {
-            db.createObjectStore('zustand-persist', { keyPath: 'name' })
-          }
-        }
-      },
-    })
-  }
-  return dbPromise
-}
+import { getDb } from './db'
 
 export function createIndexedDBStorage() {
   return {
