@@ -326,21 +326,13 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {!mindmapCollapsed ? (
+        {!mindmapCollapsed && (
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
             <div className="flex-1 h-full hidden md:block min-w-[300px]">
               <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
             </div>
           </>
-        ) : (
-          <button
-            onClick={() => setMindmapCollapsed(false)}
-            className="hidden md:flex items-center justify-center w-8 h-8 shrink-0 self-start mt-3 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="打开脑图"
-          >
-            <Network className="w-4 h-4" />
-          </button>
         )}
       </div>
     )
@@ -371,6 +363,9 @@ export default function ChatPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={() => setMindmapCollapsed(c => !c)} title={mindmapCollapsed ? '打开脑图' : '关闭脑图'}>
+                <Network className={`w-4 h-4 ${mindmapCollapsed ? 'text-muted-foreground' : ''}`} />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="会话设置">
                 <Settings className="w-4 h-4" />
               </Button>
