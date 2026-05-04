@@ -393,9 +393,7 @@ export default function ChatPage() {
           </div>
 
           <div className="flex-1 flex min-h-0">
-            <div className="flex-1 min-w-0 min-h-0">
               {renderContent()}
-            </div>
           </div>
         </div>
       </div>
