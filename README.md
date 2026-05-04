@@ -29,7 +29,6 @@ Progressive Mindmap is a **local-first web application** that transforms your LL
 ### 🤖 AI-Native Mindmap Generation
 - **Conversation to Knowledge Graph** — LLM analyzes your chats and produces structured trees
 - **Incremental Operations** — AI outputs surgical edits (`add_child`, `update`, `merge`, `delete_leaf`) instead of full regeneration
-- **Streaming Preview** — watch the mindmap grow in real-time as the model generates
 - **Editable Nodes** — double-click to edit; AI respects your edits (protected by `editedByUser` flag)
 
 ### 📚 Corpus & Provenance
@@ -135,11 +134,11 @@ npx vitest --watch    # Watch mode
 
 - [x] LLM chat with multi-provider & streaming
 - [x] AI mindmap generation (full rebuild)
-- [x] Streaming mindmap preview
 - [x] Incremental update operations
 - [x] Corpus curation & source tracking
 - [x] React Flow canvas with dagre layout
 - [x] IndexedDB persistence
+- [ ] Real-time streaming mindmap preview during generation
 - [ ] PNG / SVG / Markdown export
 - [ ] Keyboard shortcuts
 - [ ] Undo / Redo
