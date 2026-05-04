@@ -57,7 +57,7 @@ export function applyLayout(
   edges: MindMapFlowEdge[],
 ): { nodes: MindMapFlowNode[]; edges: MindMapFlowEdge[] } {
   const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 80, marginx: 40, marginy: 40 })
+  g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120, edgesep: 20, marginx: 40, marginy: 40 })
 
   for (const n of nodes) {
     g.setNode(n.id, { width: nodeWidth, height: nodeHeight })
