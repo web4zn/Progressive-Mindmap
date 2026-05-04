@@ -277,6 +277,7 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               <span className="hidden sm:inline">更新图谱</span>
             </Button>
             <select
+              aria-label="最大深度"
               className="h-7 rounded border border-sidebar-border/40 bg-transparent text-xs px-1.5 text-sidebar-foreground/70"
               value={activeMindmap?.maxDepth ?? 3}
               onChange={e => updateMindmapSettings(activeMindmapId!, { maxDepth: Number(e.target.value) })}
@@ -599,8 +600,9 @@ function MindmapSettingsDialog({
           )}
         </div>
         <div className="border-t pt-4">
-          <label className="text-sm font-medium">最大深度</label>
+          <label className="text-sm font-medium" htmlFor="settings-max-depth">最大深度</label>
           <select
+            id="settings-max-depth"
             value={maxDepth}
             onChange={(e) => setMaxDepth(Number(e.target.value))}
             className="mt-1 w-full h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
