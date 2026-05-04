@@ -27,6 +27,7 @@ interface MindMapState {
   addMonitoredConversation: (mindmapId: string, conversationId: string) => void
   removeMonitoredConversation: (mindmapId: string, conversationId: string) => void
   addBatchCorpusEntries: (mindmapId: string, entries: CorpusEntry[]) => void
+  setCollapsedNodeIds: (id: string, nodeIds: string[]) => void
 }
 
 function findAndUpdateNode(nodes: MindMapNode[], nodeId: string, fn: (node: MindMapNode) => MindMapNode | null): MindMapNode[] {
@@ -389,6 +390,16 @@ export const useMindmapStore = create<MindMapState>()(
           mindmaps: state.mindmaps.map((m) =>
             m.id === mindmapId
               ? { ...m, corpus: [...(m.corpus ?? []), ...entries], updatedAt: Date.now() }
+              : m
+          ),
+        }))
+      },
+
+      setCollapsedNodeIds: (id, nodeIds) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) =>
+            m.id === id
+              ? { ...m, collapsedNodeIds: nodeIds, updatedAt: Date.now() }
               : m
           ),
         }))

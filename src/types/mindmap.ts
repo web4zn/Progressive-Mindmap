@@ -49,6 +49,7 @@ export interface MindMap {
   tree: MindMapNode[]
   corpus: CorpusEntry[]
   monitoredConversationIds: string[]
+  collapsedNodeIds?: string[]
   maxDepth?: number
   generatorProviderId?: string
   generatorModelId?: string

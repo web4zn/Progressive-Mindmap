@@ -1,10 +1,18 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { MindMapNode } from '@/types/mindmap'
 import { getLayoutedFlow } from '@/lib/mindmap-layout'
+import { useMindmapStore } from '@/stores/mindmapStore'
 import type { MindMapFlowNode, MindMapFlowEdge } from './types'
 
 export function useMindmapLayout(tree: MindMapNode[]) {
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
+  const collapsedNodeIds = useMindmapStore((s) => {
+    if (!s.activeMindmapId) return []
+    return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.collapsedNodeIds ?? []
+  })
+  const setCollapsedNodeIds = useMindmapStore((s) => s.setCollapsedNodeIds)
+
+  const collapsedIds = useMemo(() => new Set(collapsedNodeIds), [collapsedNodeIds])
 
   const { nodes, edges } = useMemo(
     () => getLayoutedFlow(tree, collapsedIds),
@@ -12,20 +20,20 @@ export function useMindmapLayout(tree: MindMapNode[]) {
   )
 
   const toggleCollapse = useCallback((id: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }, [])
+    if (!activeMindmapId) return
+    const next = new Set(collapsedNodeIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setCollapsedNodeIds(activeMindmapId, [...next])
+  }, [collapsedNodeIds, activeMindmapId, setCollapsedNodeIds])
 
   const resetCollapse = useCallback(() => {
-    setCollapsedIds(new Set())
-  }, [])
+    if (!activeMindmapId) return
+    setCollapsedNodeIds(activeMindmapId, [])
+  }, [activeMindmapId, setCollapsedNodeIds])
 
   return {
     nodes: nodes as MindMapFlowNode[],
