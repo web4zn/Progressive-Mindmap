@@ -263,8 +263,9 @@ export default function ChatPage() {
   const renderContent = () => {
     if (!hasProviders) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <EmptyState
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 flex items-center justify-center min-w-0">
+            <EmptyState
             icon={<MessageSquare className="w-16 h-16" />}
             title="欢迎使用 LLM Chat"
             description="请配置模型提供商开始 AI 对话"
@@ -284,13 +285,23 @@ export default function ChatPage() {
               </div>
             }
           />
+          </div>
+          {!mindmapCollapsed && (
+            <>
+              <div className="w-px bg-border shrink-0 hidden md:block" />
+              <div className="flex-1 h-full hidden md:block min-w-[300px]">
+                <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+              </div>
+            </>
+          )}
         </div>
       )
     }
 
     if (!activeConversation) {
       return (
-        <div className="flex items-center justify-center h-full">
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 flex items-center justify-center min-w-0">
           <EmptyState
             icon={<MessageSquare className="w-12 h-12" />}
             title="开始新对话"
@@ -301,12 +312,22 @@ export default function ChatPage() {
               </Button>
             }
           />
+          </div>
+          {!mindmapCollapsed && (
+            <>
+              <div className="w-px bg-border shrink-0 hidden md:block" />
+              <div className="flex-1 h-full hidden md:block min-w-[300px]">
+                <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+              </div>
+            </>
+          )}
         </div>
       )
     }
 
     return (
-      <div className="flex flex-col min-h-0 min-w-0 max-w-lg">
+      <div className="flex-1 flex min-h-0">
+        <div className="flex flex-col min-h-0 min-w-0 max-w-lg">
           <div className="flex-1 min-h-0 relative">
             <MessageList
               messages={activeConversation.messages}
@@ -324,6 +345,15 @@ export default function ChatPage() {
             />
           </div>
 
+        </div>
+        {!mindmapCollapsed && (
+          <>
+            <div className="w-px bg-border shrink-0 hidden md:block" />
+            <div className="flex-1 h-full hidden md:block min-w-[300px]">
+              <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -362,18 +392,10 @@ export default function ChatPage() {
             </div>
           </div>
 
-          <div className="flex-1 flex min-w-0 min-h-0">
+          <div className="flex-1 flex min-h-0">
             <div className="flex-1 min-w-0 min-h-0">
               {renderContent()}
             </div>
-            {!mindmapCollapsed && (
-              <>
-                <div className="w-px bg-border shrink-0 hidden md:block" />
-                <div className="flex-1 h-full hidden md:block min-w-[300px]">
-                  <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
-                </div>
-              </>
-            )}
           </div>
         </div>
       </div>
