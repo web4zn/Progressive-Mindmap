@@ -327,7 +327,7 @@ export default function ChatPage() {
 
     return (
       <div className="flex-1 flex min-h-0">
-        <div className="flex flex-col min-h-0 min-w-0 max-w-lg">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 max-w-lg">
           <div className="flex-1 min-h-0 relative">
             <MessageList
               messages={activeConversation.messages}
