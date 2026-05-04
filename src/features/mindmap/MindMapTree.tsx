@@ -35,7 +35,7 @@ interface MindMapTreeProps {
 
 export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming, error, onRetry }: MindMapTreeProps) {
   const { updateNode, addChildNode, deleteNode, moveNode, reparentNode } = useMindmapStore()
-  const { nodes: layoutedNodes, edges: layoutedEdges, toggleCollapse, resetCollapse } = useMindmapLayout(tree)
+  const { nodes: layoutedNodes, edges: layoutedEdges, toggleCollapse } = useMindmapLayout(tree)
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
@@ -60,10 +60,6 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
       delete (window as unknown as Record<string, unknown>).__mindmapToggle
     }
   }, [toggleCollapse])
-
-  useEffect(() => {
-    resetCollapse()
-  }, [mindmapId, resetCollapse])
 
   const checkCanMoveUp = (nodeId: string): boolean => {
     const parent = findParentInTree(treeRef.current, nodeId)

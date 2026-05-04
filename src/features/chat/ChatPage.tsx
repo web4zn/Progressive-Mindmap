@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import { MessageSquare, Settings, PanelLeft, X } from 'lucide-react'
+import { MessageSquare, Settings, PanelLeft, X, Network, Archive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -319,18 +319,26 @@ export default function ChatPage() {
               onSend={handleSend}
               onStop={handleStopGeneration}
               isGenerating={isGenerating}
-              disabled={!hasProviders || !activeConversation || !hasValidModel}
+              disabled={!hasProviders || !activeConversation || !hasValidModel || activeConversation.archived === true}
             />
           </div>
         </div>
 
-        {!mindmapCollapsed && (
+        {!mindmapCollapsed ? (
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
             <div className="flex-1 h-full hidden md:block min-w-[300px]">
               <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
             </div>
           </>
+        ) : (
+          <button
+            onClick={() => setMindmapCollapsed(false)}
+            className="hidden md:flex items-center justify-center w-8 h-8 shrink-0 self-start mt-3 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="打开脑图"
+          >
+            <Network className="w-4 h-4" />
+          </button>
         )}
       </div>
     )
@@ -350,6 +358,12 @@ export default function ChatPage() {
                 {sidebarOpen ? <X className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
               </Button>
               <ModelSelector />
+              {activeConversation?.archived && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <Archive className="w-3 h-3" />
+                  已归档
+                </Badge>
+              )}
               {!hasValidModel && (
                 <span className="text-sm text-destructive">当前模型不可用</span>
               )}
