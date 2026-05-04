@@ -4,6 +4,9 @@
     <strong>AI-powered knowledge extraction from conversations — visualized as mindmaps</strong>
   </p>
   <p align="center">
+    <a href="README.zh-CN.md">中文文档</a>
+  </p>
+  <p align="center">
     <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
     <img src="https://img.shields.io/badge/TypeScript-5.6-blue" alt="TypeScript">
     <img src="https://img.shields.io/badge/React-18-61DAFB" alt="React">
@@ -14,6 +17,10 @@
 ---
 
 Progressive Mindmap is a **local-first web application** that transforms your LLM conversations into structured, editable mindmaps. Unlike traditional mindmap tools where you draw nodes manually, Progressive Mindmap **extracts knowledge automatically**: chat with any OpenAI-compatible LLM, select the insights you want to keep, and let the AI build a mindmap — with **incremental updates** that preserve your edits across regenerations.
+
+<p align="center">
+  <img src="docs/images/screenshot-chat.png" alt="Chat Interface" width="800">
+</p>
 
 ## ✨ Features
 
@@ -35,10 +42,18 @@ Progressive Mindmap is a **local-first web application** that transforms your LL
 - **Collapse/Expand** — toggle branches for focused viewing
 - **Full-Screen Mode** — immersive mindmap exploration
 
+<p align="center">
+  <img src="docs/images/screenshot-mindmap.png" alt="Mindmap Canvas" width="800">
+</p>
+
 ### ⚙️ Customizable
 - **Configurable Depth** — 3/4/5 levels or "Auto" (AI decides)
 - **Multi-Provider** — works with OpenAI, DeepSeek, Ollama, SiliconFlow, and any OpenAI-compatible API
 - **Per-Mindmap Model** — different mindmaps can use different models for generation
+
+<p align="center">
+  <img src="docs/images/screenshot-mindmap-setting.png" alt="Mindmap Settings" width="400">
+</p>
 
 ### 💾 Local-First & Private
 - **IndexedDB Storage** — all data stays in your browser
@@ -147,14 +162,28 @@ MIT — see [LICENSE](LICENSE) for details.
 
 与传统手动绘制脑图的工具不同，渐进式脑图 **从对话中自动提取知识**：与任意兼容 OpenAI 接口的大模型对话，选择想要保留的见解，AI 会生成结构化的知识图谱——并支持 **增量更新**，你的手动编辑在多次生成之间不会被覆盖。
 
+<p align="center">
+  <img src="docs/images/screenshot-chat.png" alt="聊天界面" width="800">
+</p>
+
 ### 核心特色
 - **AI 原生生成** — 对话 → 知识图谱，全自动提取
 - **增量操作** — LLM 输出精准编辑指令而非整棵树重建
 - **来源追溯** — 每个节点标注来自哪条对话消息
 - **语料库系统** — 消息级/文本片段级内容筛选
 - **React Flow 画布** — 拖拽重排、右键菜单、折叠展开
+
+<p align="center">
+  <img src="docs/images/screenshot-mindmap.png" alt="脑图画布" width="800">
+</p>
+
+- **可配置深度** — 3/4/5 层或自动
 - **本地存储** — IndexedDB，数据完全在浏览器端
 - **多厂商支持** — OpenAI / DeepSeek / Ollama / SiliconFlow 等
+
+<p align="center">
+  <img src="docs/images/screenshot-mindmap-setting.png" alt="脑图设置" width="400">
+</p>
 
 ### 技术栈
 React 18 · TypeScript 5.6 · Vite 6 · Tailwind v4 · shadcn/ui · Zustand 5 · @xyflow/react 12 · dagre · IndexedDB · OpenAI SDK
