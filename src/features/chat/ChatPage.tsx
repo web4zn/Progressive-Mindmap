@@ -306,8 +306,7 @@ export default function ChatPage() {
     }
 
     return (
-      <div className="flex-1 flex min-w-0 min-h-0">
-        <div className="flex flex-col min-h-0 min-w-0 w-full max-w-lg">
+      <div className="flex flex-col min-h-0 min-w-0 w-full max-w-lg mx-auto">
           <div className="flex-1 min-h-0 relative">
             <MessageList
               messages={activeConversation.messages}
@@ -324,7 +323,6 @@ export default function ChatPage() {
               disabled={!hasProviders || !activeConversation || !hasValidModel || activeConversation.archived === true}
             />
           </div>
-        </div>
 
       </div>
     )
