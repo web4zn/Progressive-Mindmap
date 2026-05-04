@@ -16,6 +16,8 @@
 
 ---
 
+> **Why I built this**: After countless conversations with LLMs, I found myself drowning in insights — brilliant answers buried in long chat histories, impossible to review or recall. I needed a way to automatically distill conversations into structured knowledge I could revisit at a glance. That's why Progressive Mindmap exists: it turns scattered Q&A into a living mindmap that grows with every conversation.
+
 Progressive Mindmap is a **local-first web application** that transforms your LLM conversations into structured, editable mindmaps. Unlike traditional mindmap tools where you draw nodes manually, Progressive Mindmap **extracts knowledge automatically**: chat with any OpenAI-compatible LLM, select the insights you want to keep, and let the AI build a mindmap — with **incremental updates** that preserve your edits across regenerations.
 
 <p align="center">
@@ -157,6 +159,8 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 ## 中文简介
+
+> **为什么做这个项目**：在与大模型进行了无数次对话后，我发现了一个痛点——那些精彩的回答被埋在冗长的聊天记录里，难以回溯、无法沉淀。我需要一种方式，能自动将碎片化的对话提炼成结构化的知识，随时翻阅、强化记忆。这就是渐进式脑图的由来：让散落的问答，生长为一棵会呼吸的知识树。
 
 **渐进式脑图** 是一款本地优先的 Web 应用，能将你与 LLM 的对话自动转化为结构化的思维导图。
 
