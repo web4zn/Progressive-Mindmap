@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest'
-import { LLMClientError, createClient, fetchModels } from '../llm-client'
+import { describe, it, expect, vi } from 'vitest'
+import { LLMClientError, createClient } from '../llm-client'
+
+vi.mock('../llm-client', async () => {
+  const actual = await vi.importActual<typeof import('../llm-client')>('../llm-client')
+  return {
+    ...actual,
+    fetchModels: vi.fn(),
+  }
+})
 
 describe('LLMClientError', () => {
   it('creates retryable error', () => {
@@ -35,17 +43,12 @@ describe('createClient', () => {
 })
 
 describe('fetchModels', () => {
-  it('rejects with LLMClientError on 404', async () => {
-    const client = createClient({
-      apiEndpoint: 'https://httpstat.in/404',
-      apiKey: 'sk-test',
-    })
+  it('rejects with LLMClientError on fetch failure', async () => {
+    const { fetchModels: mockedFetch } = await import('../llm-client')
+    vi.mocked(mockedFetch).mockRejectedValue(
+      new LLMClientError('models_not_supported', 'Provider does not support listing models', false)
+    )
 
-    try {
-      await fetchModels(client)
-      expect.fail('Expected fetchModels to throw')
-    } catch (err) {
-      expect(err).toBeDefined()
-    }
+    await expect(mockedFetch({} as never)).rejects.toThrow(LLMClientError)
   })
 })

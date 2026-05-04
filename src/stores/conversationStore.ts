@@ -10,6 +10,8 @@ interface ConversationState {
   addConversation: (data: { providerId: string; modelId: string; systemPrompt?: string }) => Conversation
   updateConversation: (id: string, data: Partial<Pick<Conversation, 'title' | 'providerId' | 'modelId' | 'systemPrompt'>>) => void
   removeConversation: (id: string) => void
+  archiveConversation: (id: string) => void
+  unarchiveConversation: (id: string) => void
   setActiveConversationId: (id: string | null) => void
   getActiveConversation: () => Conversation | null
   addMessageToConversation: (conversationId: string, message: Message) => void
@@ -65,6 +67,24 @@ export const useConversationStore = create<ConversationState>()(
                 : state.activeConversationId,
           }
         })
+      },
+
+      archiveConversation: (id) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, archived: true, updatedAt: Date.now() } : c
+          ),
+          activeConversationId:
+            state.activeConversationId === id ? null : state.activeConversationId,
+        }))
+      },
+
+      unarchiveConversation: (id) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, archived: false, updatedAt: Date.now() } : c
+          ),
+        }))
       },
 
       setActiveConversationId: (id) => set({ activeConversationId: id }),

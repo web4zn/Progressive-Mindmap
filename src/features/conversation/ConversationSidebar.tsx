@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Plus, Search, Download, Pencil, Trash2, Settings, Network, MapPin } from 'lucide-react'
+import { Plus, Search, Download, Pencil, Trash2, Settings, Network, MapPin, Archive, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -23,12 +23,13 @@ interface ConversationSidebarProps {
 }
 
 export default function ConversationSidebar({ onOpenSettings, onNewConversation }: ConversationSidebarProps) {
-  const { conversations, activeConversationId, removeConversation, setActiveConversationId, updateConversation } = useConversationStore()
+  const { conversations, activeConversationId, removeConversation, archiveConversation, unarchiveConversation, setActiveConversationId, updateConversation } = useConversationStore()
   const { mindmaps, activeMindmapId, addMindmap, removeMindmap, setActiveMindmapId, updateMindmapTitle } = useMindmapStore()
   const [search, setSearch] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const [mindmapDeleteId, setMindmapDeleteId] = useState<string | null>(null)
   const [mindmapEditingId, setMindmapEditingId] = useState<string | null>(null)
   const [mindmapEditTitle, setMindmapEditTitle] = useState('')
@@ -39,9 +40,20 @@ export default function ConversationSidebar({ onOpenSettings, onNewConversation 
     ? conversations.filter(c => c.title.toLowerCase().includes(search.toLowerCase()))
     : conversations
 
+  const activeConversations = filtered.filter(c => c.archived !== true)
+  const archivedConversations = filtered.filter(c => c.archived === true)
+
   const handleDelete = (id: string) => {
     removeConversation(id)
     setDeleteConfirm(null)
+  }
+
+  const handleArchive = (id: string) => {
+    archiveConversation(id)
+  }
+
+  const handleUnarchive = (id: string) => {
+    unarchiveConversation(id)
   }
 
   const handleStartEdit = (id: string, currentTitle: string) => {
@@ -84,6 +96,8 @@ export default function ConversationSidebar({ onOpenSettings, onNewConversation 
     return `${days}天前`
   }
 
+  const archivedExpanded = showArchived || !!search
+
   return (
     <div className="h-full flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       <div className="p-3 space-y-2">
@@ -106,15 +120,16 @@ export default function ConversationSidebar({ onOpenSettings, onNewConversation 
 
       <ScrollArea className="flex-1 thin-scrollbar">
         <div className="p-2 space-y-0.5">
+          {/* Active conversations */}
           <div className="px-1 py-1 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
             对话
           </div>
-          {filtered.length === 0 ? (
+          {activeConversations.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               {search ? '未找到匹配的对话' : '暂无对话，点击上方新建'}
             </p>
           ) : (
-            filtered.map(c => (
+            activeConversations.map(c => (
               <div
                 key={c.id}
                 className={`group flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm transition-colors ${
@@ -162,16 +177,94 @@ export default function ConversationSidebar({ onOpenSettings, onNewConversation 
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      className="p-1 rounded text-sidebar-foreground/60 hover:text-destructive hover:bg-sidebar-accent transition-colors"
-                      onClick={e => { e.stopPropagation(); setDeleteConfirm(c.id) }}
-                      title="删除"
+                      className="p-1 rounded text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                      onClick={e => { e.stopPropagation(); handleArchive(c.id) }}
+                      title="归档"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Archive className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
               </div>
             ))
+          )}
+
+          {/* Archived conversations */}
+          {archivedConversations.length > 0 && (
+            <>
+              <div className="px-1 pt-2 mt-2 border-t border-sidebar-border">
+                <button
+                  className="flex items-center gap-1 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider w-full px-1 py-1 hover:text-sidebar-foreground transition-colors"
+                  onClick={() => setShowArchived(!showArchived)}
+                >
+                  {archivedExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  已归档 ({archivedConversations.length})
+                </button>
+              </div>
+              {archivedExpanded && archivedConversations.map(c => (
+                <div
+                  key={c.id}
+                  className={`group flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-xs transition-colors opacity-60 ${
+                    c.id === activeConversationId
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'hover:bg-sidebar-accent/50'
+                  }`}
+                  onClick={() => setActiveConversationId(c.id)}
+                >
+                  {editingId === c.id ? (
+                    <Input
+                      className="h-7 text-sm"
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onBlur={handleFinishEdit}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleFinishEdit()
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      autoFocus
+                      onClick={e => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-medium">{c.title}</div>
+                      <div className="text-[10px] text-sidebar-foreground/60">{relativeTime(c.updatedAt)}</div>
+                    </div>
+                  )}
+                  {editingId !== c.id && (
+                    <div className="hidden group-hover:flex items-center gap-0.5 ml-2">
+                      <button
+                        className="p-1 rounded text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                        onClick={e => { e.stopPropagation(); const md = exportConversationAsMarkdown(c); downloadMarkdown(md, c.title) }}
+                        title="导出"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="p-1 rounded text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                        onClick={e => { e.stopPropagation(); handleStartEdit(c.id, c.title) }}
+                        title="重命名"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="p-1 rounded text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                        onClick={e => { e.stopPropagation(); handleUnarchive(c.id) }}
+                        title="取消归档"
+                      >
+                        <Undo2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="p-1 rounded text-sidebar-foreground/60 hover:text-destructive hover:bg-sidebar-accent transition-colors"
+                        onClick={e => { e.stopPropagation(); setDeleteConfirm(c.id) }}
+                        title="删除"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
           )}
 
           {!search && (

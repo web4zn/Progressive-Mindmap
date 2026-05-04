@@ -7,6 +7,7 @@ export interface Conversation {
   modelId: string
   systemPrompt: string
   messages: Message[]
+  archived?: boolean
   createdAt: number
   updatedAt: number
 }

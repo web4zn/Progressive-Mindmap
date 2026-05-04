@@ -4,11 +4,13 @@ import { getLayoutedFlow } from '@/lib/mindmap-layout'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import type { MindMapFlowNode, MindMapFlowEdge } from './types'
 
+const EMPTY_ARRAY: string[] = []
+
 export function useMindmapLayout(tree: MindMapNode[]) {
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const collapsedNodeIds = useMindmapStore((s) => {
-    if (!s.activeMindmapId) return []
-    return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.collapsedNodeIds ?? []
+    if (!s.activeMindmapId) return EMPTY_ARRAY
+    return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.collapsedNodeIds ?? EMPTY_ARRAY
   })
   const setCollapsedNodeIds = useMindmapStore((s) => s.setCollapsedNodeIds)
 
