@@ -112,6 +112,8 @@ export default function ChatPage() {
 
       updateMessageInConversation(conversationId, assistantMsg.id, { content: fullContent, status: 'complete' })
 
+      if (controller.signal.aborted) return
+
       const allMindmaps = useMindmapStore.getState().mindmaps
       for (const mm of allMindmaps) {
         if (!mm.monitoredConversationIds?.includes(conversationId)) continue
