@@ -7,7 +7,7 @@
 ## 前置准备
 
 ```bash
-cd /Users/gin/opencode_project/progressive_mindmap
+cd progressive-mindmap
 npm run dev
 # 打开 http://localhost:5173
 ```
