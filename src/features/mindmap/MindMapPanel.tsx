@@ -12,6 +12,8 @@ import {
   X,
   Maximize2,
   Minimize2,
+  FileImage,
+  FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,6 +66,14 @@ function mergeEditedNodes(newTree: MindMapNode[], editedNodes: MindMapNode[]): M
   })
 }
 import { exportMindmapAsMarkdown, downloadMarkdown } from '@/lib/export'
+import { exportMindmapAsPng } from '@/lib/export-png'
+import { exportMindmapAsSvg } from '@/lib/export-svg'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import MindMapTree from '@/features/mindmap/MindMapTree'
 
 interface MindMapPanelProps {
@@ -246,7 +256,20 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     updateMindmapSettings,
   ])
 
-  const handleExport = useCallback(() => {
+  const handleExportPng = useCallback(
+    (pixelRatio: 1 | 2 | 3) => {
+      if (!activeMindmap) return
+      exportMindmapAsPng({ pixelRatio, filename: activeMindmap.title })
+    },
+    [activeMindmap],
+  )
+
+  const handleExportSvg = useCallback(() => {
+    if (!activeMindmap) return
+    exportMindmapAsSvg(activeMindmap.title)
+  }, [activeMindmap])
+
+  const handleExportMd = useCallback(() => {
     if (!activeMindmap) return
     const md = exportMindmapAsMarkdown(activeMindmap)
     downloadMarkdown(md, activeMindmap.title)
@@ -347,14 +370,34 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               <option value={5}>5层</option>
               <option value={0}>自动</option>
             </select>
-            <button
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors shrink-0 whitespace-nowrap"
-              onClick={handleExport}
-              title="导出"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">导出</span>
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors shrink-0 whitespace-nowrap cursor-pointer">
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">导出</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuItem onClick={() => handleExportPng(1)}>
+                  <FileImage className="w-4 h-4 mr-2" />
+                  PNG 1x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportPng(2)}>
+                  <FileImage className="w-4 h-4 mr-2" />
+                  PNG 2x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportPng(3)}>
+                  <FileImage className="w-4 h-4 mr-2" />
+                  PNG 3x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportSvg}>
+                  <FileImage className="w-4 h-4 mr-2" />
+                  SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportMd}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Markdown
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors shrink-0 whitespace-nowrap ml-auto"
               onClick={() => setSettingsOpen(true)}
