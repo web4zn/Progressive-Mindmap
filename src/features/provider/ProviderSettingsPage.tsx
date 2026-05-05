@@ -37,13 +37,7 @@ const PRESETS = [
   {
     name: 'OpenRouter',
     endpoint: 'https://openrouter.ai/api/v1',
-    models: [
-      'google/gemma-3-12b-it:free',
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'mistralai/mistral-nemo:free',
-      'deepseek/deepseek-r1:free',
-      'qwen/qwen2.5-7b-instruct:free',
-    ],
+    models: ['openrouter/free'],
   },
 ]
 
