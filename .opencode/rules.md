@@ -1,5 +1,10 @@
 # Project Rules
 
+## Working Branch
+
+**Always work on the `opencode` branch.** Never commit directly to `main`.
+All changes must go through the `opencode` branch first.
+
 ## Git Push Policy
 
 **NEVER push to remote without explicit confirmation from the user.**
