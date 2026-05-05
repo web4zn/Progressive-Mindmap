@@ -112,8 +112,14 @@ export default function MindMapTree({
   }, [])
 
   const handleEditConfirm = useCallback(
-    (nodeId: string, label: string, summary: string) => {
-      if (mindmapId) updateNode(mindmapId, nodeId, { label, summary })
+    (
+      nodeId: string,
+      label: string,
+      summary: string,
+      content?: string,
+      contentType?: 'text' | 'markdown',
+    ) => {
+      if (mindmapId) updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       setEditNode(null)
     },
     [mindmapId, updateNode],

@@ -3,6 +3,8 @@ import { type Node, type Edge } from '@xyflow/react'
 export interface MindMapNodeData extends Record<string, unknown> {
   label: string
   summary: string
+  content?: string
+  contentType?: 'text' | 'markdown'
   editedByUser: boolean
   sourceCount: number
   hasChildren: boolean

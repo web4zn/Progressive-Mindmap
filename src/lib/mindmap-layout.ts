@@ -3,7 +3,8 @@ import type { MindMapNode } from '../types/mindmap'
 import type { MindMapFlowNode, MindMapFlowEdge, MindMapNodeData } from '../features/mindmap/types'
 
 const nodeWidth = 200
-const nodeHeight = 60
+const nodeHeight = 80
+const richNodeHeight = 220
 
 export function treeToFlow(
   nodes: MindMapNode[],
@@ -20,6 +21,8 @@ export function treeToFlow(
       const data: MindMapNodeData = {
         label: n.label,
         summary: n.summary,
+        content: n.content,
+        contentType: n.contentType,
         editedByUser: n.editedByUser,
         sourceCount: n.sourceConversationIds.length,
         hasChildren,
@@ -60,7 +63,11 @@ export function applyLayout(
   g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120, edgesep: 20, marginx: 40, marginy: 40 })
 
   for (const n of nodes) {
-    g.setNode(n.id, { width: nodeWidth, height: nodeHeight })
+    const hasRichContent = n.data?.contentType === 'markdown' && n.data?.content
+    g.setNode(n.id, {
+      width: nodeWidth,
+      height: hasRichContent ? richNodeHeight : nodeHeight,
+    })
   }
   for (const e of edges) {
     g.setEdge(e.source, e.target)

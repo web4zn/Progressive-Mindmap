@@ -1,7 +1,11 @@
-## MODIFIED Requirements
+## Purpose
+
+Allow users to edit mindmap node labels, summaries, and Markdown content through a modal dialog, with validation and user-edit tracking.
+
+## Requirements
 
 ### Requirement: Node edit mode
-系统 SHALL 允许用户双击节点进入编辑模式。编辑模式下 SHALL 弹出居中 Modal 弹窗（`MindMapEditModal`），包含 label 输入框和 summary 文本域。按 Enter 确认编辑并调用 `mindmapStore.updateNode`，按 Escape 或点击 Modal 外区域取消编辑。确认后节点 `editedByUser` 标记为 true。
+系统 SHALL 允许用户双击节点进入编辑模式。编辑模式下 SHALL 弹出居中 Modal 弹窗（`MindMapEditModal`），包含 label 输入框、summary 文本域，以及当 `contentType` 为 `'markdown'` 时的 content Markdown 编辑器与预览切换按钮。按 Enter 确认编辑并调用 `mindmapStore.updateNode`，按 Escape 或点击 Modal 外区域取消编辑。确认后节点 `editedByUser` 标记为 true。
 
 #### Scenario: Double-click to edit node
 - **WHEN** 用户双击画布中的某个节点

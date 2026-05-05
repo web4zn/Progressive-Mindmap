@@ -2,6 +2,8 @@ export interface MindMapNode {
   id: string
   label: string
   summary: string
+  content?: string
+  contentType?: 'text' | 'markdown'
   children: MindMapNode[]
   sourceConversationIds: string[]
   sourceExcerpts: Record<string, string>
@@ -18,9 +20,23 @@ export interface CorpusEntry {
   addedAt: number
 }
 
+export interface OperationNodeContent {
+  label: string
+  summary: string
+  content?: string
+  contentType?: 'text' | 'markdown'
+}
+
+export interface OperationNodeChanges {
+  label?: string
+  summary?: string
+  content?: string
+  contentType?: 'text' | 'markdown'
+}
+
 export type IncrementalOperation =
-  | { op: 'add_child'; parent_id: string; node: { label: string; summary: string } }
-  | { op: 'update'; node_id: string; changes: { label?: string; summary?: string } }
+  | { op: 'add_child'; parent_id: string; node: OperationNodeContent }
+  | { op: 'update'; node_id: string; changes: OperationNodeChanges }
   | { op: 'merge'; from_id: string; to_id: string }
   | { op: 'delete_leaf'; node_id: string }
   | { op: 'noop' }

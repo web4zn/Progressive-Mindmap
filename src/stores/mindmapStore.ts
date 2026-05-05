@@ -26,7 +26,7 @@ interface MindMapState {
   updateNode: (
     mindmapId: string,
     nodeId: string,
-    patch: Partial<Pick<MindMapNode, 'label' | 'summary'>>,
+    patch: Partial<Pick<MindMapNode, 'label' | 'summary' | 'content' | 'contentType'>>,
   ) => void
   addChildNode: (mindmapId: string, parentNodeId: string) => void
   deleteNode: (mindmapId: string, nodeId: string) => void
@@ -213,6 +213,8 @@ export const useMindmapStore = create<MindMapState>()(
           id: generateId(),
           label: '新节点',
           summary: '',
+          content: '',
+          contentType: 'text',
           children: [],
           sourceConversationIds: [],
           sourceExcerpts: {},

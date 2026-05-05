@@ -55,12 +55,15 @@ export function buildSystemPrompt(useJsonMode?: boolean, maxDepth = 3): string {
 输出格式要求（严格遵循）：
 - 输出必须是合法的 JSON 对象，包含一个 "nodes" 数组
 - 每个节点包含: label (字符串), summary (字符串), children (节点数组)
+- 可选字段: content (Markdown 字符串), contentType ("markdown" 或 "text"，默认 "text")
+- 当节点需要展示代码块、表格、加粗等格式时，设置 contentType 为 "markdown"，在 content 字段写入 Markdown 内容
+- content 支持的 Markdown 语法: **加粗** *斜体* \`行内代码\` ~~删除线~~  \`\`\`代码块\`\`\`  |表格|
 - ${jsonDepthRule}，每个节点下最多 10 个直接子节点
 - 只包含对话中明确讨论过的主题，不要编造内容
 - 标题简洁明了，控制在 20 字以内
 - 优先提取概念性、方法论类知识，而非琐碎的操作细节
 - 每个节点需要标注知识来源，在 label 中包含 [源: convId/msgId]
-- 输出格式: { "nodes": [{ "label": "概念 [源: abc/123]", "summary": "描述", "children": [...] }] }`
+- 输出格式: { "nodes": [{ "label": "概念 [源: abc/123]", "summary": "描述", "contentType": "markdown", "content": "详细内容...", "children": [...] }] }`
     : `
 输出格式要求（严格遵循）：
 - 必须使用 Markdown 标题语法：${headerDesc}，**禁止使用列表符号（如 - 或 * 或数字）作为层级标记**
@@ -77,8 +80,8 @@ export function buildSystemPrompt(useJsonMode?: boolean, maxDepth = 3): string {
     ? `
 ## 示例输出
 
-{ "nodes": [{ "label": "前端状态管理 [源: abc/123]", "summary": "前端应用中管理UI状态的方法和模式", "children": [
-  { "label": "本地状态", "summary": "组件内部的状态管理", "children": [
+{ "nodes": [{ "label": "前端状态管理 [源: abc/123]", "summary": "前端应用中管理UI状态的方法和模式", "contentType": "markdown", "content": "**核心方案对比**\\n\\n| 库 | 特点 |\\n|---|---|\\n| useState | 简单值 |\\n| useReducer | 复杂逻辑 |\\n| Zustand | 轻量外部库 |\\n\\n\`\`\`ts\\nconst store = create((set) => ({\\n  count: 0,\\n  inc: () => set((s) => ({ count: s.count + 1 })),\\n}))\\n\`\`\`", "children": [
+  { "label": "本地状态", "summary": "组件内部的状态管理", "contentType": "text", "children": [
     { "label": "useState [源: abc/123, def/456]", "summary": "React中最基础的状态Hook", "children": [] },
     { "label": "useReducer [源: def/456]", "summary": "适用于复杂状态逻辑", "children": [] }
   ]}
@@ -217,6 +220,8 @@ export function parseMarkdownToTree(
       id: deriveNodeId(label, parentPath),
       label: stripSourceAnnotations(label) || label || titleText,
       summary: stripSourceAnnotations(summary),
+      content: undefined,
+      contentType: undefined,
       children: [],
       sourceConversationIds: sourceIds,
       sourceExcerpts,
@@ -406,6 +411,8 @@ export function conversationMessagesToHistory(
 interface JsonNode {
   label?: string
   summary?: string
+  content?: string
+  contentType?: string
   children?: JsonNode[]
 }
 
@@ -422,6 +429,9 @@ function jsonNodeToMindMapNode(
   const cleanLabel = stripSourceAnnotations(label)
   const sourceIds = parseSourceIds(label, sourceMap)
   const sourceExcerpts = buildSourceExcerpts(sourceIds, sourceMap)
+  const contentType =
+    raw.contentType === 'markdown' || raw.contentType === 'text' ? raw.contentType : undefined
+  const content = typeof raw.content === 'string' ? raw.content : undefined
   const children = (raw.children ?? [])
     .slice(0, 10)
     .map((c: JsonNode) =>
@@ -435,6 +445,8 @@ function jsonNodeToMindMapNode(
     id: deriveNodeId(label, parentLabels),
     label: cleanLabel || '未命名',
     summary: stripSourceAnnotations(summary),
+    content,
+    contentType,
     children: depth < (maxDepth ?? 3) ? children : [],
     sourceConversationIds: sourceIds,
     sourceExcerpts,
@@ -447,16 +459,35 @@ export function parseJsonToTree(
   sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
   maxDepth = 3,
 ): MindMapNode[] {
+  const text = jsonString.trim()
+
+  // Stage 1: Try direct JSON parse
   let parsed: { nodes?: unknown[] } = {}
   try {
-    const jsonMatch = jsonString.match(/\{[\s\S]*"nodes"[\s\S]*\}/)
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]) as { nodes?: unknown[] }
-    } else {
-      parsed = JSON.parse(jsonString) as { nodes?: unknown[] }
-    }
+    parsed = JSON.parse(text) as { nodes?: unknown[] }
   } catch {
-    return parseMarkdownToTree(jsonString, sourceMap, maxDepth)
+    // Stage 2: Try extracting from outermost ```json fence
+    const fenceStripped = text
+      .replace(/^```(?:json)?\s*\n?/, '')
+      .replace(/\n?\s*```\s*$/, '')
+      .trim()
+    try {
+      parsed = JSON.parse(fenceStripped) as { nodes?: unknown[] }
+    } catch {
+      // Stage 3: Find JSON object boundaries (first { to last })
+      const braceStart = text.indexOf('{')
+      const braceEnd = text.lastIndexOf('}')
+      if (braceStart !== -1 && braceEnd > braceStart) {
+        const extracted = text.slice(braceStart, braceEnd + 1)
+        try {
+          parsed = JSON.parse(extracted) as { nodes?: unknown[] }
+        } catch {
+          return parseMarkdownToTree(jsonString, sourceMap, maxDepth)
+        }
+      } else {
+        return parseMarkdownToTree(jsonString, sourceMap, maxDepth)
+      }
+    }
   }
 
   if (!Array.isArray(parsed.nodes)) {
@@ -560,8 +591,8 @@ export function buildIncrementalPrompt(
 {
   "analysis": "分析摘要，说明需要修改的原因",
   "operations": [
-    { "op": "add_child", "parent_id": "节点ID", "node": { "label": "新节点标签", "summary": "新节点摘要" } },
-    { "op": "update", "node_id": "节点ID", "changes": { "label": "新标签", "summary": "新摘要" } },
+    { "op": "add_child", "parent_id": "节点ID", "node": { "label": "新节点标签", "summary": "新节点摘要", "contentType": "markdown", "content": "详细Markdown内容" } },
+    { "op": "update", "node_id": "节点ID", "changes": { "label": "新标签", "summary": "新摘要", "contentType": "markdown", "content": "更新后的Markdown内容" } },
     { "op": "merge", "from_id": "源节点ID", "to_id": "目标节点ID" },
     { "op": "delete_leaf", "node_id": "节点ID" },
     { "op": "noop" }
@@ -575,7 +606,8 @@ export function buildIncrementalPrompt(
 - 不要覆盖用户编辑过的节点（editedByUser 为 true 的节点）
 - update 操作只包含需要修改的字段
 - delete_leaf 只能用于叶子节点（没有子节点的节点）
-- merge 操作将 from_id 的子节点合并到 to_id，然后删除 from_id`
+- merge 操作将 from_id 的子节点合并到 to_id，然后删除 from_id
+- node 和 changes 中的 contentType/content 为可选字段，content 支持 **加粗** *斜体* \`行内代码\` ~~删除线~~  \`\`\`代码块\`\`\`  |表格|`
 
   return { systemPrompt, userMessage }
 }
@@ -605,12 +637,20 @@ export function parseOperations(jsonString: string): IncrementalOperation[] | nu
           if (!op.node || typeof op.node !== 'object') return null
           const node = op.node as Record<string, unknown>
           if (typeof node.label !== 'string') return null
+          const nodeContent =
+            typeof node.content === 'string' ? node.content : undefined
+          const nodeContentType =
+            node.contentType === 'markdown' || node.contentType === 'text'
+              ? node.contentType
+              : undefined
           ops.push({
             op: 'add_child',
             parent_id: op.parent_id,
             node: {
               label: node.label,
               summary: typeof node.summary === 'string' ? node.summary : '',
+              content: nodeContent,
+              contentType: nodeContentType,
             },
           })
           break
@@ -619,10 +659,24 @@ export function parseOperations(jsonString: string): IncrementalOperation[] | nu
           if (typeof op.node_id !== 'string') return null
           if (!op.changes || typeof op.changes !== 'object') return null
           const changes = op.changes as Record<string, unknown>
-          if (typeof changes.label !== 'string' && typeof changes.summary !== 'string') return null
-          const cleanChanges: { label?: string; summary?: string } = {}
+          if (
+            typeof changes.label !== 'string' &&
+            typeof changes.summary !== 'string' &&
+            typeof changes.content !== 'string' &&
+            typeof changes.contentType !== 'string'
+          )
+            return null
+          const cleanChanges: {
+            label?: string
+            summary?: string
+            content?: string
+            contentType?: 'text' | 'markdown'
+          } = {}
           if (typeof changes.label === 'string') cleanChanges.label = changes.label
           if (typeof changes.summary === 'string') cleanChanges.summary = changes.summary
+          if (typeof changes.content === 'string') cleanChanges.content = changes.content
+          if (changes.contentType === 'markdown' || changes.contentType === 'text')
+            cleanChanges.contentType = changes.contentType
           ops.push({ op: 'update', node_id: op.node_id, changes: cleanChanges })
           break
         }
@@ -704,6 +758,8 @@ export function applyOperations(
           id: generateId(),
           label: op.node.label,
           summary: op.node.summary,
+          content: op.node.content,
+          contentType: op.node.contentType,
           children: [],
           sourceConversationIds: [],
           sourceExcerpts: {},
@@ -724,6 +780,8 @@ export function applyOperations(
         if (editedNodeIds.has(op.node_id)) continue
         if (op.changes.label !== undefined) node.label = op.changes.label
         if (op.changes.summary !== undefined) node.summary = op.changes.summary
+        if (op.changes.content !== undefined) node.content = op.changes.content
+        if (op.changes.contentType !== undefined) node.contentType = op.changes.contentType
         changes.push({
           op: 'update',
           nodeId: op.node_id,

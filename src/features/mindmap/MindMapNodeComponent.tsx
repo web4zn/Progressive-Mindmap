@@ -1,12 +1,36 @@
-import { memo } from 'react'
+import { memo, useRef, useEffect } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Pencil } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { MindMapNodeData } from './types'
 
 function MindMapNodeComponent({ id, data, selected }: NodeProps & { data: MindMapNodeData }) {
+  const isMarkdown = data.contentType === 'markdown' && data.content
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el || !isMarkdown) return
+
+    const handleWheel = (e: WheelEvent) => {
+      const { scrollTop, scrollHeight, clientHeight } = el
+      const atTop = scrollTop <= 0
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 1
+
+      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
+        e.stopPropagation()
+      }
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [isMarkdown])
+
   return (
     <div
-      className={`mindmap-node group relative rounded-lg border bg-card px-3 py-2 shadow-sm transition-colors min-w-[180px] max-w-[280px]
+      className={`mindmap-node group relative rounded-lg border bg-card px-3 py-2 shadow-sm transition-colors min-w-[180px] max-w-[320px]
+        ${isMarkdown ? 'min-h-[80px]' : ''}
         ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border hover:border-primary/40'}`}
     >
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground" />
@@ -46,11 +70,18 @@ function MindMapNodeComponent({ id, data, selected }: NodeProps & { data: MindMa
         </span>
       </div>
 
-      {data.summary && (
+      {isMarkdown ? (
+        <div
+          ref={contentRef}
+          className="mt-1.5 text-xs leading-relaxed max-h-[180px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none prose-code:text-[11px] prose-pre:bg-muted prose-pre:text-[11px] prose-table:text-[11px] prose-th:px-2 prose-td:px-2"
+        >
+          <Markdown remarkPlugins={[remarkGfm]}>{data.content!}</Markdown>
+        </div>
+      ) : data.summary ? (
         <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">
           {data.summary}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

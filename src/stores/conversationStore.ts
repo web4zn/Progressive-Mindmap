@@ -95,6 +95,7 @@ export const useConversationStore = create<ConversationState>()(
           conversations: state.conversations.map((c) =>
             c.id === id ? { ...c, archived: false, updatedAt: Date.now() } : c,
           ),
+          activeConversationId: id,
         }))
       },
 
