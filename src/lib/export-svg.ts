@@ -1,7 +1,7 @@
-import { toSvg } from 'html-to-image'
+import { toSvg } from 'dom-to-image-more'
 
 export async function exportMindmapAsSvg(filename = 'mindmap'): Promise<void> {
-  const el = document.querySelector('.react-flow__viewport') as HTMLElement | null
+  const el = document.querySelector('.react-flow') as HTMLElement | null
   if (!el) throw new Error('未找到脑图画布元素')
 
   const dataUrl = await toSvg(el, {

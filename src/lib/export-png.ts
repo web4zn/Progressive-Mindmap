@@ -1,11 +1,11 @@
-import { toPng } from 'html-to-image'
+import { toPng } from 'dom-to-image-more'
 
 export async function exportMindmapAsPng(
   options: { pixelRatio?: 1 | 2 | 3; filename?: string } = {},
 ): Promise<void> {
   const { pixelRatio = 2, filename = 'mindmap' } = options
 
-  const el = document.querySelector('.react-flow__viewport') as HTMLElement | null
+  const el = document.querySelector('.react-flow') as HTMLElement | null
   if (!el) throw new Error('未找到脑图画布元素')
 
   const dataUrl = await toPng(el, {
