@@ -14,7 +14,13 @@ function MindMapEdgeComponent(props: EdgeProps) {
     borderRadius: 8,
   })
 
-  return <BaseEdge path={edgePath} className="!stroke-muted-foreground/30" />
+  return (
+    <BaseEdge
+      path={edgePath}
+      className="!stroke-muted-foreground/30"
+      style={{ stroke: 'rgba(148,163,184,0.3)', strokeWidth: 1.5 }}
+    />
+  )
 }
 
 export default memo(MindMapEdgeComponent)
