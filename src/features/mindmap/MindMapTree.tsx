@@ -7,6 +7,7 @@ import {
   useNodesState,
   useEdgesState,
   type NodeMouseHandler,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Loader2, AlertCircle, RefreshCw, Network } from 'lucide-react'
@@ -19,7 +20,7 @@ import MindMapEdgeComponent from './MindMapEdgeComponent'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
 import type { MindMapNode } from '@/types/mindmap'
-import type { MindMapFlowNode } from './types'
+import type { MindMapFlowNode, MindMapFlowEdge } from './types'
 
 const nodeTypes = { mindmap: MindMapNodeComponent }
 const edgeTypes = { mindmap: MindMapEdgeComponent }
@@ -74,6 +75,10 @@ export default function MindMapTree({
       delete (window as unknown as Record<string, unknown>).__mindmapToggle
     }
   }, [toggleCollapse])
+
+  const handleInit = useCallback((instance: ReactFlowInstance<MindMapFlowNode, MindMapFlowEdge>) => {
+    ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => instance.getNodes()
+  }, [])
 
   const checkCanMoveUp = (nodeId: string): boolean => {
     const parent = findParentInTree(treeRef.current, nodeId)
@@ -241,6 +246,7 @@ export default function MindMapTree({
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeDragStop={handleNodeDragStop}
+        onInit={handleInit}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+脑图面板的三栏布局、可调整宽度、工具栏及附属区域的交互规范。
+
+## Requirements
 
 ### Requirement: Right panel layout
 系统 SHALL 在主内容区右侧提供思维导图面板。面板 SHALL 位于侧边栏和聊天区之后，形成三栏布局。面板 SHALL 仅在全局开关开启时显示。
@@ -22,9 +26,13 @@
 - **图谱选择器**: 下拉菜单，列出所有已创建的图谱
 - **更新图谱按钮**: 触发手动同步生成（物料优先）
 - **自动同步开关**: 切换关联 Conversation 的 autoSync 状态
-- **导出按钮**: 导出图谱为 Markdown 文件
+- **导出下拉菜单**: 包含 PNG 1x / PNG 2x / PNG 3x / SVG / Markdown 导出选项
 - **图谱设置按钮**: 打开图谱生成设置对话框
 - **关闭按钮**: 关闭面板
+
+#### Scenario: Export dropdown menu
+- **WHEN** 用户点击导出按钮旁的下拉箭头
+- **THEN** 展开菜单显示 PNG 1x、PNG 2x、PNG 3x、SVG、Markdown 五个选项
 
 ### Requirement: New conversation dialog with mindmap association
 系统 SHALL 在用户创建新对话时弹出对话框，询问思维导图关联方式：不关联、关联到已有图谱（单选下拉）、创建新图谱。同时提供"开启自动同步"复选框。

@@ -35,9 +35,9 @@ const PRESETS = [
   },
   { name: 'Ollama', endpoint: 'http://localhost:11434/v1', models: [] },
   {
-    name: 'SiliconFlow',
-    endpoint: 'https://api.siliconflow.cn/v1',
-    models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
+    name: 'OpenRouter',
+    endpoint: 'https://openrouter.ai/api/v1',
+    models: ['openrouter/free'],
   },
 ]
 
