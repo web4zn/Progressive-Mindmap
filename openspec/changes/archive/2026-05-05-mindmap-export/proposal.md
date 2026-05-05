@@ -20,7 +20,8 @@
 
 ## Impact
 
-- **依赖新增**：`html-to-image` 或 `dom-to-image-more`（DOM → PNG/SVG 截图）
-- **新增文件**：`src/lib/export-png.ts`（PNG 导出逻辑）、`src/lib/export-svg.ts`（SVG 导出逻辑）
+- **依赖新增**：`html-to-image@1.11.11`（锁定版本，React Flow 官方文档推荐，新版本有已知 bug）
+- **新增文件**：`src/lib/export-mindmap.ts`（PNG/SVG 导出逻辑，合并在单一文件中）
 - **面板变更**：`src/features/mindmap/MindMapPanel.tsx` 导出按钮改为下拉菜单
-- **布局**：导出前需要临时计算展平所有折叠节点的完整布局
+- **画布集成**：`src/features/mindmap/MindMapTree.tsx` 通过 `onInit` 暴露 `getNodes` 到 window，供导出函数调用 `getNodesBounds` + `getViewportForBounds` 计算最优导出视口
+- **边渲染修复**：`src/features/mindmap/MindMapEdgeComponent.tsx` 改用内联 style 替代 CSS 类，确保 `html-to-image` 克隆时 SVG 元素正确渲染
