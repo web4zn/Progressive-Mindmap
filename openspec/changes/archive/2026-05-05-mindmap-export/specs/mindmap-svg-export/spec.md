@@ -1,3 +1,7 @@
+## Purpose
+
+脑图可视化 SVG 矢量导出能力，保留完整样式可编辑。
+
 ## ADDED Requirements
 
 ### Requirement: Export mindmap as SVG

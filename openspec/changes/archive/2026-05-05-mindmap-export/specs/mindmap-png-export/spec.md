@@ -1,3 +1,7 @@
+## Purpose
+
+脑图可视化 PNG 导出能力，支持多分辨率。
+
 ## ADDED Requirements
 
 ### Requirement: Export mindmap as PNG
