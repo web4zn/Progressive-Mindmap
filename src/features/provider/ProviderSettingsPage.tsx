@@ -123,16 +123,45 @@ export default function ProviderSettingsPage({ onBack }: { onBack?: () => void }
                   </div>
                   <div className="flex gap-2 mt-2">
                     <Badge variant="secondary">{p.models.length} 个模型</Badge>
-                    <Badge variant="outline">
-                      API Key: {p.apiKey ? '****' + p.apiKey.slice(-4) : '未设置'}
-                    </Badge>
+                    {p.apiKey ? (
+                      <Badge variant="outline">API Key: ****{p.apiKey.slice(-4)}</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-600 border-amber-600">
+                        需配置 API Key
+                      </Badge>
+                    )}
+                    {p.preset && (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                        系统预置
+                      </Badge>
+                    )}
                   </div>
+                  {p.preset && !p.apiKey && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      前往{' '}
+                      <a
+                        href="https://openrouter.ai/keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-foreground"
+                      >
+                        openrouter.ai
+                      </a>
+                      {' '}注册获取免费 API Key，粘贴到编辑框中即可使用
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleEdit(p)}>
                     编辑
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(p.id)}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteConfirm(p.id)}
+                    disabled={p.preset === true}
+                    title={p.preset ? '系统预置模型不可删除' : undefined}
+                  >
                     删除
                   </Button>
                 </div>

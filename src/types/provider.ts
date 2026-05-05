@@ -10,6 +10,7 @@ export interface Provider {
   apiEndpoint: string
   apiKey: string
   models: Model[]
+  preset?: boolean
   supportsJsonMode: boolean
   createdAt: number
   updatedAt: number

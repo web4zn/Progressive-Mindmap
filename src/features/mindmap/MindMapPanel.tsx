@@ -228,7 +228,13 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         return
       }
       const message = err instanceof Error ? err.message : '生成失败'
-      setError(message)
+      const isPreset = generatorProvider?.preset && !generatorProvider?.apiKey
+      const hint = isPreset
+        ? '\n\n提示：OpenRouter 免费模型需要配置 API Key，前往 openrouter.ai 注册获取（免费）'
+        : generatorProvider?.preset
+          ? '\n\n提示：免费模型有限制，可切换其他免费模型或添加自己的 API Key'
+          : ''
+      setError(message + hint)
     } finally {
       setGenerating(false)
       stopGeneration()

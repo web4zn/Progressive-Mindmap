@@ -209,11 +209,20 @@ export default function ChatPage() {
           updateMessageInConversation(conversationId, assistantMsg.id, { status: 'complete' })
         } else {
           const message = err instanceof Error ? err.message : '请求失败'
+          const provider = useProviderStore
+            .getState()
+            .providers.find((p) => p.id === activeConversation?.providerId)
+          const isPreset = provider?.preset && !provider?.apiKey
+          const hint = isPreset
+            ? '\n\n提示：OpenRouter 免费模型需要配置 API Key，前往 openrouter.ai 注册获取（免费）'
+            : provider?.preset
+              ? '\n\n提示：免费模型有限制，可切换其他免费模型或添加自己的 API Key'
+              : ''
           updateMessageInConversation(conversationId, assistantMsg.id, {
-            content: message,
+            content: message + hint,
             status: 'error',
           })
-          setError(message)
+          setError(message + hint)
         }
       } finally {
         stopGeneration()

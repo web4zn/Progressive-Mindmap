@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useProviderStore } from '../providerStore'
+import type { Provider } from '@/types/provider'
 
 beforeEach(() => {
   useProviderStore.setState({
@@ -77,5 +78,57 @@ describe('providerStore', () => {
     const state = useProviderStore.getState()
     expect(state.providers).toHaveLength(0)
     expect(state.selectedProviderId).toBeNull()
+  })
+})
+
+describe('preset provider', () => {
+  const makePreset = (overrides?: Partial<Provider>): Provider => ({
+    id: 'preset-1',
+    name: 'OpenRouter',
+    apiEndpoint: 'https://openrouter.ai/api/v1',
+    apiKey: '',
+    models: [{ id: 'google/gemma-3-12b-it:free', name: 'Gemma 3 12B (免费)', enabled: true }],
+    preset: true,
+    supportsJsonMode: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...overrides,
+  })
+
+  it('prevents deleting preset provider', () => {
+    useProviderStore.setState({
+      providers: [makePreset()],
+      selectedProviderId: 'preset-1',
+    })
+
+    const { removeProvider } = useProviderStore.getState()
+    removeProvider('preset-1')
+
+    const state = useProviderStore.getState()
+    expect(state.providers).toHaveLength(1)
+    expect(state.providers[0]!.preset).toBe(true)
+  })
+
+  it('allows deleting non-preset provider', () => {
+    useProviderStore.setState({
+      providers: [makePreset({ preset: undefined, name: 'Custom' })],
+      selectedProviderId: 'preset-1',
+    })
+
+    const { removeProvider } = useProviderStore.getState()
+    removeProvider('preset-1')
+
+    const state = useProviderStore.getState()
+    expect(state.providers).toHaveLength(0)
+  })
+
+  it('has preset flag on provider after injection', () => {
+    useProviderStore.setState({
+      providers: [makePreset()],
+      selectedProviderId: 'preset-1',
+    })
+
+    const state = useProviderStore.getState()
+    expect(state.providers[0]!.preset).toBe(true)
   })
 })
