@@ -10,7 +10,12 @@ export async function exportMindmapAsPng(
   const el = document.querySelector(FLOW_SELECTOR) as HTMLElement | null
   if (!el) throw new Error('未找到脑图画布元素')
 
-  const dataUrl = await toPng(el, { pixelRatio })
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+
+  const dataUrl = await toPng(el, {
+    pixelRatio,
+    backgroundColor: bg || '#ffffff',
+  })
 
   const date = new Date().toISOString().slice(0, 10)
   downloadDataUrl(dataUrl, `${filename}_${date}.png`)
