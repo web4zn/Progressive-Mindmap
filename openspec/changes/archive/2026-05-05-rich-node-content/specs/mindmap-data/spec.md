@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: MindMapNode data model
+### Requirement: MindMap data model
 MindMapNode SHALL 包含以下字段：`id: string`（唯一标识）、`label: string`（节点标题）、`summary: string`（纯文本摘要）、`content?: string`（可选 Markdown 内容）、`contentType?: 'text' | 'markdown'`（可选内容类型，默认 `'text'`）、`children: MindMapNode[]`（子节点）、`sourceConversationIds: string[]`（来源对话 ID）、`sourceExcerpts: Record<string, string>`（来源摘录）、`editedByUser: boolean`（是否被用户编辑）。
 
 #### Scenario: New node with markdown content

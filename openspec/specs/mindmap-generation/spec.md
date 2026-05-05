@@ -1,7 +1,11 @@
-## ADDED Requirements
+## Purpose
+
+Enable AI-powered mindmap generation from conversation history using LLM prompts, supporting both full rebuild and incremental update modes with structured JSON output.
+
+## Requirements
 
 ### Requirement: Generate mindmap from conversation history
-系统 SHALL 支持通过 LLM 从对话内容生成思维导图树结构。输入内容 SHALL 优先使用图谱语料库内容。生成模式 SHALL 根据图谱状态自动选择：首次生成使用全量模式（输出完整 Markdown/JSON 树），后续生成使用增量模式（输出操作指令）。增量模式 SHALL 提供旧树摘要而非完整树，减少 prompt token 消耗。
+系统 SHALL 支持通过 LLM 从对话内容生成思维导图树结构。输入内容 SHALL 优先使用图谱语料库内容。生成模式 SHALL 根据图谱状态自动选择：首次生成使用全量模式（输出完整 Markdown/JSON 树），后续生成使用增量模式（输出操作指令）。增量模式 SHALL 提供旧树摘要而非完整树，减少 prompt token 消耗。生成 prompt SHALL 指示 LLM 在节点中使用 `content` 字段承载 Markdown 格式内容（加粗、斜体、行内代码、删除线、代码块、表格），并在输出 JSON 中标注 `contentType: 'markdown'`。系统 SHALL 在解析 JSON 响应时识别 `contentType` 和 `content` 字段并存储到 MindMapNode。
 
 #### Scenario: First-time generation
 - **WHEN** 用户对未包含树的图谱触发生成
@@ -10,6 +14,11 @@
 #### Scenario: Incremental generation
 - **WHEN** 图谱已有树结构，用户传入新内容触发生成
 - **THEN** 系统使用增量模式，提供旧树摘要，LLM 输出操作指令
+
+#### Scenario: AI generates node with markdown content
+- **WHEN** 语料包含代码示例，且生成模式为全量或增量
+- **THEN** LLM 输出的节点可能包含带 `contentType: 'markdown'` 的 `content` 字段（含代码块或表格）
+- **AND** 系统正确解析并存储 `contentType` 和 `content` 字段
 
 ### Requirement: Markdown to tree parsing
 系统 SHALL 将 LLM 返回的 Markdown 文本解析为 MindMapNode 树结构。解析规则：

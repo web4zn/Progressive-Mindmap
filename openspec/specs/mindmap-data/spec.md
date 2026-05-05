@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the core data model for mindmap nodes and mindmap collections, supporting tree structures, source provenance tracking, and IndexedDB persistence.
+
+## Requirements
 
 ### Requirement: MindMap data model
 系统 SHALL 使用以下数据模型表示思维导图：
@@ -11,6 +15,7 @@ MindMap {
   maxDepth?: number                // 最大生成深度：3-5 或 0（自动），默认 3
   corpus: CorpusEntry[]            // 语料库条目列表
   monitoredConversationIds: string[] // 监听的对话 ID 列表
+  collapsedNodeIds?: string[]      // 折叠节点 ID 列表
   forceFullRebuild?: boolean       // 强制全量重建模式
   lastGeneratedAt?: number         // 上次生成时间戳
   createdAt: number                // 创建时间戳
@@ -23,12 +28,13 @@ MindMapNode {
   id: string                      // UUID
   label: string                   // 节点显示文本
   summary: string                 // 节点描述
+  content?: string                // 可选 Markdown 内容
+  contentType?: 'text' | 'markdown' // 内容类型，默认 'text'
   children: MindMapNode[]         // 子节点列表
   sourceConversationIds: string[] // 贡献该节点的 Conversation ID 列表
   sourceExcerpts: Record<string, string> // Conversation ID → 消息文本摘录
   editedByUser: boolean           // 是否被用户手动编辑过（默认 false）
 }
-```
 
 #### Scenario: MindMap data structure
 - **WHEN** 系统创建新的思维导图
@@ -41,6 +47,14 @@ MindMapNode {
 #### Scenario: Edited node marks
 - **WHEN** 用户手动编辑节点
 - **THEN** 节点 `editedByUser` 设为 true，`sourceConversationIds` 清空
+
+#### Scenario: New node with markdown content
+- **WHEN** 创建 MindMapNode 且指定 `contentType: 'markdown'` 和 `content: '## Title\n\nContent'`
+- **THEN** 节点存储完整 Markdown 内容且类型标记为 markdown
+
+#### Scenario: Existing node remains compatible
+- **WHEN** 现有节点（无 `contentType` 和 `content` 字段）被反序列化
+- **THEN** 节点正常加载，`contentType` 默认为 `'text'`，行为与旧版本一致
 
 ### Requirement: Create mindmap
 系统 SHALL 允许用户创建新的思维导图。用户 MUST 提供图谱标题。创建后 SHALL 自动在侧边栏显示新图谱条目。
