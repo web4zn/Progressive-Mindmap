@@ -31,6 +31,7 @@ function detectJsonMode(apiEndpoint: string): boolean {
     lower.includes('api.openai.com') ||
     lower.includes('api.deepseek.com') ||
     lower.includes('api.siliconflow.cn') ||
+    lower.includes('openrouter.ai') ||
     lower.includes('generativelanguage.googleapis.com')
   )
 }
@@ -89,8 +90,33 @@ export const useProviderStore = create<ProviderState>()(
     }),
     {
       name: 'provider-store',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => createIndexedDBStorage()),
+      onRehydrateStorage: () => {
+        let initialized = false
+        return (_state, error) => {
+          if (error || initialized) return
+          initialized = true
+          const current = useProviderStore.getState()
+          if (current.providers.length === 0) {
+            const now = Date.now()
+            const openRouter: Provider = {
+              id: generateId(),
+              name: 'OpenRouter',
+              apiEndpoint: 'https://openrouter.ai/api/v1',
+              apiKey: '',
+              models: [{ id: 'openrouter/free', name: 'openrouter/free', enabled: true }],
+              supportsJsonMode: true,
+              createdAt: now,
+              updatedAt: now,
+            }
+            useProviderStore.setState({
+              providers: [openRouter],
+              selectedProviderId: openRouter.id,
+            })
+          }
+        }
+      },
     },
   ),
 )
