@@ -1,42 +1,28 @@
 import { toPng, toSvg } from 'html-to-image'
+import { getNodesBounds, getViewportForBounds } from '@xyflow/react'
 
-const FLOW_SELECTOR = '.react-flow'
+const FLOW_SELECTOR = '.react-flow__viewport'
+const IMAGE_WIDTH = 1920
+const IMAGE_HEIGHT = 1080
 
-interface ViewportState {
-  x: number
-  y: number
-  zoom: number
-}
-
-function getFitView(): (() => void) | undefined {
+function getNodes(): { position: { x: number; y: number }; measured?: { width?: number; height?: number } }[] {
   const w = window as unknown as Record<string, unknown>
-  return w.__mindmapFitView as (() => void) | undefined
+  const fn = w.__mindmapGetNodes as (() => { position: { x: number; y: number }; measured?: { width?: number; height?: number } }[]) | undefined
+  return fn?.() ?? []
 }
 
-function getViewport(): ViewportState | undefined {
-  const w = window as unknown as Record<string, unknown>
-  const fn = w.__mindmapGetViewport as (() => ViewportState) | undefined
-  return fn?.()
-}
+async function getExportStyle(): Promise<Record<string, string>> {
+  const nodes = getNodes()
+  if (nodes.length === 0) return {}
 
-function setViewport(vp: ViewportState) {
-  const w = window as unknown as Record<string, unknown>
-  const fn = w.__mindmapSetViewport as ((vp: ViewportState) => void) | undefined
-  fn?.(vp)
-}
+  const bounds = getNodesBounds(nodes as never)
+  const viewport = getViewportForBounds(bounds, IMAGE_WIDTH, IMAGE_HEIGHT, 0.5, 2, 0.3)
 
-async function prepareExport(): Promise<ViewportState | null> {
-  const fitView = getFitView()
-  if (!fitView) return null
-
-  const prev = getViewport()
-  fitView()
-  await new Promise((r) => setTimeout(r, 100))
-  return prev ?? null
-}
-
-function restoreViewport(vp: ViewportState | null) {
-  if (vp) setViewport(vp)
+  return {
+    width: `${IMAGE_WIDTH}px`,
+    height: `${IMAGE_HEIGHT}px`,
+    transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+  }
 }
 
 export async function exportMindmapAsPng(
@@ -44,40 +30,38 @@ export async function exportMindmapAsPng(
 ): Promise<void> {
   const { pixelRatio = 2, filename = 'mindmap' } = options
 
-  const prevViewport = await prepareExport()
+  const el = document.querySelector(FLOW_SELECTOR) as HTMLElement | null
+  if (!el) throw new Error('未找到脑图画布元素')
 
-  try {
-    const el = document.querySelector(FLOW_SELECTOR) as HTMLElement | null
-    if (!el) throw new Error('未找到脑图画布元素')
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#ffffff'
+  const style = await getExportStyle()
 
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+  const dataUrl = await toPng(el, {
+    pixelRatio,
+    backgroundColor: bg,
+    style,
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+  })
 
-    const dataUrl = await toPng(el, {
-      pixelRatio,
-      backgroundColor: bg || '#ffffff',
-    })
-
-    const date = new Date().toISOString().slice(0, 10)
-    downloadDataUrl(dataUrl, `${filename}_${date}.png`)
-  } finally {
-    restoreViewport(prevViewport)
-  }
+  const date = new Date().toISOString().slice(0, 10)
+  downloadDataUrl(dataUrl, `${filename}_${date}.png`)
 }
 
 export async function exportMindmapAsSvg(filename = 'mindmap'): Promise<void> {
-  const prevViewport = await prepareExport()
+  const el = document.querySelector(FLOW_SELECTOR) as HTMLElement | null
+  if (!el) throw new Error('未找到脑图画布元素')
 
-  try {
-    const el = document.querySelector(FLOW_SELECTOR) as HTMLElement | null
-    if (!el) throw new Error('未找到脑图画布元素')
+  const style = await getExportStyle()
 
-    const dataUrl = await toSvg(el)
+  const dataUrl = await toSvg(el, {
+    style,
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+  })
 
-    const date = new Date().toISOString().slice(0, 10)
-    downloadDataUrl(dataUrl, `${filename}_${date}.svg`)
-  } finally {
-    restoreViewport(prevViewport)
-  }
+  const date = new Date().toISOString().slice(0, 10)
+  downloadDataUrl(dataUrl, `${filename}_${date}.svg`)
 }
 
 function downloadDataUrl(dataUrl: string, filename: string) {

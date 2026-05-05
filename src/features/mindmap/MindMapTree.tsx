@@ -77,13 +77,7 @@ export default function MindMapTree({
   }, [toggleCollapse])
 
   const handleInit = useCallback((instance: ReactFlowInstance<MindMapFlowNode, MindMapFlowEdge>) => {
-    ;(window as unknown as Record<string, unknown>).__mindmapFitView = () =>
-      instance.fitView({ padding: 0.3, duration: 0 })
-    ;(window as unknown as Record<string, unknown>).__mindmapGetViewport = () =>
-      instance.getViewport()
-    ;(window as unknown as Record<string, unknown>).__mindmapSetViewport = (
-      vp: ReturnType<typeof instance.getViewport>,
-    ) => instance.setViewport(vp, { duration: 0 })
+    ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => instance.getNodes()
   }, [])
 
   const checkCanMoveUp = (nodeId: string): boolean => {
