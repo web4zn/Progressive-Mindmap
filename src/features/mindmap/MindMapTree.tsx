@@ -33,7 +33,14 @@ interface MindMapTreeProps {
   onRetry?: () => void
 }
 
-export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming, error, onRetry }: MindMapTreeProps) {
+export default function MindMapTree({
+  tree,
+  mindmapId,
+  isGenerating,
+  isStreaming,
+  error,
+  onRetry,
+}: MindMapTreeProps) {
   const { updateNode, addChildNode, deleteNode, moveNode, reparentNode } = useMindmapStore()
   const { nodes: layoutedNodes, edges: layoutedEdges, toggleCollapse } = useMindmapLayout(tree)
 
@@ -42,12 +49,19 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
 
   const [editNode, setEditNode] = useState<MindMapNode | null>(null)
   const [contextMenu, setContextMenu] = useState<{
-    x: number; y: number; nodeId: string; canMoveUp: boolean; canMoveDown: boolean
+    x: number
+    y: number
+    nodeId: string
+    canMoveUp: boolean
+    canMoveDown: boolean
   } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const treeRef = useRef(tree)
-  treeRef.current = tree
+
+  useEffect(() => {
+    treeRef.current = tree
+  })
 
   useEffect(() => {
     setNodes(layoutedNodes)
@@ -92,10 +106,13 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
     setConfirmDelete(false)
   }, [])
 
-  const handleEditConfirm = useCallback((nodeId: string, label: string, summary: string) => {
-    if (mindmapId) updateNode(mindmapId, nodeId, { label, summary })
-    setEditNode(null)
-  }, [mindmapId, updateNode])
+  const handleEditConfirm = useCallback(
+    (nodeId: string, label: string, summary: string) => {
+      if (mindmapId) updateNode(mindmapId, nodeId, { label, summary })
+      setEditNode(null)
+    },
+    [mindmapId, updateNode],
+  )
 
   const handleAddChild = useCallback(() => {
     if (mindmapId && contextMenu) {
@@ -126,42 +143,45 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
     }
   }, [mindmapId, contextMenu, deleteNode])
 
-  const handleNodeDragStop = useCallback((_: unknown, draggedNode: MindMapFlowNode) => {
-    if (!mindmapId) return
+  const handleNodeDragStop = useCallback(
+    (_: unknown, draggedNode: MindMapFlowNode) => {
+      if (!mindmapId) return
 
-    const currentTree = treeRef.current
-    const draggedId = draggedNode.id
+      const currentTree = treeRef.current
+      const draggedId = draggedNode.id
 
-    const dragged = findNodeInTree(currentTree, draggedId)
-    if (!dragged) return
+      const dragged = findNodeInTree(currentTree, draggedId)
+      if (!dragged) return
 
-    const oldParent = findParentInTree(currentTree, draggedId)
+      const oldParent = findParentInTree(currentTree, draggedId)
 
-    for (const candidate of currentTree) {
-      if (candidate.id === draggedId) continue
-      if (oldParent && candidate.id === oldParent.id) continue
-      if (isDescendantOf(dragged, candidate.id)) continue
+      for (const candidate of currentTree) {
+        if (candidate.id === draggedId) continue
+        if (oldParent && candidate.id === oldParent.id) continue
+        if (isDescendantOf(dragged, candidate.id)) continue
 
-      const candidateEl = document.querySelector(`[data-id="${candidate.id}"]`)
-      if (!candidateEl) continue
+        const candidateEl = document.querySelector(`[data-id="${candidate.id}"]`)
+        if (!candidateEl) continue
 
-      const { top, bottom, left, right } = candidateEl.getBoundingClientRect()
+        const { top, bottom, left, right } = candidateEl.getBoundingClientRect()
 
-      if (
-        draggedNode.position.x >= left - 20 &&
-        draggedNode.position.x <= right + 20 &&
-        draggedNode.position.y >= top - 20 &&
-        draggedNode.position.y <= bottom + 20
-      ) {
-        reparentNode(mindmapId, draggedId, candidate.id)
-        return
+        if (
+          draggedNode.position.x >= left - 20 &&
+          draggedNode.position.x <= right + 20 &&
+          draggedNode.position.y >= top - 20 &&
+          draggedNode.position.y <= bottom + 20
+        ) {
+          reparentNode(mindmapId, draggedId, candidate.id)
+          return
+        }
       }
-    }
 
-    if (oldParent) {
-      reparentNode(mindmapId, draggedId, '')
-    }
-  }, [mindmapId, reparentNode])
+      if (oldParent) {
+        reparentNode(mindmapId, draggedId, '')
+      }
+    },
+    [mindmapId, reparentNode],
+  )
 
   if (error) {
     return (
@@ -170,7 +190,8 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
         <p className="text-sm text-destructive text-center">{error}</p>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
-            <RefreshCw className="w-3.5 h-3.5" />重试
+            <RefreshCw className="w-3.5 h-3.5" />
+            重试
           </Button>
         )}
       </div>
@@ -184,7 +205,11 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
         <p className="text-sm">正在生成思维导图...</p>
         <div className="w-full space-y-2 mt-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-5 rounded bg-muted animate-pulse" style={{ width: `${85 - i * 15}%`, marginLeft: `${i * 12}px` }} />
+            <div
+              key={i}
+              className="h-5 rounded bg-muted animate-pulse"
+              style={{ width: `${85 - i * 15}%`, marginLeft: `${i * 12}px` }}
+            />
           ))}
         </div>
       </div>
@@ -259,7 +284,10 @@ export default function MindMapTree({ tree, mindmapId, isGenerating, isStreaming
           onDeleteRequest={() => setConfirmDelete(true)}
           onDeleteConfirm={handleDeleteConfirm}
           onCancelDelete={() => setConfirmDelete(false)}
-          onClose={() => { setContextMenu(null); setConfirmDelete(false) }}
+          onClose={() => {
+            setContextMenu(null)
+            setConfirmDelete(false)
+          }}
         />
       )}
     </div>

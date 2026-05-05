@@ -138,13 +138,15 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addCorpusEntry(mm.id, {
-      id: 'c1', messageId: 'msg-1',
+      id: 'c1',
+      messageId: 'msg-1',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1000,
     })
     addCorpusEntry(mm.id, {
-      id: 'c2', messageId: 'msg-2',
+      id: 'c2',
+      messageId: 'msg-2',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1001,
@@ -161,13 +163,15 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addCorpusEntry(mm.id, {
-      id: 'c1', messageId: 'msg-1',
+      id: 'c1',
+      messageId: 'msg-1',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1000,
     })
     addCorpusEntry(mm.id, {
-      id: 'c2', messageId: 'msg-2',
+      id: 'c2',
+      messageId: 'msg-2',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1001,
@@ -185,7 +189,8 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addCorpusEntry(mm.id, {
-      id: 'c1', messageId: 'msg-1',
+      id: 'c1',
+      messageId: 'msg-1',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1000,
@@ -203,7 +208,8 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addCorpusEntry(mm.id, {
-      id: 'c1', messageId: 'msg-1',
+      id: 'c1',
+      messageId: 'msg-1',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1000,
@@ -218,13 +224,15 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addCorpusEntry(mm.id, {
-      id: 'c1', messageId: 'msg-1',
+      id: 'c1',
+      messageId: 'msg-1',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1000,
     })
     addCorpusEntry(mm.id, {
-      id: 'c2', messageId: 'msg-2',
+      id: 'c2',
+      messageId: 'msg-2',
       selectedText: undefined as string | undefined,
       enabled: true,
       addedAt: 1001,
@@ -240,9 +248,27 @@ describe('corpus operations', () => {
     const mm = addMindmap('Test')
 
     addBatchCorpusEntries(mm.id, [
-      { id: 'c1', messageId: 'msg-1', selectedText: undefined as string | undefined, enabled: true, addedAt: 1000 },
-      { id: 'c2', messageId: 'msg-2', selectedText: undefined as string | undefined, enabled: true, addedAt: 1001 },
-      { id: 'c3', messageId: 'msg-3', selectedText: undefined as string | undefined, enabled: true, addedAt: 1002 },
+      {
+        id: 'c1',
+        messageId: 'msg-1',
+        selectedText: undefined as string | undefined,
+        enabled: true,
+        addedAt: 1000,
+      },
+      {
+        id: 'c2',
+        messageId: 'msg-2',
+        selectedText: undefined as string | undefined,
+        enabled: true,
+        addedAt: 1001,
+      },
+      {
+        id: 'c3',
+        messageId: 'msg-3',
+        selectedText: undefined as string | undefined,
+        enabled: true,
+        addedAt: 1002,
+      },
     ])
 
     const state = useMindmapStore.getState()
@@ -284,7 +310,8 @@ describe('monitored conversations', () => {
   })
 
   it('removes a monitored conversation', () => {
-    const { addMindmap, addMonitoredConversation, removeMonitoredConversation } = useMindmapStore.getState()
+    const { addMindmap, addMonitoredConversation, removeMonitoredConversation } =
+      useMindmapStore.getState()
     const mm = addMindmap('Test')
 
     addMonitoredConversation(mm.id, 'conv-1')

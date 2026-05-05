@@ -16,21 +16,21 @@ export function useMindmapLayout(tree: MindMapNode[]) {
 
   const collapsedIds = useMemo(() => new Set(collapsedNodeIds), [collapsedNodeIds])
 
-  const { nodes, edges } = useMemo(
-    () => getLayoutedFlow(tree, collapsedIds),
-    [tree, collapsedIds],
-  )
+  const { nodes, edges } = useMemo(() => getLayoutedFlow(tree, collapsedIds), [tree, collapsedIds])
 
-  const toggleCollapse = useCallback((id: string) => {
-    if (!activeMindmapId) return
-    const next = new Set(collapsedNodeIds)
-    if (next.has(id)) {
-      next.delete(id)
-    } else {
-      next.add(id)
-    }
-    setCollapsedNodeIds(activeMindmapId, [...next])
-  }, [collapsedNodeIds, activeMindmapId, setCollapsedNodeIds])
+  const toggleCollapse = useCallback(
+    (id: string) => {
+      if (!activeMindmapId) return
+      const next = new Set(collapsedNodeIds)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      setCollapsedNodeIds(activeMindmapId, [...next])
+    },
+    [collapsedNodeIds, activeMindmapId, setCollapsedNodeIds],
+  )
 
   const resetCollapse = useCallback(() => {
     if (!activeMindmapId) return

@@ -44,7 +44,7 @@ export async function* streamChat(
     model: string
     messages: ChatCompletionMessageParam[]
     signal?: AbortSignal
-  }
+  },
 ): AsyncIterable<string> {
   const stream = await client.chat.completions.create(
     {
@@ -52,7 +52,7 @@ export async function* streamChat(
       messages: params.messages,
       stream: true,
     },
-    { signal: params.signal }
+    { signal: params.signal },
   )
 
   for await (const chunk of stream) {
@@ -70,7 +70,7 @@ export async function* streamChatWithRetry(
     messages: ChatCompletionMessageParam[]
     signal?: AbortSignal
   },
-  maxRetries = 1
+  maxRetries = 1,
 ): AsyncIterable<string> {
   let lastError: unknown
 
@@ -90,11 +90,7 @@ export async function* streamChatWithRetry(
       }
 
       if (err instanceof OpenAI.APIError && err.status && err.status >= 400 && err.status < 500) {
-        throw new LLMClientError(
-          `api_error_${err.status}`,
-          err.message,
-          false
-        )
+        throw new LLMClientError(`api_error_${err.status}`, err.message, false)
       }
 
       if (attempt < maxRetries) {
@@ -121,7 +117,11 @@ export async function fetchModels(client: OpenAI): Promise<Model[]> {
       }))
   } catch (err) {
     if (err instanceof OpenAI.APIError && err.status === 404) {
-      throw new LLMClientError('models_not_supported', 'This provider does not support listing models', false)
+      throw new LLMClientError(
+        'models_not_supported',
+        'This provider does not support listing models',
+        false,
+      )
     }
     throw err
   }

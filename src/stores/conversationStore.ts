@@ -7,15 +7,26 @@ import type { Message } from '../types/message'
 interface ConversationState {
   conversations: Conversation[]
   activeConversationId: string | null
-  addConversation: (data: { providerId: string; modelId: string; systemPrompt?: string }) => Conversation
-  updateConversation: (id: string, data: Partial<Pick<Conversation, 'title' | 'providerId' | 'modelId' | 'systemPrompt'>>) => void
+  addConversation: (data: {
+    providerId: string
+    modelId: string
+    systemPrompt?: string
+  }) => Conversation
+  updateConversation: (
+    id: string,
+    data: Partial<Pick<Conversation, 'title' | 'providerId' | 'modelId' | 'systemPrompt'>>,
+  ) => void
   removeConversation: (id: string) => void
   archiveConversation: (id: string) => void
   unarchiveConversation: (id: string) => void
   setActiveConversationId: (id: string | null) => void
   getActiveConversation: () => Conversation | null
   addMessageToConversation: (conversationId: string, message: Message) => void
-  updateMessageInConversation: (conversationId: string, messageId: string, updates: Partial<Pick<Message, 'content' | 'status'>>) => void
+  updateMessageInConversation: (
+    conversationId: string,
+    messageId: string,
+    updates: Partial<Pick<Message, 'content' | 'status'>>,
+  ) => void
   removeLastAssistantMessage: (conversationId: string) => void
 }
 
@@ -51,7 +62,7 @@ export const useConversationStore = create<ConversationState>()(
       updateConversation: (id, data) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, ...data, updatedAt: Date.now() } : c
+            c.id === id ? { ...c, ...data, updatedAt: Date.now() } : c,
           ),
         }))
       },
@@ -63,7 +74,7 @@ export const useConversationStore = create<ConversationState>()(
             conversations: remaining,
             activeConversationId:
               state.activeConversationId === id
-                ? remaining[0]?.id ?? null
+                ? (remaining[0]?.id ?? null)
                 : state.activeConversationId,
           }
         })
@@ -72,7 +83,7 @@ export const useConversationStore = create<ConversationState>()(
       archiveConversation: (id) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, archived: true, updatedAt: Date.now() } : c
+            c.id === id ? { ...c, archived: true, updatedAt: Date.now() } : c,
           ),
           activeConversationId:
             state.activeConversationId === id ? null : state.activeConversationId,
@@ -82,7 +93,7 @@ export const useConversationStore = create<ConversationState>()(
       unarchiveConversation: (id) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, archived: false, updatedAt: Date.now() } : c
+            c.id === id ? { ...c, archived: false, updatedAt: Date.now() } : c,
           ),
         }))
       },
@@ -120,9 +131,7 @@ export const useConversationStore = create<ConversationState>()(
             if (c.id !== conversationId) return c
             return {
               ...c,
-              messages: c.messages.map((m) =>
-                m.id === messageId ? { ...m, ...updates } : m
-              ),
+              messages: c.messages.map((m) => (m.id === messageId ? { ...m, ...updates } : m)),
               updatedAt: Date.now(),
             }
           }),
@@ -142,6 +151,10 @@ export const useConversationStore = create<ConversationState>()(
         }))
       },
     }),
-    { name: 'conversation-store', version: 2, storage: createJSONStorage(() => createIndexedDBStorage()) }
-  )
+    {
+      name: 'conversation-store',
+      version: 2,
+      storage: createJSONStorage(() => createIndexedDBStorage()),
+    },
+  ),
 )

@@ -13,7 +13,7 @@ export function deriveNodeId(label: string, parentPath: string[] = []): string {
   const seed = [...parentPath, normalizeLabel(label)].join('/')
   let hash = 0
   for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i) | 0
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
   }
   return 'n' + Math.abs(hash).toString(36).slice(0, 7)
 }

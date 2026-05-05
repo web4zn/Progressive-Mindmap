@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseMarkdownToTree, treeToMarkdown, buildMindmapPrompt, buildSystemPrompt,
-  countNodes, maxTreeDepth, validateTree, collectCorpusContent,
-  deriveNodeId, buildIncrementalPrompt, parseOperations, buildEditedNodeIdSet, applyOperations
+  parseMarkdownToTree,
+  treeToMarkdown,
+  buildMindmapPrompt,
+  buildSystemPrompt,
+  countNodes,
+  maxTreeDepth,
+  validateTree,
+  collectCorpusContent,
+  deriveNodeId,
+  buildIncrementalPrompt,
+  parseOperations,
+  buildEditedNodeIdSet,
+  applyOperations,
 } from '../mindmap-generator'
 import type { Conversation, Message } from '@/types'
 import type { CorpusEntry, MindMapNode, IncrementalOperation } from '@/types/mindmap'
@@ -198,20 +208,59 @@ describe('countNodes', () => {
   })
 
   it('counts single node', () => {
-    const node: MindMapNode = { id: '1', label: 'A', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }
+    const node: MindMapNode = {
+      id: '1',
+      label: 'A',
+      summary: '',
+      children: [],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
+    }
     expect(countNodes([node])).toBe(1)
   })
 
   it('counts nested tree', () => {
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'Root', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [
-        { id: '2', label: 'Child1', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-        { id: '3', label: 'Child2', summary: '', children: [
-          { id: '4', label: 'Grandchild', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-        ], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-      ],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'Root',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: '2',
+            label: 'Child1',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+          {
+            id: '3',
+            label: 'Child2',
+            summary: '',
+            children: [
+              {
+                id: '4',
+                label: 'Grandchild',
+                summary: '',
+                children: [],
+                sourceConversationIds: [],
+                sourceExcerpts: {},
+                editedByUser: false,
+              },
+            ],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+        ],
+      },
+    ]
     expect(countNodes(tree)).toBe(4)
   })
 })
@@ -222,86 +271,214 @@ describe('maxTreeDepth', () => {
   })
 
   it('returns 1 for single node', () => {
-    const node: MindMapNode = { id: '1', label: 'A', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }
+    const node: MindMapNode = {
+      id: '1',
+      label: 'A',
+      summary: '',
+      children: [],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
+    }
     expect(maxTreeDepth([node])).toBe(1)
   })
 
   it('returns correct depth for 3-level tree', () => {
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'L1', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [{
-        id: '2', label: 'L2', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-        children: [{
-          id: '3', label: 'L3', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-        }],
-      }],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'L1',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: '2',
+            label: 'L2',
+            summary: '',
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+            children: [
+              {
+                id: '3',
+                label: 'L3',
+                summary: '',
+                children: [],
+                sourceConversationIds: [],
+                sourceExcerpts: {},
+                editedByUser: false,
+              },
+            ],
+          },
+        ],
+      },
+    ]
     expect(maxTreeDepth(tree)).toBe(3)
   })
 })
 
 describe('validateTree', () => {
   it('validates clean tree with no warnings', () => {
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'Root', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [
-        { id: '2', label: 'Child', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-      ],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'Root',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: '2',
+            label: 'Child',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+        ],
+      },
+    ]
     expect(validateTree(tree)).toEqual([])
   })
 
   it('detects duplicate nodes at same depth', () => {
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'Root', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [
-        { id: '2', label: 'Same', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-        { id: '3', label: 'Same', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-      ],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'Root',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: '2',
+            label: 'Same',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+          {
+            id: '3',
+            label: 'Same',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+        ],
+      },
+    ]
     const warnings = validateTree(tree)
     expect(warnings.length).toBeGreaterThan(0)
-    expect(warnings.some(w => w.type === 'duplicate')).toBe(true)
+    expect(warnings.some((w) => w.type === 'duplicate')).toBe(true)
   })
 
   it('detects empty label nodes', () => {
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'Root', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [
-        { id: '2', label: '', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false },
-      ],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'Root',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: '2',
+            label: '',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: false,
+          },
+        ],
+      },
+    ]
     const warnings = validateTree(tree)
-    expect(warnings.some(w => w.type === 'empty-label')).toBe(true)
+    expect(warnings.some((w) => w.type === 'empty-label')).toBe(true)
   })
 
   it('detects depth exceeded', () => {
-    const deepNode: MindMapNode = { id: '4', label: 'L4', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }
-    const l3: MindMapNode = { id: '3', label: 'L3', summary: '', children: [deepNode], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }
-    const l2: MindMapNode = { id: '2', label: 'L2', summary: '', children: [l3], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }
-    const tree: MindMapNode[] = [{ id: '1', label: 'L1', summary: '', children: [l2], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false }]
+    const deepNode: MindMapNode = {
+      id: '4',
+      label: 'L4',
+      summary: '',
+      children: [],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
+    }
+    const l3: MindMapNode = {
+      id: '3',
+      label: 'L3',
+      summary: '',
+      children: [deepNode],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
+    }
+    const l2: MindMapNode = {
+      id: '2',
+      label: 'L2',
+      summary: '',
+      children: [l3],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
+    }
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'L1',
+        summary: '',
+        children: [l2],
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+      },
+    ]
     const warnings = validateTree(tree)
-    expect(warnings.some(w => w.type === 'depth-exceeded')).toBe(true)
+    expect(warnings.some((w) => w.type === 'depth-exceeded')).toBe(true)
   })
 
   it('detects breadth exceeded', () => {
     const children = Array.from({ length: 12 }, (_, i) => ({
-      id: `c${i}`, label: `Child${i}`, summary: '', children: [],
-      sourceConversationIds: [] as string[], sourceExcerpts: {} as Record<string, string>, editedByUser: false,
+      id: `c${i}`,
+      label: `Child${i}`,
+      summary: '',
+      children: [],
+      sourceConversationIds: [] as string[],
+      sourceExcerpts: {} as Record<string, string>,
+      editedByUser: false,
     }))
-    const tree: MindMapNode[] = [{
-      id: '1', label: 'Root', summary: '', children, sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: '1',
+        label: 'Root',
+        summary: '',
+        children,
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+      },
+    ]
     const warnings = validateTree(tree)
-    expect(warnings.some(w => w.type === 'breadth-exceeded')).toBe(true)
+    expect(warnings.some((w) => w.type === 'breadth-exceeded')).toBe(true)
   })
 })
 
 describe('buildMindmapPrompt with materialContent', () => {
   it('uses materialContent when provided', () => {
-    const conv = makeConversation('Test', [
-      makeMessage('user', 'What is React?'),
-    ])
+    const conv = makeConversation('Test', [makeMessage('user', 'What is React?')])
     const matContent = 'Custom material text content'
     const { userMessage } = buildMindmapPrompt(null, [conv], matContent)
     expect(userMessage).toContain('Custom material text content')
@@ -309,9 +486,7 @@ describe('buildMindmapPrompt with materialContent', () => {
   })
 
   it('falls back to conversations when no materialContent', () => {
-    const conv = makeConversation('Test', [
-      makeMessage('user', 'What is React?'),
-    ])
+    const conv = makeConversation('Test', [makeMessage('user', 'What is React?')])
     const { userMessage } = buildMindmapPrompt(null, [conv])
     expect(userMessage).toContain('What is React?')
     expect(userMessage).toContain('[src:')
@@ -410,8 +585,13 @@ describe('buildIncrementalPrompt', () => {
 
   it('includes existing tree in user message', () => {
     const node: MindMapNode = {
-      id: 'n1', label: 'Root', summary: '', children: [],
-      sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
+      id: 'n1',
+      label: 'Root',
+      summary: '',
+      children: [],
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: false,
     }
     const { userMessage } = buildIncrementalPrompt([node], [])
     expect(userMessage).toContain('# Root')
@@ -447,7 +627,11 @@ describe('parseOperations', () => {
     const result = parseOperations(json)
     expect(result).toHaveLength(5)
     if (result) {
-      expect(result[0]).toEqual({ op: 'add_child', parent_id: 'p1', node: { label: 'New', summary: 'Desc' } })
+      expect(result[0]).toEqual({
+        op: 'add_child',
+        parent_id: 'p1',
+        node: { label: 'New', summary: 'Desc' },
+      })
       expect(result[1]).toEqual({ op: 'update', node_id: 'n1', changes: { label: 'Updated' } })
       expect(result[2]).toEqual({ op: 'merge', from_id: 'n2', to_id: 'n3' })
       expect(result[3]).toEqual({ op: 'delete_leaf', node_id: 'n4' })
@@ -498,50 +682,102 @@ describe('parseOperations', () => {
   })
 
   it('defaults summary to empty string when missing in add_child', () => {
-    const json = JSON.stringify({ operations: [{ op: 'add_child', parent_id: 'p1', node: { label: 'X' } }] })
+    const json = JSON.stringify({
+      operations: [{ op: 'add_child', parent_id: 'p1', node: { label: 'X' } }],
+    })
     const result = parseOperations(json)
     expect(result).toHaveLength(1)
     if (result) {
-      expect(result[0]).toEqual({ op: 'add_child', parent_id: 'p1', node: { label: 'X', summary: '' } })
+      expect(result[0]).toEqual({
+        op: 'add_child',
+        parent_id: 'p1',
+        node: { label: 'X', summary: '' },
+      })
     }
   })
 })
 
 describe('buildEditedNodeIdSet', () => {
   it('returns empty set when no nodes are edited', () => {
-    const tree: MindMapNode[] = [{
-      id: 'n1', label: 'A', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: 'n1',
+        label: 'A',
+        summary: '',
+        children: [],
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+      },
+    ]
     expect(buildEditedNodeIdSet(tree)).toEqual(new Set())
   })
 
   it('returns ID of edited node', () => {
-    const tree: MindMapNode[] = [{
-      id: 'n1', label: 'A', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: true,
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: 'n1',
+        label: 'A',
+        summary: '',
+        children: [],
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: true,
+      },
+    ]
     expect(buildEditedNodeIdSet(tree)).toEqual(new Set(['n1']))
   })
 
   it('finds edited nodes recursively', () => {
-    const tree: MindMapNode[] = [{
-      id: 'n1', label: 'A', summary: '', sourceConversationIds: [], sourceExcerpts: {}, editedByUser: false,
-      children: [{
-        id: 'n2', label: 'B', summary: '', children: [], sourceConversationIds: [], sourceExcerpts: {}, editedByUser: true,
-      }],
-    }]
+    const tree: MindMapNode[] = [
+      {
+        id: 'n1',
+        label: 'A',
+        summary: '',
+        sourceConversationIds: [],
+        sourceExcerpts: {},
+        editedByUser: false,
+        children: [
+          {
+            id: 'n2',
+            label: 'B',
+            summary: '',
+            children: [],
+            sourceConversationIds: [],
+            sourceExcerpts: {},
+            editedByUser: true,
+          },
+        ],
+      },
+    ]
     expect(buildEditedNodeIdSet(tree)).toEqual(new Set(['n2']))
   })
 })
 
 describe('applyOperations', () => {
-  function makeNode(id: string, label: string, children: MindMapNode[] = [], edited = false): MindMapNode {
-    return { id, label, summary: '', children, sourceConversationIds: [], sourceExcerpts: {}, editedByUser: edited }
+  function makeNode(
+    id: string,
+    label: string,
+    children: MindMapNode[] = [],
+    edited = false,
+  ): MindMapNode {
+    return {
+      id,
+      label,
+      summary: '',
+      children,
+      sourceConversationIds: [],
+      sourceExcerpts: {},
+      editedByUser: edited,
+    }
   }
 
   describe('add_child', () => {
     it('adds a child to the specified parent', () => {
       const tree = [makeNode('n1', 'Root')]
-      const ops: IncrementalOperation[] = [{ op: 'add_child', parent_id: 'n1', node: { label: 'Child', summary: 'A child' } }]
+      const ops: IncrementalOperation[] = [
+        { op: 'add_child', parent_id: 'n1', node: { label: 'Child', summary: 'A child' } },
+      ]
       const { newTree, changes } = applyOperations(tree, ops, new Set())
       expect(newTree[0]!.children).toHaveLength(1)
       expect(newTree[0]!.children[0]!.label).toBe('Child')
@@ -552,7 +788,9 @@ describe('applyOperations', () => {
 
     it('skips add_child when parent_id does not exist', () => {
       const tree = [makeNode('n1', 'Root')]
-      const ops: IncrementalOperation[] = [{ op: 'add_child', parent_id: 'nonexistent', node: { label: 'X', summary: '' } }]
+      const ops: IncrementalOperation[] = [
+        { op: 'add_child', parent_id: 'nonexistent', node: { label: 'X', summary: '' } },
+      ]
       const { newTree, changes } = applyOperations(tree, ops, new Set())
       expect(newTree[0]!.children).toHaveLength(0)
       expect(changes).toHaveLength(0)
@@ -562,7 +800,9 @@ describe('applyOperations', () => {
   describe('update', () => {
     it('updates label and summary of a node', () => {
       const tree = [makeNode('n1', 'OldLabel', [makeNode('n2', 'Child')])]
-      const ops: IncrementalOperation[] = [{ op: 'update', node_id: 'n1', changes: { label: 'NewLabel', summary: 'New summary' } }]
+      const ops: IncrementalOperation[] = [
+        { op: 'update', node_id: 'n1', changes: { label: 'NewLabel', summary: 'New summary' } },
+      ]
       const { newTree, changes } = applyOperations(tree, ops, new Set())
       expect(newTree[0]!.label).toBe('NewLabel')
       expect(newTree[0]!.summary).toBe('New summary')
@@ -572,7 +812,9 @@ describe('applyOperations', () => {
 
     it('does not update edited nodes', () => {
       const tree = [makeNode('n1', 'OldLabel', [], true)]
-      const ops: IncrementalOperation[] = [{ op: 'update', node_id: 'n1', changes: { label: 'NewLabel' } }]
+      const ops: IncrementalOperation[] = [
+        { op: 'update', node_id: 'n1', changes: { label: 'NewLabel' } },
+      ]
       const { newTree, changes } = applyOperations(tree, ops, new Set(['n1']))
       expect(newTree[0]!.label).toBe('OldLabel')
       expect(changes).toHaveLength(0)
@@ -580,7 +822,9 @@ describe('applyOperations', () => {
 
     it('skips update when node_id does not exist', () => {
       const tree = [makeNode('n1', 'Label')]
-      const ops: IncrementalOperation[] = [{ op: 'update', node_id: 'nonexistent', changes: { label: 'X' } }]
+      const ops: IncrementalOperation[] = [
+        { op: 'update', node_id: 'nonexistent', changes: { label: 'X' } },
+      ]
       const { newTree, changes } = applyOperations(tree, ops, new Set())
       expect(newTree).toHaveLength(1)
       expect(newTree[0]!.label).toBe('Label')
@@ -598,7 +842,7 @@ describe('applyOperations', () => {
       expect(newTree).toHaveLength(1)
       expect(newTree[0]!.id).toBe('n2')
       expect(newTree[0]!.children).toHaveLength(2)
-      expect(newTree[0]!.children.map(c => c.label).sort()).toEqual(['ChildA', 'ChildB'])
+      expect(newTree[0]!.children.map((c) => c.label).sort()).toEqual(['ChildA', 'ChildB'])
       expect(changes).toHaveLength(1)
     })
 
@@ -671,5 +915,3 @@ describe('applyOperations', () => {
     })
   })
 })
-
-

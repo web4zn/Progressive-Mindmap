@@ -46,7 +46,7 @@ describe('fetchModels', () => {
   it('rejects with LLMClientError on fetch failure', async () => {
     const { fetchModels: mockedFetch } = await import('../llm-client')
     vi.mocked(mockedFetch).mockRejectedValue(
-      new LLMClientError('models_not_supported', 'Provider does not support listing models', false)
+      new LLMClientError('models_not_supported', 'Provider does not support listing models', false),
     )
 
     await expect(mockedFetch({} as never)).rejects.toThrow(LLMClientError)

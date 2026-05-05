@@ -11,7 +11,9 @@ export function createIndexedDBStorage() {
         return (record as { value?: string } | undefined)?.value ?? null
       } catch {
         if (!warnedUnavailable) {
-          console.error('IndexedDB unavailable — running in memory-only mode. Data will not persist across refreshes.')
+          console.error(
+            'IndexedDB unavailable — running in memory-only mode. Data will not persist across refreshes.',
+          )
           warnedUnavailable = true
         }
         return null
@@ -21,13 +23,17 @@ export function createIndexedDBStorage() {
       try {
         const db = await getDb()
         await db.put('zustand-persist', { name: _name, value: _value })
-      } catch {}
+      } catch {
+        /* IndexedDB write failed — silently ignore, data will be retried on next persist */
+      }
     },
     removeItem: async (_name: string): Promise<void> => {
       try {
         const db = await getDb()
         await db.delete('zustand-persist', _name)
-      } catch {}
+      } catch {
+        /* IndexedDB delete failed — silently ignore */
+      }
     },
   }
 }

@@ -35,3 +35,7 @@ temp/
 # Logs
 *.log
 npm-debug.log*
+
+# Tooling
+.agents/
+skills-lock.json

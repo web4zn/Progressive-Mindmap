@@ -15,12 +15,10 @@ import { useProviderStore } from '@/stores/providerStore'
 export default function ModelSelector() {
   const { conversations, activeConversationId, updateConversation } = useConversationStore()
   const { providers } = useProviderStore()
-  const active = conversations.find(c => c.id === activeConversationId)
+  const active = conversations.find((c) => c.id === activeConversationId)
 
-  const activeProvider = active ? providers.find(p => p.id === active.providerId) : null
-  const label = activeProvider && active
-    ? `${activeProvider.name} / ${active.modelId}`
-    : '选择模型'
+  const activeProvider = active ? providers.find((p) => p.id === active.providerId) : null
+  const label = activeProvider && active ? `${activeProvider.name} / ${active.modelId}` : '选择模型'
 
   const handleSelect = (providerId: string, modelId: string) => {
     if (!active) return
@@ -41,16 +39,22 @@ export default function ModelSelector() {
         ) : (
           providers.map((p) => (
             <DropdownMenuGroup key={p.id}>
-              <DropdownMenuLabel className="text-xs text-muted-foreground">{p.name}</DropdownMenuLabel>
-              {p.models.filter(m => m.enabled).map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onClick={() => handleSelect(p.id, m.id)}
-                  className={active?.modelId === m.id && active?.providerId === p.id ? 'bg-accent' : ''}
-                >
-                  {m.name}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                {p.name}
+              </DropdownMenuLabel>
+              {p.models
+                .filter((m) => m.enabled)
+                .map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onClick={() => handleSelect(p.id, m.id)}
+                    className={
+                      active?.modelId === m.id && active?.providerId === p.id ? 'bg-accent' : ''
+                    }
+                  >
+                    {m.name}
+                  </DropdownMenuItem>
+                ))}
               <DropdownMenuSeparator />
             </DropdownMenuGroup>
           ))

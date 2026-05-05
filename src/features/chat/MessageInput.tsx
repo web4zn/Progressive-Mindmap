@@ -10,7 +10,12 @@ interface MessageInputProps {
   disabled?: boolean
 }
 
-export default function MessageInput({ onSend, onStop, isGenerating, disabled }: MessageInputProps) {
+export default function MessageInput({
+  onSend,
+  onStop,
+  isGenerating,
+  disabled,
+}: MessageInputProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -47,7 +52,7 @@ export default function MessageInput({ onSend, onStop, isGenerating, disabled }:
       <Textarea
         ref={textareaRef}
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={disabled ? '请先配置模型提供商...' : '输入消息开始对话... (Shift+Enter 换行)'}
         className="min-h-[40px] max-h-[144px] resize-none ring-1 ring-border focus-visible:ring-2 focus-visible:ring-ring transition-shadow"

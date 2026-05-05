@@ -12,7 +12,12 @@ interface MessageListProps {
   isGenerating?: boolean
 }
 
-export default function MessageList({ messages, conversationId, onRegenerate, isGenerating }: MessageListProps) {
+export default function MessageList({
+  messages,
+  conversationId,
+  onRegenerate,
+  isGenerating,
+}: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -54,9 +59,10 @@ export default function MessageList({ messages, conversationId, onRegenerate, is
               <MessageBubble
                 message={msg}
                 conversationId={conversationId ?? ''}
-                onRegenerate={msg.role === 'assistant' && msg.status !== 'streaming' && msg.status !== 'pending'
-                  ? () => onRegenerate?.(msg.id)
-                  : undefined
+                onRegenerate={
+                  msg.role === 'assistant' && msg.status !== 'streaming' && msg.status !== 'pending'
+                    ? () => onRegenerate?.(msg.id)
+                    : undefined
                 }
               />
             </div>

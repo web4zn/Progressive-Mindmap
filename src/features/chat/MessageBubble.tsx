@@ -20,7 +20,10 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
 
   const pendingSelectionRef = useRef<string | null>(null)
 
-  const time = new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(message.createdAt).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content)
@@ -69,7 +72,9 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
     <div className={`flex gap-3 mb-4 message-enter ${isUser ? 'flex-row-reverse' : ''}`}>
       <Avatar type={isUser ? 'user' : 'ai'} userInitial="我" />
 
-      <div className={`max-w-[75%] lg:max-w-[60%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div
+        className={`max-w-[75%] lg:max-w-[60%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}
+      >
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs text-muted-foreground/60">{time}</span>
         </div>
@@ -86,14 +91,14 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
           {isUser ? (
             <span className="whitespace-pre-wrap">{message.content}</span>
           ) : (
-            <Markdown remarkPlugins={[remarkGfm]}>
-              {message.content || ''}
-            </Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{message.content || ''}</Markdown>
           )}
           {isStreaming && (
             <span className="inline-flex items-center gap-1 ml-1">
               <span className="streaming-indicator">
-                <span /><span /><span />
+                <span />
+                <span />
+                <span />
               </span>
             </span>
           )}

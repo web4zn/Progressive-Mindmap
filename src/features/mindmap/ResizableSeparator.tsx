@@ -15,14 +15,11 @@ export default function ResizableSeparator({
   const startXRef = useRef(0)
   const startWidthRef = useRef(0)
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      setDragging(true)
-      startXRef.current = e.clientX
-    },
-    []
-  )
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setDragging(true)
+    startXRef.current = e.clientX
+  }, [])
 
   useEffect(() => {
     if (!dragging) return
@@ -51,9 +48,7 @@ export default function ResizableSeparator({
   return (
     <div
       className={`w-1.5 shrink-0 cursor-col-resize transition-colors duration-150 ${
-        dragging
-          ? 'bg-primary'
-          : 'bg-border hover:bg-primary/50'
+        dragging ? 'bg-primary' : 'bg-border hover:bg-primary/50'
       }`}
       onMouseDown={handleMouseDown}
     />

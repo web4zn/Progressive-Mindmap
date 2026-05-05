@@ -1,0 +1,9 @@
+dist
+node_modules
+.vite
+package-lock.json
+tsconfig.tsbuildinfo
+.opencode
+.agents
+openspec
+.github

@@ -6,8 +6,16 @@ import type { Provider, Model } from '../types/provider'
 interface ProviderState {
   providers: Provider[]
   selectedProviderId: string | null
-  addProvider: (data: { name: string; apiEndpoint: string; apiKey: string; models?: Model[] }) => Provider
-  updateProvider: (id: string, data: Partial<Pick<Provider, 'name' | 'apiEndpoint' | 'apiKey' | 'models'>>) => void
+  addProvider: (data: {
+    name: string
+    apiEndpoint: string
+    apiKey: string
+    models?: Model[]
+  }) => Provider
+  updateProvider: (
+    id: string,
+    data: Partial<Pick<Provider, 'name' | 'apiEndpoint' | 'apiKey' | 'models'>>,
+  ) => void
   removeProvider: (id: string) => void
   setSelectedProviderId: (id: string | null) => void
   getSelectedProvider: () => Provider | null
@@ -19,10 +27,12 @@ function generateId(): string {
 
 function detectJsonMode(apiEndpoint: string): boolean {
   const lower = apiEndpoint.toLowerCase()
-  return lower.includes('api.openai.com') ||
+  return (
+    lower.includes('api.openai.com') ||
     lower.includes('api.deepseek.com') ||
     lower.includes('api.siliconflow.cn') ||
     lower.includes('generativelanguage.googleapis.com')
+  )
 }
 
 export const useProviderStore = create<ProviderState>()(
@@ -52,7 +62,7 @@ export const useProviderStore = create<ProviderState>()(
       updateProvider: (id, data) => {
         set((state) => ({
           providers: state.providers.map((p) =>
-            p.id === id ? { ...p, ...data, updatedAt: Date.now() } : p
+            p.id === id ? { ...p, ...data, updatedAt: Date.now() } : p,
           ),
         }))
       },
@@ -64,7 +74,7 @@ export const useProviderStore = create<ProviderState>()(
             providers: remaining,
             selectedProviderId:
               state.selectedProviderId === id
-                ? remaining[0]?.id ?? null
+                ? (remaining[0]?.id ?? null)
                 : state.selectedProviderId,
           }
         })
@@ -77,6 +87,10 @@ export const useProviderStore = create<ProviderState>()(
         return providers.find((p) => p.id === selectedProviderId) ?? null
       },
     }),
-    { name: 'provider-store', version: 2, storage: createJSONStorage(() => createIndexedDBStorage()) }
-  )
+    {
+      name: 'provider-store',
+      version: 2,
+      storage: createJSONStorage(() => createIndexedDBStorage()),
+    },
+  ),
 )

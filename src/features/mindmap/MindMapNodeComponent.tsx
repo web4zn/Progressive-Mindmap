@@ -18,11 +18,16 @@ function MindMapNodeComponent({ id, data, selected }: NodeProps & { data: MindMa
             className="nodrag shrink-0 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation()
-              const handler = (window as unknown as { __mindmapToggle?: (id: string) => void }).__mindmapToggle
+              const handler = (window as unknown as { __mindmapToggle?: (id: string) => void })
+                .__mindmapToggle
               handler?.(id)
             }}
           >
-            {data.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {data.collapsed ? (
+              <ChevronRight className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
           </button>
         )}
         {!data.hasChildren && <span className="w-3.5 shrink-0" />}

@@ -64,8 +64,12 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="outline" size="sm" onClick={onCancel}>取消</Button>
-          <Button size="sm" onClick={handleConfirm}>确认</Button>
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            取消
+          </Button>
+          <Button size="sm" onClick={handleConfirm}>
+            确认
+          </Button>
         </div>
       </div>
     </div>,

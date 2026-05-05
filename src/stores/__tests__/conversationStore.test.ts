@@ -68,7 +68,8 @@ describe('conversationStore', () => {
   })
 
   it('updateMessageInConversation modifies message fields', () => {
-    const { addConversation, addMessageToConversation, updateMessageInConversation } = useConversationStore.getState()
+    const { addConversation, addMessageToConversation, updateMessageInConversation } =
+      useConversationStore.getState()
     const conv = addConversation({ providerId: 'p1', modelId: 'gpt-4' })
 
     addMessageToConversation(conv.id, {
@@ -87,14 +88,23 @@ describe('conversationStore', () => {
   })
 
   it('removeLastAssistantMessage removes only assistant messages at the end', () => {
-    const { addConversation, addMessageToConversation, removeLastAssistantMessage } = useConversationStore.getState()
+    const { addConversation, addMessageToConversation, removeLastAssistantMessage } =
+      useConversationStore.getState()
     const conv = addConversation({ providerId: 'p1', modelId: 'gpt-4' })
 
     addMessageToConversation(conv.id, {
-      id: 'm1', role: 'user', content: 'hello', createdAt: Date.now(), status: 'complete',
+      id: 'm1',
+      role: 'user',
+      content: 'hello',
+      createdAt: Date.now(),
+      status: 'complete',
     })
     addMessageToConversation(conv.id, {
-      id: 'm2', role: 'assistant', content: 'hi', createdAt: Date.now(), status: 'complete',
+      id: 'm2',
+      role: 'assistant',
+      content: 'hi',
+      createdAt: Date.now(),
+      status: 'complete',
     })
 
     removeLastAssistantMessage(conv.id)

@@ -36,9 +36,7 @@ describe('providerStore', () => {
       name: 'DeepSeek',
       apiEndpoint: 'https://api.deepseek.com',
       apiKey: 'sk-test',
-      models: [
-        { id: 'deepseek-chat', name: 'DeepSeek Chat', enabled: true },
-      ],
+      models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat', enabled: true }],
     })
 
     const state = useProviderStore.getState()

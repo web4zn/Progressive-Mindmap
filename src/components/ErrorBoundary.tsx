@@ -44,7 +44,9 @@ export default class ErrorBoundary extends Component<Props, State> {
             )}
             <div className="flex justify-center gap-3">
               <Button onClick={() => window.location.reload()}>刷新页面</Button>
-              <Button variant="outline" onClick={this.handleReset}>重试</Button>
+              <Button variant="outline" onClick={this.handleReset}>
+                重试
+              </Button>
             </div>
           </div>
         </div>

@@ -4,9 +4,13 @@ import type { MindMapNode } from '../../types/mindmap'
 
 function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
   return {
-    id: overrides.id ?? 'n1', label: overrides.label ?? 'Test', summary: overrides.summary ?? '',
-    children: overrides.children ?? [], sourceConversationIds: overrides.sourceConversationIds ?? [],
-    sourceExcerpts: {}, editedByUser: overrides.editedByUser ?? false,
+    id: overrides.id ?? 'n1',
+    label: overrides.label ?? 'Test',
+    summary: overrides.summary ?? '',
+    children: overrides.children ?? [],
+    sourceConversationIds: overrides.sourceConversationIds ?? [],
+    sourceExcerpts: {},
+    editedByUser: overrides.editedByUser ?? false,
   }
 }
 
@@ -20,7 +24,9 @@ describe('treeToFlow', () => {
   })
 
   it('creates edges for parent-child', () => {
-    const tree = [makeNode({ id: 'root', children: [makeNode({ id: 'c1' }), makeNode({ id: 'c2' })] })]
+    const tree = [
+      makeNode({ id: 'root', children: [makeNode({ id: 'c1' }), makeNode({ id: 'c2' })] }),
+    ]
     const { nodes, edges } = treeToFlow(tree)
     expect(nodes).toHaveLength(3)
     expect(edges).toHaveLength(2)
@@ -30,16 +36,21 @@ describe('treeToFlow', () => {
   })
 
   it('hides collapsed subtree', () => {
-    const tree = [makeNode({ id: 'root', children: [makeNode({ id: 'c1', children: [makeNode({ id: 'gc1' })] })] })]
+    const tree = [
+      makeNode({
+        id: 'root',
+        children: [makeNode({ id: 'c1', children: [makeNode({ id: 'gc1' })] })],
+      }),
+    ]
     const { nodes, edges } = treeToFlow(tree, new Set(['c1']))
-    expect(nodes.map(n => n.id)).toEqual(['root', 'c1'])
+    expect(nodes.map((n) => n.id)).toEqual(['root', 'c1'])
     expect(edges).toHaveLength(1)
   })
 
   it('marks hasChildren and collapsed in data', () => {
     const tree = [makeNode({ id: 'root', children: [makeNode({ id: 'c1' })] })]
     const { nodes } = treeToFlow(tree, new Set(['c1']))
-    const c1 = nodes.find(n => n.id === 'c1')!
+    const c1 = nodes.find((n) => n.id === 'c1')!
     expect(c1.data.hasChildren).toBe(false)
   })
 })
@@ -74,7 +85,10 @@ describe('isDescendantOf', () => {
   })
 
   it('grandchild is descendant', () => {
-    const node = makeNode({ id: 'root', children: [makeNode({ id: 'c1', children: [makeNode({ id: 'gc1' })] })] })
+    const node = makeNode({
+      id: 'root',
+      children: [makeNode({ id: 'c1', children: [makeNode({ id: 'gc1' })] })],
+    })
     expect(isDescendantOf(node, 'gc1')).toBe(true)
   })
 

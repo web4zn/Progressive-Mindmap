@@ -22,8 +22,12 @@ vi.mock('@/lib/llm-client', () => ({
 beforeEach(() => {
   const store: Record<string, string> = {}
   vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => store[key] ?? null)
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string, value: string) => { store[key] = value })
-  vi.spyOn(Storage.prototype, 'removeItem').mockImplementation((key: string) => { delete store[key] })
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string, value: string) => {
+    store[key] = value
+  })
+  vi.spyOn(Storage.prototype, 'removeItem').mockImplementation((key: string) => {
+    delete store[key]
+  })
 
   useProviderStore.persist.clearStorage()
   useProviderStore.setState({ providers: [], selectedProviderId: null })

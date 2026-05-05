@@ -1,7 +1,13 @@
 import OpenAI from 'openai'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import type { Conversation } from '../types/conversation'
-import type { MindMapNode, MindMap, CorpusEntry, IncrementalOperation, ChangeRecord } from '../types/mindmap'
+import type {
+  MindMapNode,
+  MindMap,
+  CorpusEntry,
+  IncrementalOperation,
+  ChangeRecord,
+} from '../types/mindmap'
 import { generateId, deriveNodeId } from './id'
 
 export { deriveNodeId }
@@ -31,16 +37,18 @@ export function buildSystemPrompt(useJsonMode?: boolean, maxDepth = 3): string {
 
   let depthLimitStr: string
   if (maxDepth === 0) {
-    depthLimitStr = '深度不做硬性限制。根据内容的知识密度自行判断：表层概念用较少层级，技术细节可以到 4-5 层。不要让无关紧要的细节占据层级。'
+    depthLimitStr =
+      '深度不做硬性限制。根据内容的知识密度自行判断：表层概念用较少层级，技术细节可以到 4-5 层。不要让无关紧要的细节占据层级。'
   } else if (maxDepth === 1) {
     depthLimitStr = `最大深度为 1 层（#）`
   } else {
     depthLimitStr = `最大深度为 ${maxDepth} 层（${headerExamples}），不超过 ${maxDepth} 层`
   }
 
-  const jsonDepthRule = maxDepth === 0
-    ? '深度不做硬性限制。根据内容的知识密度自行判断：表层概念用较少层级，技术细节可以到 4-5 层。不要让无关紧要的细节占据层级'
-    : `最大深度为 ${maxDepth} 层`
+  const jsonDepthRule =
+    maxDepth === 0
+      ? '深度不做硬性限制。根据内容的知识密度自行判断：表层概念用较少层级，技术细节可以到 4-5 层。不要让无关紧要的细节占据层级'
+      : `最大深度为 ${maxDepth} 层`
 
   const formatRules = useJsonMode
     ? `
@@ -106,7 +114,7 @@ export function buildSystemPrompt(useJsonMode?: boolean, maxDepth = 3): string {
   return `${base}${formatRules}${examples}
 
 注意要点：
-${guidance.map(g => `- ${g}`).join('\n')}`
+${guidance.map((g) => `- ${g}`).join('\n')}`
 }
 
 export function buildMindmapPrompt(
@@ -114,7 +122,7 @@ export function buildMindmapPrompt(
   conversations: Conversation[],
   materialContent?: string,
   useJsonMode?: boolean,
-  maxDepth = 3
+  maxDepth = 3,
 ): {
   systemPrompt: string
   userMessage: string
@@ -129,7 +137,8 @@ export function buildMindmapPrompt(
     userMessage += '以下是现有的思维导图结构：\n\n'
     userMessage += treeToMarkdown(existingTree)
     userMessage += '\n\n---\n\n'
-    userMessage += '请基于以下新的内容更新思维导图。合并新知识点，扩充已有主题，输出完整的更新后 JSON：\n\n'
+    userMessage +=
+      '请基于以下新的内容更新思维导图。合并新知识点，扩充已有主题，输出完整的更新后 JSON：\n\n'
   } else {
     userMessage += '请基于以下内容生成思维导图：\n\n'
   }
@@ -146,7 +155,11 @@ export function buildMindmapPrompt(
         const srcKey = `${conv.id}/${msg.id.slice(0, 8)}`
         const content = msg.content.length > 2000 ? msg.content.slice(0, 2000) + '...' : msg.content
         userMessage += `[src:${srcKey}] **${role}**: ${content}\n\n`
-        sourceMap.set(srcKey, { conversationId: conv.id, messageId: msg.id, text: content.slice(0, 200) })
+        sourceMap.set(srcKey, {
+          conversationId: conv.id,
+          messageId: msg.id,
+          text: content.slice(0, 200),
+        })
       }
       userMessage += '---\n\n'
     }
@@ -158,7 +171,7 @@ export function buildMindmapPrompt(
 export function parseMarkdownToTree(
   markdown: string,
   sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
-  maxDepth = 3
+  maxDepth = 3,
 ): MindMapNode[] {
   const lines = markdown.split('\n')
   const roots: MindMapNode[] = []
@@ -198,7 +211,7 @@ export function parseMarkdownToTree(
 
     pendingSummary = ''
 
-    const parentPath = stack.map(s => s.node.label)
+    const parentPath = stack.map((s) => s.node.label)
 
     const node: MindMapNode = {
       id: deriveNodeId(label, parentPath),
@@ -235,7 +248,7 @@ export function parseMarkdownToTree(
 
 function parseSourceIds(
   text: string,
-  sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>
+  sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
 ): string[] {
   const sourceMatch = text.match(/\[源:\s*([^\]]+)\]/)
   if (!sourceMatch || !sourceMap) {
@@ -246,7 +259,7 @@ function parseSourceIds(
     }
     return []
   }
-  const keys = sourceMatch[1]?.split(',').map(k => k.trim()) ?? []
+  const keys = sourceMatch[1]?.split(',').map((k) => k.trim()) ?? []
   const ids = new Set<string>()
   for (const key of keys) {
     const entry = sourceMap.get(key)
@@ -261,7 +274,7 @@ function stripSourceAnnotations(text: string): string {
 
 function buildSourceExcerpts(
   sourceIds: string[],
-  sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>
+  sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
 ): Record<string, string> {
   if (!sourceMap) return {}
   const excerpts: Record<string, string> = {}
@@ -371,7 +384,9 @@ export function treeToMarkdown(nodes: MindMapNode[], depth = 0): string {
   return lines.join('\n')
 }
 
-export function conversationMessagesToHistory(conversations: Conversation[]): ChatCompletionMessageParam[] {
+export function conversationMessagesToHistory(
+  conversations: Conversation[],
+): ChatCompletionMessageParam[] {
   const messages: ChatCompletionMessageParam[] = []
 
   for (const conv of conversations.slice(-10)) {
@@ -399,7 +414,7 @@ function jsonNodeToMindMapNode(
   sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
   depth = 0,
   maxDepth = 3,
-  parentLabels: string[] = []
+  parentLabels: string[] = [],
 ): MindMapNode {
   const raw = item as JsonNode
   const label = (raw.label ?? '未命名').trim()
@@ -407,7 +422,14 @@ function jsonNodeToMindMapNode(
   const cleanLabel = stripSourceAnnotations(label)
   const sourceIds = parseSourceIds(label, sourceMap)
   const sourceExcerpts = buildSourceExcerpts(sourceIds, sourceMap)
-  const children = (raw.children ?? []).slice(0, 10).map((c: JsonNode) => jsonNodeToMindMapNode(c, sourceMap, depth + 1, maxDepth, [...parentLabels, cleanLabel || '未命名']))
+  const children = (raw.children ?? [])
+    .slice(0, 10)
+    .map((c: JsonNode) =>
+      jsonNodeToMindMapNode(c, sourceMap, depth + 1, maxDepth, [
+        ...parentLabels,
+        cleanLabel || '未命名',
+      ]),
+    )
 
   return {
     id: deriveNodeId(label, parentLabels),
@@ -423,7 +445,7 @@ function jsonNodeToMindMapNode(
 export function parseJsonToTree(
   jsonString: string,
   sourceMap?: Map<string, { conversationId: string; messageId: string; text: string }>,
-  maxDepth = 3
+  maxDepth = 3,
 ): MindMapNode[] {
   let parsed: { nodes?: unknown[] } = {}
   try {
@@ -446,8 +468,11 @@ export function parseJsonToTree(
 
 export function collectCorpusContent(
   corpus: CorpusEntry[],
-  conversations: Conversation[]
-): { content: string; sourceMap: Map<string, { conversationId: string; messageId: string; text: string }> } {
+  conversations: Conversation[],
+): {
+  content: string
+  sourceMap: Map<string, { conversationId: string; messageId: string; text: string }>
+} {
   const sourceMap = new Map<string, { conversationId: string; messageId: string; text: string }>()
   const parts: string[] = []
 
@@ -457,7 +482,7 @@ export function collectCorpusContent(
     let convId = ''
     let conv: Conversation | undefined
     for (const c of conversations) {
-      const found = c.messages.find(m => m.id === entry.messageId)
+      const found = c.messages.find((m) => m.id === entry.messageId)
       if (found) {
         msg = found
         convId = c.id
@@ -476,13 +501,18 @@ export function collectCorpusContent(
       const msgIndex = conv.messages.indexOf(msg)
       const prevMsg = msgIndex > 0 ? conv.messages[msgIndex - 1] : null
       if (prevMsg && prevMsg.role === 'user') {
-        const prevText = prevMsg.content.length > 500 ? prevMsg.content.slice(0, 500) + '...' : prevMsg.content
+        const prevText =
+          prevMsg.content.length > 500 ? prevMsg.content.slice(0, 500) + '...' : prevMsg.content
         contextLine = `**用户**: ${prevText}\n`
       }
     }
 
     parts.push(`${contextLine}[src:${srcKey}] **${role}**: ${text}`)
-    sourceMap.set(srcKey, { conversationId: convId, messageId: entry.messageId, text: text.slice(0, 200) })
+    sourceMap.set(srcKey, {
+      conversationId: convId,
+      messageId: entry.messageId,
+      text: text.slice(0, 200),
+    })
   }
 
   return { content: parts.join('\n\n'), sourceMap }
@@ -493,7 +523,8 @@ export function buildIncrementalPrompt(
   conversations: Conversation[],
   materialContent?: string,
 ): { systemPrompt: string; userMessage: string } {
-  const systemPrompt = '你是一个知识图谱增量编辑助手。分析现有图谱和新内容之间的差异，输出需要修改的操作。'
+  const systemPrompt =
+    '你是一个知识图谱增量编辑助手。分析现有图谱和新内容之间的差异，输出需要修改的操作。'
 
   let userMessage = '## 现有图谱\n\n'
   userMessage += treeToMarkdown(existingTree)
@@ -708,9 +739,9 @@ export function applyOperations(
         toNode.children.push(...fromNode.children)
         fromNode.children = []
         if (fromParent) {
-          fromParent.children = fromParent.children.filter(c => c.id !== op.from_id)
+          fromParent.children = fromParent.children.filter((c) => c.id !== op.from_id)
         } else {
-          const idx = newTree.findIndex(n => n.id === op.from_id)
+          const idx = newTree.findIndex((n) => n.id === op.from_id)
           if (idx !== -1) newTree.splice(idx, 1)
         }
         changes.push({
@@ -727,9 +758,9 @@ export function applyOperations(
         if (node.children.length > 0) continue
         if (editedNodeIds.has(op.node_id)) continue
         if (parent) {
-          parent.children = parent.children.filter(c => c.id !== op.node_id)
+          parent.children = parent.children.filter((c) => c.id !== op.node_id)
         } else {
-          const idx = newTree.findIndex(n => n.id === op.node_id)
+          const idx = newTree.findIndex((n) => n.id === op.node_id)
           if (idx !== -1) newTree.splice(idx, 1)
         }
         changes.push({
@@ -755,9 +786,10 @@ export async function* generateMindmap(
   conversations: Conversation[],
   modelId: string,
   signal?: AbortSignal,
-  mode: 'full' | 'incremental' = 'full'
+  mode: 'full' | 'incremental' = 'full',
 ): AsyncIterable<string> {
-  const effectiveDepth = mindmap.maxDepth == null ? 3 : mindmap.maxDepth === 0 ? 6 : mindmap.maxDepth
+  const effectiveDepth =
+    mindmap.maxDepth == null ? 3 : mindmap.maxDepth === 0 ? 6 : mindmap.maxDepth
   const existingTree = mindmap.tree.length > 0 ? mindmap.tree : null
   const { content: materialContent, sourceMap } = collectCorpusContent(corpus, conversations)
 
@@ -771,7 +803,13 @@ export async function* generateMindmap(
     systemPrompt = result.systemPrompt
     userMessage = result.userMessage
   } else {
-    const result = buildMindmapPrompt(existingTree, conversations, materialContent, true, effectiveDepth)
+    const result = buildMindmapPrompt(
+      existingTree,
+      conversations,
+      materialContent,
+      true,
+      effectiveDepth,
+    )
     systemPrompt = result.systemPrompt
     userMessage = result.userMessage
   }
@@ -787,7 +825,9 @@ export async function* generateMindmap(
     stream: false,
   }
 
-  createParams.response_format = { type: 'json_object' } as OpenAI.Chat.Completions.ChatCompletionCreateParams['response_format']
+  createParams.response_format = {
+    type: 'json_object',
+  } as OpenAI.Chat.Completions.ChatCompletionCreateParams['response_format']
 
   let response: OpenAI.Chat.Completions.ChatCompletion
   try {
@@ -811,5 +851,3 @@ export async function* generateMindmap(
     yield fullText
   }
 }
-
-

@@ -1,5 +1,18 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { BookmarkPlus, ChevronDown, ChevronRight, Download, RefreshCw, Settings, Trash2, ToggleLeft, ToggleRight, X, Maximize2, Minimize2 } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import {
+  BookmarkPlus,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  RefreshCw,
+  Settings,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  X,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -21,7 +34,14 @@ import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
 
 import { createClient } from '@/lib/llm-client'
-import { generateMindmap, parseJsonToTree, validateTree, parseOperations, applyOperations, buildEditedNodeIdSet } from '@/lib/mindmap-generator'
+import {
+  generateMindmap,
+  parseJsonToTree,
+  validateTree,
+  parseOperations,
+  applyOperations,
+  buildEditedNodeIdSet,
+} from '@/lib/mindmap-generator'
 import type { CorpusEntry, MindMapNode, ValidationWarning } from '@/types/mindmap'
 
 function findEditedNodes(nodes: MindMapNode[]): MindMapNode[] {
@@ -34,10 +54,10 @@ function findEditedNodes(nodes: MindMapNode[]): MindMapNode[] {
 }
 
 function mergeEditedNodes(newTree: MindMapNode[], editedNodes: MindMapNode[]): MindMapNode[] {
-  const editedIds = new Set(editedNodes.map(n => n.id))
+  const editedIds = new Set(editedNodes.map((n) => n.id))
   return newTree.map((node) => {
     if (editedIds.has(node.id)) {
-      const edited = editedNodes.find(n => n.id === node.id)
+      const edited = editedNodes.find((n) => n.id === node.id)
       return edited ?? node
     }
     return { ...node, children: mergeEditedNodes(node.children, editedNodes) }
@@ -51,7 +71,13 @@ interface MindMapPanelProps {
 }
 
 export default function MindMapPanel({ onClose }: MindMapPanelProps) {
-  const { mindmaps, activeMindmapId, setActiveMindmapId, updateMindmapTree, updateMindmapSettings } = useMindmapStore()
+  const {
+    mindmaps,
+    activeMindmapId,
+    setActiveMindmapId,
+    updateMindmapTree,
+    updateMindmapSettings,
+  } = useMindmapStore()
   const { conversations } = useConversationStore()
   const { providers } = useProviderStore()
   const { startGeneration, stopGeneration } = useChatStore()
@@ -66,18 +92,19 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   const [streamingTree, setStreamingTree] = useState<MindMapNode[] | null>(null)
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [corpusDeleteEntry, setCorpusDeleteEntry] = useState<{ entryId: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const activeMindmap = mindmaps.find((m) => m.id === activeMindmapId) ?? null
 
   const activeConversation = conversations.find(
-    (c) => c.id === useConversationStore.getState().activeConversationId
+    (c) => c.id === useConversationStore.getState().activeConversationId,
   )
 
   const generatorProviderId = activeMindmap?.generatorProviderId ?? activeConversation?.providerId
   const generatorModelId = activeMindmap?.generatorModelId ?? activeConversation?.modelId ?? ''
   const generatorProvider = generatorProviderId
-    ? providers.find((p) => p.id === generatorProviderId) ?? null
+    ? (providers.find((p) => p.id === generatorProviderId) ?? null)
     : null
 
   const handleGenerate = useCallback(async () => {
@@ -104,16 +131,26 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
       let fullContent = ''
       const configDepth = activeMindmap.maxDepth ?? 3
       const effectiveDepth = configDepth === 0 ? 6 : configDepth
-      const mode = activeMindmap.forceFullRebuild === true || (activeMindmap.tree ?? []).length === 0 || activeMindmap.lastGeneratedAt == null ? 'full' : 'incremental'
-      const corpusForGeneration = mode === 'incremental'
-        ? (activeMindmap.corpus ?? []).filter(e => !activeMindmap.lastGeneratedAt || e.addedAt > activeMindmap.lastGeneratedAt)
-        : (activeMindmap.corpus ?? [])
+      const mode =
+        activeMindmap.forceFullRebuild === true ||
+        (activeMindmap.tree ?? []).length === 0 ||
+        activeMindmap.lastGeneratedAt == null
+          ? 'full'
+          : 'incremental'
+      const corpusForGeneration =
+        mode === 'incremental'
+          ? (activeMindmap.corpus ?? []).filter(
+              (e) => !activeMindmap.lastGeneratedAt || e.addedAt > activeMindmap.lastGeneratedAt,
+            )
+          : (activeMindmap.corpus ?? [])
       setReasoningContent('')
       setReasoningOpen(true)
       setProgressText('')
       setStreamingTree(null)
 
-      let sourceMap: Map<string, { conversationId: string; messageId: string; text: string }> | undefined
+      let sourceMap:
+        | Map<string, { conversationId: string; messageId: string; text: string }>
+        | undefined
 
       for await (const chunk of generateMindmap(
         client,
@@ -122,15 +159,19 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         conversations,
         generatorModelId,
         controller.signal,
-        mode
+        mode,
       )) {
         if (typeof chunk === 'object' && chunk !== null && 'sourceMap' in chunk) {
-          sourceMap = (chunk as { sourceMap: Map<string, { conversationId: string; messageId: string; text: string }> }).sourceMap
+          sourceMap = (
+            chunk as {
+              sourceMap: Map<string, { conversationId: string; messageId: string; text: string }>
+            }
+          ).sourceMap
           continue
         }
         if (typeof chunk === 'object' && chunk !== null && 'reasoning' in chunk) {
           const reasoningChunk = chunk as { reasoning: string }
-          setReasoningContent(prev => prev + reasoningChunk.reasoning)
+          setReasoningContent((prev) => prev + reasoningChunk.reasoning)
           continue
         }
         if (typeof chunk === 'object' && chunk !== null && 'incrementalResult' in chunk) {
@@ -165,17 +206,20 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         if (editedNodes.length > 0) {
           const merged = mergeEditedNodes(tree, editedNodes)
           updateMindmapTree(activeMindmapId, merged)
-          setValidationWarnings([...validateTree(merged, effectiveDepth), {
-            type: 'duplicate' as const,
-            nodeLabel: '',
-            message: `保留了 ${editedNodes.length} 个手动编辑的节点`,
-          }])
+          setValidationWarnings([
+            ...validateTree(merged, effectiveDepth),
+            {
+              type: 'duplicate' as const,
+              nodeLabel: '',
+              message: `保留了 ${editedNodes.length} 个手动编辑的节点`,
+            },
+          ])
         } else {
           updateMindmapTree(activeMindmapId, tree)
-      }
+        }
 
-      setStreamingTree(null)
-      updateMindmapSettings(activeMindmapId, { lastGeneratedAt: Date.now() })
+        setStreamingTree(null)
+        updateMindmapSettings(activeMindmapId, { lastGeneratedAt: Date.now() })
         const warnings = validateTree(tree, effectiveDepth)
         setValidationWarnings(warnings)
       }
@@ -193,11 +237,13 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   }, [
     activeMindmap,
     activeMindmapId,
+    conversations,
     generatorProvider,
     generatorModelId,
     startGeneration,
     stopGeneration,
     updateMindmapTree,
+    updateMindmapSettings,
   ])
 
   const handleExport = useCallback(() => {
@@ -212,7 +258,9 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     if (!conv) return
     const existingIds = new Set((activeMindmap.corpus ?? []).map((e) => e.messageId))
     const entries: CorpusEntry[] = conv.messages
-      .filter((m) => m.role === 'assistant' && m.content.trim().length > 0 && !existingIds.has(m.id))
+      .filter(
+        (m) => m.role === 'assistant' && m.content.trim().length > 0 && !existingIds.has(m.id),
+      )
       .map((m) => ({
         id: crypto.randomUUID(),
         messageId: m.id,
@@ -244,9 +292,7 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
             </SelectTrigger>
             <SelectContent>
               {mindmaps.length === 0 ? (
-                <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-                  暂无图谱
-                </div>
+                <div className="px-2 py-4 text-sm text-muted-foreground text-center">暂无图谱</div>
               ) : (
                 mindmaps.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
@@ -256,10 +302,22 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               )}
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setIsFullscreen((v) => !v)} title={isFullscreen ? '退出全屏' : '全屏'}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            onClick={() => setIsFullscreen((v) => !v)}
+            title={isFullscreen ? '退出全屏' : '全屏'}
+          >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </Button>
-          <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose} title="关闭面板">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            onClick={onClose}
+            title="关闭面板"
+          >
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -280,7 +338,9 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               aria-label="最大深度"
               className="h-7 rounded border border-sidebar-border/40 bg-transparent text-xs px-1.5 text-sidebar-foreground/70"
               value={activeMindmap?.maxDepth ?? 3}
-              onChange={e => updateMindmapSettings(activeMindmapId!, { maxDepth: Number(e.target.value) })}
+              onChange={(e) =>
+                updateMindmapSettings(activeMindmapId!, { maxDepth: Number(e.target.value) })
+              }
             >
               <option value={3}>3层</option>
               <option value={4}>4层</option>
@@ -304,7 +364,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
             </button>
           </div>
         )}
-
       </div>
 
       {activeMindmap && (
@@ -313,8 +372,13 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
             className="flex items-center gap-1 text-xs font-medium text-sidebar-foreground/80 hover:text-sidebar-foreground w-full"
             onClick={() => setCorpusOpen((o) => !o)}
           >
-            {corpusOpen ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
-            语料库 ({(activeMindmap.corpus ?? []).filter((e) => e.enabled).length}/{(activeMindmap.corpus ?? []).length})
+            {corpusOpen ? (
+              <ChevronDown className="w-3 h-3 shrink-0" />
+            ) : (
+              <ChevronRight className="w-3 h-3 shrink-0" />
+            )}
+            语料库 ({(activeMindmap.corpus ?? []).filter((e) => e.enabled).length}/
+            {(activeMindmap.corpus ?? []).length})
             <button
               className="ml-auto inline-flex items-center gap-0.5 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground shrink-0"
               onClick={(e) => {
@@ -330,13 +394,16 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
           {corpusOpen && (
             <div className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
               {(() => {
-                const msgConvMap = new Map<string, typeof conversations[number]>()
+                const msgConvMap = new Map<string, (typeof conversations)[number]>()
                 for (const c of conversations) {
                   for (const m of c.messages) {
                     msgConvMap.set(m.id, c)
                   }
                 }
-                const groupMap = new Map<string, { conversation: typeof conversations[number] | null; entries: CorpusEntry[] }>()
+                const groupMap = new Map<
+                  string,
+                  { conversation: (typeof conversations)[number] | null; entries: CorpusEntry[] }
+                >()
                 for (const entry of activeMindmap.corpus ?? []) {
                   const conv = msgConvMap.get(entry.messageId) ?? null
                   const key = conv?.id ?? '__orphan__'
@@ -347,7 +414,11 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
                 }
                 const groups = Array.from(groupMap.values())
                 if (groups.length === 0) {
-                  return <p className="text-xs text-muted-foreground py-2 text-center">暂无语料，从对话中选择内容加入语料库</p>
+                  return (
+                    <p className="text-xs text-muted-foreground py-2 text-center">
+                      暂无语料，从对话中选择内容加入语料库
+                    </p>
+                  )
                 }
                 return groups.map((group) => (
                   <div key={group.conversation?.id ?? '__orphan__'}>
@@ -358,48 +429,65 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
                     )}
                     {group.entries.map((entry) => {
                       const msg = group.conversation?.messages.find((m) => m.id === entry.messageId)
-                      let displayText = entry.selectedText ?? msg?.content.slice(0, 60) ?? ''
+                      const displayText = entry.selectedText ?? msg?.content.slice(0, 60) ?? ''
                       let qPrefix = ''
                       if (msg && msg.role === 'assistant' && group.conversation) {
                         const msgIndex = group.conversation.messages.indexOf(msg)
-                        const prevMsg = msgIndex > 0 ? group.conversation.messages[msgIndex - 1] : null
+                        const prevMsg =
+                          msgIndex > 0 ? group.conversation.messages[msgIndex - 1] : null
                         if (prevMsg && prevMsg.role === 'user') {
                           qPrefix = prevMsg.content.slice(0, 24)
                         }
                       }
                       const isDeleted = !msg
                       return (
-                        <div key={entry.id} className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-sidebar-accent/30 group/entry">
+                        <div
+                          key={entry.id}
+                          className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-sidebar-accent/30 group/entry"
+                        >
                           <span
                             className={`text-xs truncate flex-1 ${isDeleted ? 'text-muted-foreground/50 italic' : ''}`}
                             title={displayText}
                           >
-                            {isDeleted && <span className="text-muted-foreground/50">来源已删除 · </span>}
-                            {qPrefix && <span className="text-sidebar-foreground/40">{qPrefix} → </span>}
+                            {isDeleted && (
+                              <span className="text-muted-foreground/50">来源已删除 · </span>
+                            )}
+                            {qPrefix && (
+                              <span className="text-sidebar-foreground/40">{qPrefix} → </span>
+                            )}
                             {displayText}
                           </span>
                           {entry.note && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title={entry.note} />
+                            <span
+                              className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+                              title={entry.note}
+                            />
                           )}
                           <button
                             className="opacity-0 group-hover/entry:opacity-100 transition-opacity p-0.5 rounded text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
                             onClick={() => {
                               if (entry.enabled) {
-                                useMindmapStore.getState().toggleCorpusEntry(activeMindmap.id, entry.id, false)
+                                useMindmapStore
+                                  .getState()
+                                  .toggleCorpusEntry(activeMindmap.id, entry.id, false)
                               } else {
-                                useMindmapStore.getState().toggleCorpusEntry(activeMindmap.id, entry.id, true)
+                                useMindmapStore
+                                  .getState()
+                                  .toggleCorpusEntry(activeMindmap.id, entry.id, true)
                               }
                             }}
                             title={entry.enabled ? '禁用' : '启用'}
                           >
-                            {entry.enabled ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                            {entry.enabled ? (
+                              <ToggleRight className="w-3.5 h-3.5" />
+                            ) : (
+                              <ToggleLeft className="w-3.5 h-3.5" />
+                            )}
                           </button>
                           <button
                             className="opacity-0 group-hover/entry:opacity-100 transition-opacity p-0.5 rounded text-sidebar-foreground/50 hover:text-red-400 hover:bg-sidebar-accent/50"
                             onClick={() => {
-                              if (window.confirm('确认删除此条语料？')) {
-                                useMindmapStore.getState().removeCorpusEntry(activeMindmap.id, entry.id)
-                              }
+                              setCorpusDeleteEntry({ entryId: entry.id })
                             }}
                             title="删除"
                           >
@@ -426,9 +514,13 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         <div className="border-b border-sidebar-border">
           <button
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground w-full"
-            onClick={() => setReasoningOpen(o => !o)}
+            onClick={() => setReasoningOpen((o) => !o)}
           >
-            {reasoningOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            {reasoningOpen ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
             AI 思考过程
           </button>
           {reasoningOpen && (
@@ -450,7 +542,9 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
 
       {validationWarnings.length > 0 && !generating && (
         <div className="border-t border-sidebar-border px-3 py-2">
-          <p className="text-xs font-medium text-amber-500 mb-1">质量提醒 ({validationWarnings.length})</p>
+          <p className="text-xs font-medium text-amber-500 mb-1">
+            质量提醒 ({validationWarnings.length})
+          </p>
           <div className="space-y-1 max-h-24 overflow-y-auto">
             {validationWarnings.map((w, i) => (
               <div key={i} className="text-xs text-amber-600/80">
@@ -462,6 +556,7 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
       )}
 
       <MindmapSettingsDialog
+        key={activeMindmap?.id ?? 'none'}
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         mindmap={activeMindmap}
@@ -471,6 +566,38 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
           }
         }}
       />
+
+      <Dialog
+        open={corpusDeleteEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) setCorpusDeleteEntry(null)
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">确认删除此条语料？</p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setCorpusDeleteEntry(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (corpusDeleteEntry && activeMindmap) {
+                  useMindmapStore
+                    .getState()
+                    .removeCorpusEntry(activeMindmap.id, corpusDeleteEntry.entryId)
+                }
+                setCorpusDeleteEntry(null)
+              }}
+            >
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -484,33 +611,30 @@ function MindmapSettingsDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   mindmap: ReturnType<typeof useMindmapStore.getState>['mindmaps'][number] | null
-  onSave: (settings: { generatorProviderId?: string; generatorModelId?: string; maxDepth?: number; forceFullRebuild?: boolean }) => void
+  onSave: (settings: {
+    generatorProviderId?: string
+    generatorModelId?: string
+    maxDepth?: number
+    forceFullRebuild?: boolean
+  }) => void
 }) {
   const { providers } = useProviderStore()
   const { conversations } = useConversationStore()
   const [useCustom, setUseCustom] = useState(
-    !!mindmap?.generatorProviderId && !!mindmap?.generatorModelId
+    !!mindmap?.generatorProviderId && !!mindmap?.generatorModelId,
   )
   const [selectedProviderId, setSelectedProviderId] = useState(
-    mindmap?.generatorProviderId ?? providers[0]?.id ?? ''
+    mindmap?.generatorProviderId ?? providers[0]?.id ?? '',
   )
-  const [selectedModelId, setSelectedModelId] = useState(
-    mindmap?.generatorModelId ?? ''
+  const [selectedModelId, setSelectedModelId] = useState(mindmap?.generatorModelId ?? '')
+  const [monitoredIds, setMonitoredIds] = useState<string[]>(
+    mindmap?.monitoredConversationIds ?? [],
   )
-  const [monitoredIds, setMonitoredIds] = useState<string[]>(mindmap?.monitoredConversationIds ?? [])
   const [maxDepth, setMaxDepth] = useState(mindmap?.maxDepth ?? 3)
   const [forceFullRebuild, setForceFullRebuild] = useState(mindmap?.forceFullRebuild ?? false)
 
-  useEffect(() => {
-    if (open && mindmap) {
-      setMonitoredIds(mindmap.monitoredConversationIds ?? [])
-      setMaxDepth(mindmap.maxDepth ?? 3)
-      setForceFullRebuild(mindmap.forceFullRebuild ?? false)
-    }
-  }, [open, mindmap])
-
-  const selectedProvider = providers.find(p => p.id === selectedProviderId)
-  const enabledModels = selectedProvider?.models.filter(m => m.enabled) ?? []
+  const selectedProvider = providers.find((p) => p.id === selectedProviderId)
+  const enabledModels = selectedProvider?.models.filter((m) => m.enabled) ?? []
 
   const handleSave = () => {
     onSave({
@@ -556,9 +680,7 @@ function MindmapSettingsDialog({
             />
             <span className="text-sm">指定专用生成模型</span>
           </label>
-          <p className="text-xs text-muted-foreground">
-            不勾选时使用当前对话的模型生成图谱
-          </p>
+          <p className="text-xs text-muted-foreground">不勾选时使用当前对话的模型生成图谱</p>
 
           {useCustom && (
             <div className="space-y-3">
@@ -600,7 +722,9 @@ function MindmapSettingsDialog({
           )}
         </div>
         <div className="border-t pt-4">
-          <label className="text-sm font-medium" htmlFor="settings-max-depth">最大深度</label>
+          <label className="text-sm font-medium" htmlFor="settings-max-depth">
+            最大深度
+          </label>
           <select
             id="settings-max-depth"
             value={maxDepth}

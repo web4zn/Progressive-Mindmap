@@ -3,7 +3,9 @@ import { render, screen } from '@testing-library/react'
 import MindMapTree from '../MindMapTree'
 
 vi.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children }: { children: React.ReactNode }) => <div data-testid="react-flow">{children}</div>,
+  ReactFlow: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="react-flow">{children}</div>
+  ),
   Background: () => null,
   Controls: () => null,
   MiniMap: () => null,
@@ -20,7 +22,12 @@ vi.mock('../MindMapEdgeComponent', () => ({ default: () => null }))
 vi.mock('../MindMapEditModal', () => ({ default: () => null }))
 vi.mock('../MindMapContextMenu', () => ({ default: () => null }))
 vi.mock('../useMindmapLayout', () => ({
-  useMindmapLayout: () => ({ nodes: [], edges: [], toggleCollapse: vi.fn(), resetCollapse: vi.fn() }),
+  useMindmapLayout: () => ({
+    nodes: [],
+    edges: [],
+    toggleCollapse: vi.fn(),
+    resetCollapse: vi.fn(),
+  }),
 }))
 vi.mock('@/lib/mindmap-layout', () => ({
   findNodeInTree: () => null,
@@ -32,9 +39,13 @@ import type { MindMapNode } from '@/types/mindmap'
 
 function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
   return {
-    id: overrides.id ?? 'n1', label: overrides.label ?? 'Test', summary: overrides.summary ?? '',
-    children: overrides.children ?? [], sourceConversationIds: overrides.sourceConversationIds ?? [],
-    sourceExcerpts: {}, editedByUser: overrides.editedByUser ?? false,
+    id: overrides.id ?? 'n1',
+    label: overrides.label ?? 'Test',
+    summary: overrides.summary ?? '',
+    children: overrides.children ?? [],
+    sourceConversationIds: overrides.sourceConversationIds ?? [],
+    sourceExcerpts: {},
+    editedByUser: overrides.editedByUser ?? false,
   }
 }
 

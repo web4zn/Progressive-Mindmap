@@ -11,10 +11,23 @@ interface MindMapState {
   removeMindmap: (id: string) => void
   updateMindmapTree: (id: string, tree: MindMapNode[]) => void
   updateMindmapTitle: (id: string, title: string) => void
-  updateMindmapSettings: (id: string, settings: { generatorProviderId?: string; generatorModelId?: string; maxDepth?: number; forceFullRebuild?: boolean; lastGeneratedAt?: number }) => void
+  updateMindmapSettings: (
+    id: string,
+    settings: {
+      generatorProviderId?: string
+      generatorModelId?: string
+      maxDepth?: number
+      forceFullRebuild?: boolean
+      lastGeneratedAt?: number
+    },
+  ) => void
   setActiveMindmapId: (id: string | null) => void
   getActiveMindmap: () => MindMap | null
-  updateNode: (mindmapId: string, nodeId: string, patch: Partial<Pick<MindMapNode, 'label' | 'summary'>>) => void
+  updateNode: (
+    mindmapId: string,
+    nodeId: string,
+    patch: Partial<Pick<MindMapNode, 'label' | 'summary'>>,
+  ) => void
   addChildNode: (mindmapId: string, parentNodeId: string) => void
   deleteNode: (mindmapId: string, nodeId: string) => void
   moveNode: (mindmapId: string, nodeId: string, direction: 'up' | 'down') => void
@@ -30,21 +43,30 @@ interface MindMapState {
   setCollapsedNodeIds: (id: string, nodeIds: string[]) => void
 }
 
-function findAndUpdateNode(nodes: MindMapNode[], nodeId: string, fn: (node: MindMapNode) => MindMapNode | null): MindMapNode[] {
-  return nodes.map((node) => {
-    if (node.id === nodeId) {
-      const result = fn(node)
-      if (result === null) return null as unknown as MindMapNode
-      return result
-    }
-    if (node.children.length > 0) {
-      return { ...node, children: findAndUpdateNode(node.children, nodeId, fn).filter(Boolean) }
-    }
-    return node
-  }).filter(Boolean)
+function findAndUpdateNode(
+  nodes: MindMapNode[],
+  nodeId: string,
+  fn: (node: MindMapNode) => MindMapNode | null,
+): MindMapNode[] {
+  return nodes
+    .map((node) => {
+      if (node.id === nodeId) {
+        const result = fn(node)
+        if (result === null) return null as unknown as MindMapNode
+        return result
+      }
+      if (node.children.length > 0) {
+        return { ...node, children: findAndUpdateNode(node.children, nodeId, fn).filter(Boolean) }
+      }
+      return node
+    })
+    .filter(Boolean)
 }
 
-function findParentAndIndex(nodes: MindMapNode[], nodeId: string): { parent: MindMapNode[]; index: number } | null {
+function findParentAndIndex(
+  nodes: MindMapNode[],
+  nodeId: string,
+): { parent: MindMapNode[]; index: number } | null {
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i]
     if (!n) continue
@@ -108,9 +130,7 @@ export const useMindmapStore = create<MindMapState>()(
           return {
             mindmaps: remaining,
             activeMindmapId:
-              state.activeMindmapId === id
-                ? remaining[0]?.id ?? null
-                : state.activeMindmapId,
+              state.activeMindmapId === id ? (remaining[0]?.id ?? null) : state.activeMindmapId,
           }
         })
       },
@@ -118,7 +138,7 @@ export const useMindmapStore = create<MindMapState>()(
       updateMindmapTree: (id, tree) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
-            m.id === id ? { ...m, tree, updatedAt: Date.now() } : m
+            m.id === id ? { ...m, tree, updatedAt: Date.now() } : m,
           ),
         }))
       },
@@ -126,7 +146,7 @@ export const useMindmapStore = create<MindMapState>()(
       updateMindmapTitle: (id, title) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
-            m.id === id ? { ...m, title, updatedAt: Date.now() } : m
+            m.id === id ? { ...m, title, updatedAt: Date.now() } : m,
           ),
         }))
       },
@@ -137,14 +157,26 @@ export const useMindmapStore = create<MindMapState>()(
             m.id === id
               ? {
                   ...m,
-                  generatorProviderId: settings.generatorProviderId !== undefined ? settings.generatorProviderId : m.generatorProviderId,
-                  generatorModelId: settings.generatorModelId !== undefined ? settings.generatorModelId : m.generatorModelId,
+                  generatorProviderId:
+                    settings.generatorProviderId !== undefined
+                      ? settings.generatorProviderId
+                      : m.generatorProviderId,
+                  generatorModelId:
+                    settings.generatorModelId !== undefined
+                      ? settings.generatorModelId
+                      : m.generatorModelId,
                   maxDepth: settings.maxDepth !== undefined ? settings.maxDepth : m.maxDepth,
-                  forceFullRebuild: settings.forceFullRebuild !== undefined ? settings.forceFullRebuild : m.forceFullRebuild,
-                  lastGeneratedAt: settings.lastGeneratedAt !== undefined ? settings.lastGeneratedAt : m.lastGeneratedAt,
+                  forceFullRebuild:
+                    settings.forceFullRebuild !== undefined
+                      ? settings.forceFullRebuild
+                      : m.forceFullRebuild,
+                  lastGeneratedAt:
+                    settings.lastGeneratedAt !== undefined
+                      ? settings.lastGeneratedAt
+                      : m.lastGeneratedAt,
                   updatedAt: Date.now(),
                 }
-              : m
+              : m,
           ),
         }))
       },
@@ -225,7 +257,7 @@ export const useMindmapStore = create<MindMapState>()(
           const node = pos.parent[pos.index]
           if (!node) return state
 
-          let newTree = JSON.parse(JSON.stringify(mindmap.tree)) as MindMapNode[]
+          const newTree = JSON.parse(JSON.stringify(mindmap.tree)) as MindMapNode[]
           const newPos = findParentAndIndex(newTree, nodeId)
           if (!newPos) return state
 
@@ -245,7 +277,7 @@ export const useMindmapStore = create<MindMapState>()(
 
           return {
             mindmaps: state.mindmaps.map((m) =>
-              m.id === mindmapId ? { ...m, tree: newTree, updatedAt: Date.now() } : m
+              m.id === mindmapId ? { ...m, tree: newTree, updatedAt: Date.now() } : m,
             ),
           }
         })
@@ -269,7 +301,7 @@ export const useMindmapStore = create<MindMapState>()(
           if (isDescendantOf(parent, nodeId)) return state
           if (node.id === newParentId) return state
 
-          let newTree = JSON.parse(JSON.stringify(mindmap.tree)) as MindMapNode[]
+          const newTree = JSON.parse(JSON.stringify(mindmap.tree)) as MindMapNode[]
           const newNodePos = findParentAndIndex(newTree, nodeId)
           if (!newNodePos) return state
 
@@ -284,7 +316,7 @@ export const useMindmapStore = create<MindMapState>()(
 
           return {
             mindmaps: state.mindmaps.map((m) =>
-              m.id === mindmapId ? { ...m, tree: newTree, updatedAt: Date.now() } : m
+              m.id === mindmapId ? { ...m, tree: newTree, updatedAt: Date.now() } : m,
             ),
           }
         })
@@ -295,7 +327,7 @@ export const useMindmapStore = create<MindMapState>()(
           mindmaps: state.mindmaps.map((m) =>
             m.id === mindmapId
               ? { ...m, corpus: [...(m.corpus ?? []), entry], updatedAt: Date.now() }
-              : m
+              : m,
           ),
         }))
       },
@@ -304,8 +336,13 @@ export const useMindmapStore = create<MindMapState>()(
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
             m.id === mindmapId
-              ? { ...m, corpus: (m.corpus ?? []).filter((e) => e.id !== entryId), lastGeneratedAt: undefined, updatedAt: Date.now() }
-              : m
+              ? {
+                  ...m,
+                  corpus: (m.corpus ?? []).filter((e) => e.id !== entryId),
+                  lastGeneratedAt: undefined,
+                  updatedAt: Date.now(),
+                }
+              : m,
           ),
         }))
       },
@@ -316,13 +353,11 @@ export const useMindmapStore = create<MindMapState>()(
             m.id === mindmapId
               ? {
                   ...m,
-                  corpus: (m.corpus ?? []).map((e) =>
-                    e.id === entryId ? { ...e, enabled } : e
-                  ),
+                  corpus: (m.corpus ?? []).map((e) => (e.id === entryId ? { ...e, enabled } : e)),
                   lastGeneratedAt: undefined,
                   updatedAt: Date.now(),
                 }
-              : m
+              : m,
           ),
         }))
       },
@@ -333,12 +368,10 @@ export const useMindmapStore = create<MindMapState>()(
             m.id === mindmapId
               ? {
                   ...m,
-                  corpus: (m.corpus ?? []).map((e) =>
-                    e.id === entryId ? { ...e, note } : e
-                  ),
+                  corpus: (m.corpus ?? []).map((e) => (e.id === entryId ? { ...e, note } : e)),
                   updatedAt: Date.now(),
                 }
-              : m
+              : m,
           ),
         }))
       },
@@ -348,7 +381,7 @@ export const useMindmapStore = create<MindMapState>()(
           mindmaps: state.mindmaps.map((m) =>
             m.id === mindmapId
               ? { ...m, corpus: [], lastGeneratedAt: undefined, updatedAt: Date.now() }
-              : m
+              : m,
           ),
         }))
       },
@@ -359,12 +392,14 @@ export const useMindmapStore = create<MindMapState>()(
             m.id === mindmapId
               ? {
                   ...m,
-                  monitoredConversationIds: (m.monitoredConversationIds ?? []).includes(conversationId)
+                  monitoredConversationIds: (m.monitoredConversationIds ?? []).includes(
+                    conversationId,
+                  )
                     ? m.monitoredConversationIds
                     : [...(m.monitoredConversationIds ?? []), conversationId],
                   updatedAt: Date.now(),
                 }
-              : m
+              : m,
           ),
         }))
       },
@@ -376,11 +411,11 @@ export const useMindmapStore = create<MindMapState>()(
               ? {
                   ...m,
                   monitoredConversationIds: (m.monitoredConversationIds ?? []).filter(
-                    (id) => id !== conversationId
+                    (id) => id !== conversationId,
                   ),
                   updatedAt: Date.now(),
                 }
-              : m
+              : m,
           ),
         }))
       },
@@ -390,7 +425,7 @@ export const useMindmapStore = create<MindMapState>()(
           mindmaps: state.mindmaps.map((m) =>
             m.id === mindmapId
               ? { ...m, corpus: [...(m.corpus ?? []), ...entries], updatedAt: Date.now() }
-              : m
+              : m,
           ),
         }))
       },
@@ -398,13 +433,15 @@ export const useMindmapStore = create<MindMapState>()(
       setCollapsedNodeIds: (id, nodeIds) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
-            m.id === id
-              ? { ...m, collapsedNodeIds: nodeIds, updatedAt: Date.now() }
-              : m
+            m.id === id ? { ...m, collapsedNodeIds: nodeIds, updatedAt: Date.now() } : m,
           ),
         }))
       },
     }),
-    { name: 'mindmap-store', version: 2, storage: createJSONStorage(() => createIndexedDBStorage()) }
-  )
+    {
+      name: 'mindmap-store',
+      version: 2,
+      storage: createJSONStorage(() => createIndexedDBStorage()),
+    },
+  ),
 )
