@@ -42,7 +42,7 @@
     "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dom-to-image-more": "^3.7.2",
+    "html-to-image": "^1.11.13",
     "idb": "^8.0.3",
     "lucide-react": "^1.14.0",
     "next-themes": "^0.4.6",

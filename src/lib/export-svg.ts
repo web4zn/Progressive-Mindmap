@@ -1,4 +1,4 @@
-import { toSvg } from 'dom-to-image-more'
+import { toSvg } from 'html-to-image'
 
 export async function exportMindmapAsSvg(filename = 'mindmap'): Promise<void> {
   const el = document.querySelector('.react-flow') as HTMLElement | null

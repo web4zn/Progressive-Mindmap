@@ -1,4 +1,4 @@
-import { toPng } from 'dom-to-image-more'
+import { toPng } from 'html-to-image'
 
 export async function exportMindmapAsPng(
   options: { pixelRatio?: 1 | 2 | 3; filename?: string } = {},
