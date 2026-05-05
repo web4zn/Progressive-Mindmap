@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileImage,
+  FileText,
   RefreshCw,
   Settings,
   Trash2,
@@ -12,8 +14,6 @@ import {
   X,
   Maximize2,
   Minimize2,
-  FileImage,
-  FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -66,8 +66,7 @@ function mergeEditedNodes(newTree: MindMapNode[], editedNodes: MindMapNode[]): M
   })
 }
 import { exportMindmapAsMarkdown, downloadMarkdown } from '@/lib/export'
-import { exportMindmapAsPng } from '@/lib/export-png'
-import { exportMindmapAsSvg } from '@/lib/export-svg'
+import { exportMindmapAsPng, exportMindmapAsSvg } from '@/lib/export-mindmap'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -377,24 +376,19 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-36">
                 <DropdownMenuItem onClick={() => handleExportPng(1)}>
-                  <FileImage className="w-4 h-4 mr-2" />
-                  PNG 1x
+                  <FileImage className="w-4 h-4 mr-2" />PNG 1x
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExportPng(2)}>
-                  <FileImage className="w-4 h-4 mr-2" />
-                  PNG 2x
+                  <FileImage className="w-4 h-4 mr-2" />PNG 2x
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExportPng(3)}>
-                  <FileImage className="w-4 h-4 mr-2" />
-                  PNG 3x
+                  <FileImage className="w-4 h-4 mr-2" />PNG 3x
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportSvg}>
-                  <FileImage className="w-4 h-4 mr-2" />
-                  SVG
+                  <FileImage className="w-4 h-4 mr-2" />SVG
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportMd}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Markdown
+                  <FileText className="w-4 h-4 mr-2" />Markdown
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
