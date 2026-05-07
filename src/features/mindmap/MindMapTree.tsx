@@ -232,7 +232,7 @@ export default function MindMapTree({
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
         <Network className="w-10 h-10 opacity-30" />
         <p className="text-sm text-center">此图谱暂无内容</p>
-        <p className="text-xs text-center opacity-60">关联对话后点击「更新图谱」从对话中生成内容</p>
+        <p className="text-xs text-center opacity-60">关联会话后脑图随对话自动生长</p>
       </div>
     )
   }

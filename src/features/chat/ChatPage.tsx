@@ -1,5 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
-import { toast } from 'sonner'
+import { useState, useCallback } from 'react'
 import { MessageSquare, Settings, PanelLeft, X, Network, Archive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,8 +7,10 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useMindmapStore } from '@/stores/mindmapStore'
-import { createClient, streamChatWithRetry, isAbortError } from '@/lib/llm-client'
-import { generateMindmap, parseJsonToTree } from '@/lib/mindmap-generator'
+import { createClient, chat, isAbortError } from '@/lib/llm-client'
+import { buildFullMindmapPrompt, mindmapTreeToContext, parseJsonToTree, findEditedNodes, mergeEditedNodes } from '@/lib/mindmap-generator'
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import type { MindMapNode } from '@/types/mindmap'
 import ConversationSidebar, {
   ConversationSettingsDialog,
 } from '@/features/conversation/ConversationSidebar'
@@ -26,13 +27,27 @@ import { generateId } from '@/lib/id'
 type View = 'chat' | 'providers'
 
 export default function ChatPage() {
+  const updateMindmapForConversation = useCallback(
+    (newTree: MindMapNode[], convId: string) => {
+      if (newTree.length === 0) return
+      const allMindmaps = useMindmapStore.getState().mindmaps
+      for (const mm of allMindmaps) {
+        if (!mm.monitoredConversationIds?.includes(convId)) continue
+        const editedNodes = findEditedNodes(mm.tree)
+        const merged =
+          editedNodes.length > 0
+            ? mergeEditedNodes(newTree, editedNodes)
+            : newTree
+        useMindmapStore.getState().updateMindmapTree(mm.id, merged)
+      }
+    },
+    [],
+  )
   const [view, setView] = useState<View>('chat')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [newConvDialogOpen, setNewConvDialogOpen] = useState(false)
   const [mindmapCollapsed, setMindmapCollapsed] = useState(false)
-
-  const genTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const conversations = useConversationStore((s) => s.conversations)
   const activeConversationId = useConversationStore((s) => s.activeConversationId)
@@ -97,113 +112,94 @@ export default function ChatPage() {
           .concat(userMsg)
           .map((m) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
 
-        if (conv.systemPrompt) {
-          history.unshift({ role: 'system', content: conv.systemPrompt })
+        const useJsonMode = prov.supportsJsonMode === true
+
+        const effectiveSystemPrompt = conv.systemPrompt
+          ? `${conv.systemPrompt}\n\n${buildFullMindmapPrompt(useJsonMode)}`
+          : buildFullMindmapPrompt(useJsonMode)
+
+        const monitoredMindmap = useMindmapStore
+          .getState()
+          .mindmaps.find(
+            (m) => m.monitoredConversationIds?.includes(conversationId) && m.tree.length > 0,
+          )
+
+        let systemContent = effectiveSystemPrompt
+        if (monitoredMindmap) {
+          const treeCtx = mindmapTreeToContext(monitoredMindmap.tree)
+          if (treeCtx) {
+            systemContent += '\n\n' + treeCtx
+          }
         }
 
-        let fullContent = ''
+        const messages: ChatCompletionMessageParam[] = [
+          { role: 'system', content: systemContent },
+          ...history as ChatCompletionMessageParam[],
+        ]
 
-        for await (const chunk of streamChatWithRetry(
-          client,
-          {
+        let displayContent = ''
+        let accumulated = ''
+
+        try {
+          const responseText = await chat(client, {
             model: conv.modelId,
-            messages: history,
+            messages,
             signal: controller.signal,
-          },
-          1,
-        )) {
-          fullContent += chunk
-          updateMessageInConversation(conversationId, assistantMsg.id, { content: fullContent })
-        }
+            useJsonMode,
+          })
 
-        updateMessageInConversation(conversationId, assistantMsg.id, {
-          content: fullContent,
-          status: 'complete',
-        })
+          accumulated = responseText
+
+          if (useJsonMode) {
+            try {
+              const parsed = JSON.parse(accumulated) as { answer?: string; mindmap?: { nodes?: unknown[] } }
+              displayContent = parsed.answer ?? accumulated
+
+              if (parsed.mindmap?.nodes && Array.isArray(parsed.mindmap.nodes)) {
+                const mindmapJson = JSON.stringify({ nodes: parsed.mindmap.nodes })
+                const newTree = parseJsonToTree(mindmapJson)
+                updateMindmapForConversation(newTree, conversationId)
+              }
+            } catch (jsonErr) {
+              console.error('[mindmap] JSON mode parse failed:', jsonErr)
+              displayContent = accumulated
+            }
+          } else {
+            // Fallback: <!--MINDMAP--> marker mode
+            const idx = accumulated.indexOf('<!--MINDMAP-->')
+            console.log('[mindmap] marker found:', idx !== -1)
+            if (idx !== -1) {
+              const mindmapStart = idx
+              displayContent = accumulated.slice(0, idx).replace(/```\w*\s*$/, '')
+              const mEnd = accumulated.indexOf('<!--/MINDMAP-->', mindmapStart + 1)
+              if (mEnd !== -1) {
+                const jsonStr = accumulated.slice(
+                  mindmapStart + '<!--MINDMAP-->'.length,
+                  mEnd,
+                )
+                console.log('[mindmap] jsonStr length:', jsonStr.length)
+                try {
+                  const newTree = parseJsonToTree(jsonStr)
+                  updateMindmapForConversation(newTree, conversationId)
+                } catch (err) {
+                  console.error('[mindmap] parse failed:', err)
+                }
+                displayContent += accumulated.slice(mEnd + '<!--/MINDMAP-->'.length).replace(/^\s*```\w*\s*/gm, '')
+              }
+            } else {
+              displayContent = accumulated
+            }
+          }
+        } finally {
+          if (displayContent) {
+            updateMessageInConversation(conversationId, assistantMsg.id, {
+              content: displayContent,
+              status: 'complete',
+            })
+          }
+        }
 
         if (controller.signal.aborted) return
-
-        const allMindmaps = useMindmapStore.getState().mindmaps
-        for (const mm of allMindmaps) {
-          if (!mm.monitoredConversationIds?.includes(conversationId)) continue
-
-          const entry = {
-            id: generateId(),
-            messageId: assistantMsg.id,
-            enabled: true,
-            addedAt: Date.now(),
-          }
-          useMindmapStore.getState().addCorpusEntry(mm.id, entry)
-
-          const timers = genTimersRef.current
-          const existing = timers.get(mm.id)
-          if (existing) clearTimeout(existing)
-
-          timers.set(
-            mm.id,
-            setTimeout(async () => {
-              const stillGenerating = useChatStore.getState().isGenerating
-              if (stillGenerating) return
-
-              const mindmapState = useMindmapStore.getState().mindmaps.find((m) => m.id === mm.id)
-              if (!mindmapState) return
-
-              const linkedConvs = useConversationStore
-                .getState()
-                .conversations.filter((c) => mindmapState.monitoredConversationIds?.includes(c.id))
-
-              const generatorProvId = mindmapState.generatorProviderId ?? linkedConvs[0]?.providerId
-              const generatorModel = mindmapState.generatorModelId ?? linkedConvs[0]?.modelId
-              if (!generatorProvId || !generatorModel) return
-
-              const prov = useProviderStore
-                .getState()
-                .providers.find((p) => p.id === generatorProvId)
-              if (!prov) return
-
-              let toastId: string | number | undefined
-              try {
-                toastId = toast.loading(`正在为图谱「${mindmapState.title}」自动生成...`)
-                const client = createClient(prov)
-                let fullGenContent = ''
-
-                for await (const chunk of generateMindmap(
-                  client,
-                  mindmapState,
-                  mindmapState.corpus,
-                  linkedConvs,
-                  generatorModel,
-                  undefined,
-                )) {
-                  if (typeof chunk === 'object' && chunk !== null && 'sourceMap' in chunk) continue
-                  fullGenContent += chunk as string
-                }
-
-                const tree = parseJsonToTree(fullGenContent)
-                useMindmapStore.getState().updateMindmapTree(mm.id, tree)
-                toast.success(`图谱「${mindmapState.title}」已自动更新`, {
-                  id: toastId,
-                  duration: Infinity,
-                  cancel: { label: '✕', onClick: () => {} },
-                })
-              } catch {
-                if (toastId !== undefined) {
-                  toast.error(`图谱「${mindmapState.title}」自动生成失败`, {
-                    id: toastId,
-                    duration: Infinity,
-                    cancel: { label: '✕', onClick: () => {} },
-                  })
-                } else {
-                  toast.error(`图谱「${mindmapState.title}」自动生成失败`, {
-                    duration: Infinity,
-                    cancel: { label: '✕', onClick: () => {} },
-                  })
-                }
-                // silently fail for auto-generation
-              }
-            }, 5000),
-          )
-        }
       } catch (err: unknown) {
         if (isAbortError(err)) {
           updateMessageInConversation(conversationId, assistantMsg.id, { status: 'complete' })
@@ -266,10 +262,21 @@ export default function ChatPage() {
     const p = providers[0]
     if (!p) return
     const modelId = p.models.find((m) => m.enabled)?.id ?? p.models[0]?.id ?? ''
-    addConversation({
+    const conv = addConversation({
       providerId: p.id,
       modelId,
     })
+
+    const mindmapId = _result.mindmapId
+    if (mindmapId) {
+      useMindmapStore.getState().addMonitoredConversation(mindmapId, conv.id)
+    }
+
+    if (_result.newMindmapTitle) {
+      const mm = useMindmapStore.getState().addMindmap(_result.newMindmapTitle)
+      useMindmapStore.getState().addMonitoredConversation(mm.id, conv.id)
+    }
+
     setView('chat')
   }
 

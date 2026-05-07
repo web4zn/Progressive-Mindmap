@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { createJSONStorage } from 'zustand/middleware'
 import { createIndexedDBStorage } from '@/lib/indexeddb-storage-adapter'
-import type { CorpusEntry, MindMap, MindMapNode } from '../types/mindmap'
+import type { MindMap, MindMapNode } from '../types/mindmap'
 
 interface MindMapState {
   mindmaps: MindMap[]
@@ -11,16 +11,6 @@ interface MindMapState {
   removeMindmap: (id: string) => void
   updateMindmapTree: (id: string, tree: MindMapNode[]) => void
   updateMindmapTitle: (id: string, title: string) => void
-  updateMindmapSettings: (
-    id: string,
-    settings: {
-      generatorProviderId?: string
-      generatorModelId?: string
-      maxDepth?: number
-      forceFullRebuild?: boolean
-      lastGeneratedAt?: number
-    },
-  ) => void
   setActiveMindmapId: (id: string | null) => void
   getActiveMindmap: () => MindMap | null
   updateNode: (
@@ -32,14 +22,8 @@ interface MindMapState {
   deleteNode: (mindmapId: string, nodeId: string) => void
   moveNode: (mindmapId: string, nodeId: string, direction: 'up' | 'down') => void
   reparentNode: (mindmapId: string, nodeId: string, newParentId: string) => void
-  addCorpusEntry: (mindmapId: string, entry: CorpusEntry) => void
-  removeCorpusEntry: (mindmapId: string, entryId: string) => void
-  toggleCorpusEntry: (mindmapId: string, entryId: string, enabled: boolean) => void
-  updateCorpusEntryNote: (mindmapId: string, entryId: string, note: string) => void
-  clearCorpus: (mindmapId: string) => void
   addMonitoredConversation: (mindmapId: string, conversationId: string) => void
   removeMonitoredConversation: (mindmapId: string, conversationId: string) => void
-  addBatchCorpusEntries: (mindmapId: string, entries: CorpusEntry[]) => void
   setCollapsedNodeIds: (id: string, nodeIds: string[]) => void
 }
 
@@ -112,7 +96,6 @@ export const useMindmapStore = create<MindMapState>()(
           id: generateId(),
           title,
           tree: [],
-          corpus: [],
           monitoredConversationIds: [],
           createdAt: now,
           updatedAt: now,
@@ -151,36 +134,6 @@ export const useMindmapStore = create<MindMapState>()(
         }))
       },
 
-      updateMindmapSettings: (id, settings) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  generatorProviderId:
-                    settings.generatorProviderId !== undefined
-                      ? settings.generatorProviderId
-                      : m.generatorProviderId,
-                  generatorModelId:
-                    settings.generatorModelId !== undefined
-                      ? settings.generatorModelId
-                      : m.generatorModelId,
-                  maxDepth: settings.maxDepth !== undefined ? settings.maxDepth : m.maxDepth,
-                  forceFullRebuild:
-                    settings.forceFullRebuild !== undefined
-                      ? settings.forceFullRebuild
-                      : m.forceFullRebuild,
-                  lastGeneratedAt:
-                    settings.lastGeneratedAt !== undefined
-                      ? settings.lastGeneratedAt
-                      : m.lastGeneratedAt,
-                  updatedAt: Date.now(),
-                }
-              : m,
-          ),
-        }))
-      },
-
       setActiveMindmapId: (id) => set({ activeMindmapId: id }),
 
       getActiveMindmap: () => {
@@ -198,9 +151,6 @@ export const useMindmapStore = create<MindMapState>()(
                 ...node,
                 ...patch,
                 editedByUser: true,
-                sourceConversationIds: [],
-                sourceExcerpts: {},
-                updatedAt: Date.now(),
               })),
               updatedAt: Date.now(),
             }
@@ -324,70 +274,6 @@ export const useMindmapStore = create<MindMapState>()(
         })
       },
 
-      addCorpusEntry: (mindmapId, entry) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? { ...m, corpus: [...(m.corpus ?? []), entry], updatedAt: Date.now() }
-              : m,
-          ),
-        }))
-      },
-
-      removeCorpusEntry: (mindmapId, entryId) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? {
-                  ...m,
-                  corpus: (m.corpus ?? []).filter((e) => e.id !== entryId),
-                  lastGeneratedAt: undefined,
-                  updatedAt: Date.now(),
-                }
-              : m,
-          ),
-        }))
-      },
-
-      toggleCorpusEntry: (mindmapId, entryId, enabled) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? {
-                  ...m,
-                  corpus: (m.corpus ?? []).map((e) => (e.id === entryId ? { ...e, enabled } : e)),
-                  lastGeneratedAt: undefined,
-                  updatedAt: Date.now(),
-                }
-              : m,
-          ),
-        }))
-      },
-
-      updateCorpusEntryNote: (mindmapId, entryId, note) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? {
-                  ...m,
-                  corpus: (m.corpus ?? []).map((e) => (e.id === entryId ? { ...e, note } : e)),
-                  updatedAt: Date.now(),
-                }
-              : m,
-          ),
-        }))
-      },
-
-      clearCorpus: (mindmapId) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? { ...m, corpus: [], lastGeneratedAt: undefined, updatedAt: Date.now() }
-              : m,
-          ),
-        }))
-      },
-
       addMonitoredConversation: (mindmapId, conversationId) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
@@ -422,16 +308,6 @@ export const useMindmapStore = create<MindMapState>()(
         }))
       },
 
-      addBatchCorpusEntries: (mindmapId, entries) => {
-        set((state) => ({
-          mindmaps: state.mindmaps.map((m) =>
-            m.id === mindmapId
-              ? { ...m, corpus: [...(m.corpus ?? []), ...entries], updatedAt: Date.now() }
-              : m,
-          ),
-        }))
-      },
-
       setCollapsedNodeIds: (id, nodeIds) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
@@ -442,7 +318,7 @@ export const useMindmapStore = create<MindMapState>()(
     }),
     {
       name: 'mindmap-store',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => createIndexedDBStorage()),
     },
   ),
