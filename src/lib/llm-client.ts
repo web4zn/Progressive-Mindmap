@@ -63,6 +63,28 @@ export async function* streamChat(
   }
 }
 
+export async function chat(
+  client: OpenAI,
+  params: {
+    model: string
+    messages: ChatCompletionMessageParam[]
+    signal?: AbortSignal
+    useJsonMode?: boolean
+  },
+): Promise<string> {
+  const response = await client.chat.completions.create(
+    {
+      model: params.model,
+      messages: params.messages,
+      stream: false,
+      ...(params.useJsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParams,
+    { signal: params.signal },
+  )
+  const result = response as OpenAI.Chat.Completions.ChatCompletion
+  return result.choices[0]?.message?.content ?? ''
+}
+
 export async function* streamChatWithRetry(
   client: OpenAI,
   params: {

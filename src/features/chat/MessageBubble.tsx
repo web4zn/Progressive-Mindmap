@@ -1,11 +1,8 @@
-import { useRef } from 'react'
-import { Copy, RefreshCw, BookmarkPlus } from 'lucide-react'
+import { Copy, RefreshCw } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Avatar from '@/components/Avatar'
-import { useMindmapStore } from '@/stores/mindmapStore'
 import type { Message } from '@/types/message'
-import type { CorpusEntry } from '@/types/mindmap'
 
 interface MessageBubbleProps {
   message: Message
@@ -18,8 +15,6 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
   const isStreaming = message.status === 'streaming'
   const isError = message.status === 'error'
 
-  const pendingSelectionRef = useRef<string | null>(null)
-
   const time = new Date(message.createdAt).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -27,45 +22,6 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content)
-  }
-
-  const handleCorpusMouseDown = () => {
-    const selection = window.getSelection()
-    const text = selection && selection.toString().trim()
-    pendingSelectionRef.current = text && text.length > 0 ? text : null
-  }
-
-  const handleAddToCorpus = () => {
-    const activeMindmapId = useMindmapStore.getState().activeMindmapId
-    if (!activeMindmapId) return
-
-    const selectedText = pendingSelectionRef.current
-    pendingSelectionRef.current = null
-
-    const mindmap = useMindmapStore.getState().mindmaps.find((m) => m.id === activeMindmapId)
-    if (!selectedText && mindmap) {
-      const alreadyAdded = (mindmap.corpus ?? []).some((e) => e.messageId === message.id)
-      if (alreadyAdded) return
-    }
-
-    let range: { start: number; end: number } | undefined
-    if (selectedText) {
-      const start = message.content.indexOf(selectedText)
-      if (start !== -1) {
-        range = { start, end: start + selectedText.length }
-      }
-    }
-
-    const entry: CorpusEntry = {
-      id: crypto.randomUUID(),
-      messageId: message.id,
-      selectedText: selectedText || undefined,
-      range,
-      enabled: true,
-      addedAt: Date.now(),
-    }
-
-    useMindmapStore.getState().addCorpusEntry(activeMindmapId, entry)
   }
 
   return (
@@ -112,16 +68,6 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
           >
             <Copy className="w-3 h-3" />
           </button>
-          {!isUser && message.status === 'complete' && (
-            <button
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"
-              onMouseDown={handleCorpusMouseDown}
-              onClick={handleAddToCorpus}
-              title="加入语料库"
-            >
-              <BookmarkPlus className="w-3 h-3" />
-            </button>
-          )}
           {!isUser && onRegenerate && (
             <button
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"

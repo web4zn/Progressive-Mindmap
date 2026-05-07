@@ -8,9 +8,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { useMindmapStore } from '@/stores/mindmapStore'
 
 export interface NewConversationResult {
+  mindmapId?: string
   newMindmapTitle?: string
 }
 
@@ -20,23 +27,26 @@ interface NewConversationDialogProps {
   onSubmit: (result: NewConversationResult) => void
 }
 
+type LinkMode = 'none' | 'existing' | 'new'
+
 export default function NewConversationDialog({
   open,
   onOpenChange,
   onSubmit,
 }: NewConversationDialogProps) {
-  const { addMindmap } = useMindmapStore()
+  const mindmaps = useMindmapStore((s) => s.mindmaps)
 
-  const [isCreatingNew, setIsCreatingNew] = useState(false)
+  const [mode, setMode] = useState<LinkMode>('none')
+  const [selectedMindmapId, setSelectedMindmapId] = useState('')
   const [newMindmapTitle, setNewMindmapTitle] = useState('')
 
   const handleSubmit = () => {
     const result: NewConversationResult = {}
 
-    if (isCreatingNew && newMindmapTitle.trim()) {
-      const title = newMindmapTitle.trim()
-      addMindmap(title)
-      result.newMindmapTitle = title
+    if (mode === 'existing' && selectedMindmapId) {
+      result.mindmapId = selectedMindmapId
+    } else if (mode === 'new' && newMindmapTitle.trim()) {
+      result.newMindmapTitle = newMindmapTitle.trim()
     }
 
     onSubmit(result)
@@ -45,11 +55,15 @@ export default function NewConversationDialog({
   }
 
   const resetForm = () => {
-    setIsCreatingNew(false)
+    setMode('none')
+    setSelectedMindmapId('')
     setNewMindmapTitle('')
   }
 
-  const canSubmit = !isCreatingNew || newMindmapTitle.trim().length > 0
+  const canSubmit =
+    mode === 'none' ||
+    (mode === 'existing' && selectedMindmapId !== '') ||
+    (mode === 'new' && newMindmapTitle.trim().length > 0)
 
   return (
     <Dialog
@@ -67,29 +81,62 @@ export default function NewConversationDialog({
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">关联思维导图</label>
-            <div className="mt-2 space-y-2">
+            <p className="text-xs text-muted-foreground mb-2">关联后对话内容会自动积累到图谱中</p>
+
+            <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="linkMode"
-                  checked={!isCreatingNew}
-                  onChange={() => setIsCreatingNew(false)}
+                  checked={mode === 'none'}
+                  onChange={() => setMode('none')}
                   className="w-4 h-4"
                 />
                 <span className="text-sm">不关联（纯聊天）</span>
               </label>
 
+              {mindmaps.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="linkMode"
+                    checked={mode === 'existing'}
+                    onChange={() => setMode('existing')}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">关联已有图谱</span>
+                </label>
+              )}
+              {mode === 'existing' && (
+                <div className="ml-6 mt-1">
+                  <Select value={selectedMindmapId} onValueChange={(v) => setSelectedMindmapId(v ?? '')}>
+                    <SelectTrigger size="sm">
+                      {selectedMindmapId
+                        ? (mindmaps.find((m) => m.id === selectedMindmapId)?.title ?? selectedMindmapId)
+                        : '选择图谱...'}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mindmaps.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="linkMode"
-                  checked={isCreatingNew}
-                  onChange={() => setIsCreatingNew(true)}
+                  checked={mode === 'new'}
+                  onChange={() => setMode('new')}
                   className="w-4 h-4"
                 />
                 <span className="text-sm">创建新图谱</span>
               </label>
-              {isCreatingNew && (
+              {mode === 'new' && (
                 <div className="ml-6 mt-1">
                   <Input
                     placeholder="输入图谱名称..."

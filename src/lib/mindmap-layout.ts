@@ -60,7 +60,7 @@ export function applyLayout(
   edges: MindMapFlowEdge[],
 ): { nodes: MindMapFlowNode[]; edges: MindMapFlowEdge[] } {
   const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120, edgesep: 20, marginx: 40, marginy: 40 })
+  g.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 180, edgesep: 30, marginx: 80, marginy: 80 })
 
   for (const n of nodes) {
     const hasRichContent = n.data?.contentType === 'markdown' && n.data?.content
