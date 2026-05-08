@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildFullMindmapPrompt,
-  parseMarkdownToTree,
   parseJsonToTree,
   findEditedNodes,
   mergeEditedNodes,
   mindmapTreeToContext,
-  buildHybridContext,
 } from '../mindmap-generator'
 import type { MindMapNode } from '@/types/mindmap'
 
@@ -21,54 +19,50 @@ function makeNode(
     label,
     summary: '',
     children,
-    sourceConversationIds: [],
-    sourceExcerpts: {},
     editedByUser: edited,
   }
 }
 
 describe('buildFullMindmapPrompt', () => {
-  it('contains mindmap delimiter markers', () => {
+  it('contains JSON mode instructions', () => {
     const prompt = buildFullMindmapPrompt()
-    expect(prompt).toContain('<!--MINDMAP-->')
-    expect(prompt).toContain('<!--/MINDMAP-->')
-  })
-
-  it('contains JSON schema instructions', () => {
-    const prompt = buildFullMindmapPrompt()
+    expect(prompt).toContain('"answer"')
+    expect(prompt).toContain('"mindmap"')
     expect(prompt).toContain('"nodes"')
     expect(prompt).toContain('"label"')
   })
 
   it('mentions user-edited nodes preservation', () => {
     const prompt = buildFullMindmapPrompt()
-    expect(prompt).toContain('细化它')
-  })
-})
-
-describe('parseMarkdownToTree', () => {
-  it('parses a single root node', () => {
-    const md = '# React'
-    const tree = parseMarkdownToTree(md)
-    expect(tree).toHaveLength(1)
-    expect(tree[0]!.label).toBe('React')
+    expect(prompt).toContain('[用户编辑]')
   })
 
-  it('parses multiple levels', () => {
-    const md = '# React\n## Hooks\n### useState'
-    const tree = parseMarkdownToTree(md)
-    expect(tree).toHaveLength(1)
-    expect(tree[0]!.children).toHaveLength(1)
-    expect(tree[0]!.children[0]!.children).toHaveLength(1)
+  it('includes 5w1h instructions when pattern is 5w1h', () => {
+    const prompt = buildFullMindmapPrompt('5w1h')
+    expect(prompt).toContain('5W1H')
+    expect(prompt).toContain('What')
+    expect(prompt).toContain('Why')
+    expect(prompt).toContain('How')
   })
 
-  it('handles separator —— for summary', () => {
-    const md = '# React —— A UI library\n## Hooks —— Side effects'
-    const tree = parseMarkdownToTree(md)
-    expect(tree[0]!.label).toBe('React')
-    expect(tree[0]!.summary).toBe('A UI library')
-    expect(tree[0]!.children[0]!.label).toBe('Hooks')
-    expect(tree[0]!.children[0]!.summary).toBe('Side effects')
+  it('includes tech instructions when pattern is tech', () => {
+    const prompt = buildFullMindmapPrompt('tech')
+    expect(prompt).toContain('技术概念')
+    expect(prompt).toContain('核心定义')
+    expect(prompt).toContain('使用场景')
+  })
+
+  it('includes pros-cons instructions when pattern is pros-cons', () => {
+    const prompt = buildFullMindmapPrompt('pros-cons')
+    expect(prompt).toContain('优缺点')
+    expect(prompt).toContain('优点')
+    expect(prompt).toContain('缺点')
+  })
+
+  it('no extra instructions for auto pattern', () => {
+    const auto = buildFullMindmapPrompt('auto')
+    const explicit = buildFullMindmapPrompt()
+    expect(auto).toBe(explicit)
   })
 })
 
@@ -101,15 +95,44 @@ describe('parseJsonToTree', () => {
     expect(tree[0]!.children[0]!.label).toBe('Hooks')
   })
 
-  it('falls back to markdown for invalid JSON', () => {
-    const tree = parseJsonToTree('# React\n## Hooks')
-    expect(tree).toHaveLength(1)
-    expect(tree[0]!.children).toHaveLength(1)
+  it('returns empty array for invalid JSON', () => {
+    const tree = parseJsonToTree('not json')
+    expect(tree).toEqual([])
   })
 
-  it('handles empty JSON gracefully', () => {
+  it('returns empty array for JSON without nodes', () => {
     const tree = parseJsonToTree('{}')
     expect(tree).toEqual([])
+  })
+
+  it('parses deeply nested JSON beyond old 6-depth limit', () => {
+    const deepChild: Record<string, unknown> = { label: 'leaf', summary: '', children: [] }
+    let node = deepChild
+    for (let i = 0; i < 8; i++) {
+      node = { label: `L${i}`, summary: '', children: [node] }
+    }
+    const json = JSON.stringify({ nodes: [node] })
+    const tree = parseJsonToTree(json)
+    let current = tree[0]!
+    let depth = 0
+    while (current.children.length > 0) {
+      current = current.children[0]!
+      depth++
+    }
+    expect(depth).toBe(8)
+  })
+
+  it('preserves more than 10 children per node', () => {
+    const children = Array.from({ length: 15 }, (_, i) => ({
+      label: `C${i}`,
+      summary: '',
+      children: [] as unknown[],
+    }))
+    const json = JSON.stringify({
+      nodes: [{ label: 'Root', summary: '', children }],
+    })
+    const tree = parseJsonToTree(json)
+    expect(tree[0]!.children).toHaveLength(15)
   })
 })
 
@@ -161,24 +184,5 @@ describe('mindmapTreeToContext', () => {
 
   it('returns empty string for empty tree', () => {
     expect(mindmapTreeToContext([])).toBe('')
-  })
-})
-
-describe('buildHybridContext', () => {
-  it('returns original messages when tree is empty', () => {
-    const messages = [{ role: 'user' as const, content: 'Hello' }]
-    const result = buildHybridContext(messages, [])
-    expect(result).toEqual(messages)
-  })
-
-  it('prepends mindmap context when tree is non-empty', () => {
-    const tree = [makeNode('n1', 'React')]
-    const messages = [
-      { role: 'user' as const, content: 'Q1' },
-      { role: 'assistant' as const, content: 'A1' },
-    ]
-    const result = buildHybridContext(messages, tree)
-    expect(result[0]!.role).toBe('system')
-    expect(result[0]!.content).toContain('# React')
   })
 })

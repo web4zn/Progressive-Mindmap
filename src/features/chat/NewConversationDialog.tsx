@@ -19,6 +19,7 @@ import { useMindmapStore } from '@/stores/mindmapStore'
 export interface NewConversationResult {
   mindmapId?: string
   newMindmapTitle?: string
+  pattern?: string
 }
 
 interface NewConversationDialogProps {
@@ -28,6 +29,13 @@ interface NewConversationDialogProps {
 }
 
 type LinkMode = 'none' | 'existing' | 'new'
+
+const PATTERNS: Record<string, string> = {
+  auto: '自动（无限制）',
+  '5w1h': '5W1H 六维度',
+  tech: '技术概念',
+  'pros-cons': '优缺点分析',
+}
 
 export default function NewConversationDialog({
   open,
@@ -39,6 +47,7 @@ export default function NewConversationDialog({
   const [mode, setMode] = useState<LinkMode>('none')
   const [selectedMindmapId, setSelectedMindmapId] = useState('')
   const [newMindmapTitle, setNewMindmapTitle] = useState('')
+  const [pattern, setPattern] = useState('auto')
 
   const handleSubmit = () => {
     const result: NewConversationResult = {}
@@ -47,6 +56,7 @@ export default function NewConversationDialog({
       result.mindmapId = selectedMindmapId
     } else if (mode === 'new' && newMindmapTitle.trim()) {
       result.newMindmapTitle = newMindmapTitle.trim()
+      result.pattern = pattern
     }
 
     onSubmit(result)
@@ -58,6 +68,7 @@ export default function NewConversationDialog({
     setMode('none')
     setSelectedMindmapId('')
     setNewMindmapTitle('')
+    setPattern('auto')
   }
 
   const canSubmit =
@@ -137,13 +148,25 @@ export default function NewConversationDialog({
                 <span className="text-sm">创建新图谱</span>
               </label>
               {mode === 'new' && (
-                <div className="ml-6 mt-1">
+                <div className="ml-6 mt-1 space-y-2">
                   <Input
                     placeholder="输入图谱名称..."
                     value={newMindmapTitle}
                     onChange={(e) => setNewMindmapTitle(e.target.value)}
                     className="h-8"
                   />
+                  <Select value={pattern} onValueChange={(v) => setPattern(v ?? 'auto')}>
+                    <SelectTrigger size="sm">
+                      {PATTERNS[pattern] ?? '选择模式...'}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PATTERNS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>

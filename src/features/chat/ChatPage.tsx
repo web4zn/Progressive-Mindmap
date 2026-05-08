@@ -114,15 +114,17 @@ export default function ChatPage() {
 
         const useJsonMode = prov.supportsJsonMode === true
 
-        const effectiveSystemPrompt = conv.systemPrompt
-          ? `${conv.systemPrompt}\n\n${buildFullMindmapPrompt(useJsonMode)}`
-          : buildFullMindmapPrompt(useJsonMode)
-
-        const monitoredMindmap = useMindmapStore
+        const linkedMindmap = useMindmapStore
           .getState()
           .mindmaps.find(
-            (m) => m.monitoredConversationIds?.includes(conversationId) && m.tree.length > 0,
+            (m) => m.monitoredConversationIds?.includes(conversationId),
           )
+        const monitoredMindmap = linkedMindmap?.tree.length ? linkedMindmap : null
+        const pattern = linkedMindmap?.pattern ?? 'auto'
+
+        const effectiveSystemPrompt = conv.systemPrompt
+          ? `${conv.systemPrompt}\n\n${buildFullMindmapPrompt(pattern)}`
+          : buildFullMindmapPrompt(pattern)
 
         let systemContent = effectiveSystemPrompt
         if (monitoredMindmap) {
@@ -150,45 +152,18 @@ export default function ChatPage() {
 
           accumulated = responseText
 
-          if (useJsonMode) {
-            try {
-              const parsed = JSON.parse(accumulated) as { answer?: string; mindmap?: { nodes?: unknown[] } }
-              displayContent = parsed.answer ?? accumulated
+          try {
+            const parsed = JSON.parse(accumulated) as { answer?: string; mindmap?: { nodes?: unknown[] } }
+            displayContent = parsed.answer ?? accumulated
 
-              if (parsed.mindmap?.nodes && Array.isArray(parsed.mindmap.nodes)) {
-                const mindmapJson = JSON.stringify({ nodes: parsed.mindmap.nodes })
-                const newTree = parseJsonToTree(mindmapJson)
-                updateMindmapForConversation(newTree, conversationId)
-              }
-            } catch (jsonErr) {
-              console.error('[mindmap] JSON mode parse failed:', jsonErr)
-              displayContent = accumulated
+            if (parsed.mindmap?.nodes && Array.isArray(parsed.mindmap.nodes)) {
+              const mindmapJson = JSON.stringify({ nodes: parsed.mindmap.nodes })
+              const newTree = parseJsonToTree(mindmapJson)
+              updateMindmapForConversation(newTree, conversationId)
             }
-          } else {
-            // Fallback: <!--MINDMAP--> marker mode
-            const idx = accumulated.indexOf('<!--MINDMAP-->')
-            console.log('[mindmap] marker found:', idx !== -1)
-            if (idx !== -1) {
-              const mindmapStart = idx
-              displayContent = accumulated.slice(0, idx).replace(/```\w*\s*$/, '')
-              const mEnd = accumulated.indexOf('<!--/MINDMAP-->', mindmapStart + 1)
-              if (mEnd !== -1) {
-                const jsonStr = accumulated.slice(
-                  mindmapStart + '<!--MINDMAP-->'.length,
-                  mEnd,
-                )
-                console.log('[mindmap] jsonStr length:', jsonStr.length)
-                try {
-                  const newTree = parseJsonToTree(jsonStr)
-                  updateMindmapForConversation(newTree, conversationId)
-                } catch (err) {
-                  console.error('[mindmap] parse failed:', err)
-                }
-                displayContent += accumulated.slice(mEnd + '<!--/MINDMAP-->'.length).replace(/^\s*```\w*\s*/gm, '')
-              }
-            } else {
-              displayContent = accumulated
-            }
+          } catch (jsonErr) {
+            console.error('[mindmap] JSON parse failed:', jsonErr)
+            displayContent = accumulated
           }
         } finally {
           if (displayContent) {
@@ -273,7 +248,7 @@ export default function ChatPage() {
     }
 
     if (_result.newMindmapTitle) {
-      const mm = useMindmapStore.getState().addMindmap(_result.newMindmapTitle)
+      const mm = useMindmapStore.getState().addMindmap(_result.newMindmapTitle, _result.pattern)
       useMindmapStore.getState().addMonitoredConversation(mm.id, conv.id)
     }
 

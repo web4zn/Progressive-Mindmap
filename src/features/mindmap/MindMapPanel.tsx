@@ -24,6 +24,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import MindMapTree from '@/features/mindmap/MindMapTree'
 
+const PATTERN_LABELS: Record<string, string> = {
+  '5w1h': '5W1H',
+  tech: '技术概念',
+  'pros-cons': '优缺点分析',
+}
+
 interface MindMapPanelProps {
   onClose: () => void
 }
@@ -130,6 +136,27 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
             <span className="text-xs text-sidebar-foreground/50 shrink-0">
               {countNodes(activeMindmap.tree)} 节点
             </span>
+            <Select
+              value={activeMindmap.pattern ?? 'auto'}
+              onValueChange={(v) => {
+                if (!v) return
+                useMindmapStore.setState((s) => ({
+                  mindmaps: s.mindmaps.map((m) =>
+                    m.id === activeMindmapId ? { ...m, pattern: v, updatedAt: Date.now() } : m,
+                  ),
+                }))
+              }}
+            >
+              <SelectTrigger className="h-5 text-[10px] w-auto px-1.5 gap-0 border-0 bg-transparent text-primary/60 hover:text-primary">
+                {PATTERN_LABELS[activeMindmap.pattern ?? 'auto'] ?? '自动'}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">自动</SelectItem>
+                <SelectItem value="5w1h">5W1H</SelectItem>
+                <SelectItem value="tech">技术概念</SelectItem>
+                <SelectItem value="pros-cons">优缺点分析</SelectItem>
+              </SelectContent>
+            </Select>
             <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors shrink-0 whitespace-nowrap cursor-pointer ml-auto">
                 <Download className="w-3.5 h-3.5" />

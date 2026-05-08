@@ -57,8 +57,6 @@ describe('mindmapStore', () => {
         label: 'React',
         summary: '',
         children: [],
-        sourceConversationIds: [],
-        sourceExcerpts: {},
         editedByUser: false,
       },
     ]

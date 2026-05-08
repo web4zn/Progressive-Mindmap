@@ -18,7 +18,7 @@ MindMapNode 到 React Flow 数据格式的转换 SHALL 通过 `treeToFlow()` 完
 - **THEN** 所有节点和边正确渲染，dagre 自动计算层级位置
 
 ### Requirement: nodeTypes and edgeTypes
-系统 SHALL 注册自定义节点类型 `'mindmap'` 和自定义边类型 `'mindmap'`。节点 SHALL 显示 label 文本、summary 副文本、✎ 编辑标记和 💬N 来源徽章。边 SHALL 使用 smoothstep 贝塞尔曲线。
+系统 SHALL 注册自定义节点类型 `'mindmap'` 和自定义边类型 `'mindmap'`。节点 SHALL 显示 label 文本、summary 副文本、✎ 编辑标记。边 SHALL 使用 smoothstep 贝塞尔曲线。
 
 ### Requirement: Responsive sizing
 系统 SHALL 在容器尺寸变化时自动调整画布。面板通过 flex 布局填充可用空间。

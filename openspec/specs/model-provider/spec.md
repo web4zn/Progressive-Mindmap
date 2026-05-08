@@ -10,6 +10,7 @@ Provider {
   apiEndpoint: string // API 基础 URL，如 "https://api.openai.com/v1"
   apiKey: string      // API 密钥
   models: Model[]     // 该提供商下的可用模型列表
+  supportsJsonMode: boolean // 是否支持 JSON mode（detectJsonMode 自动检测）
   createdAt: number   // 创建时间戳
   updatedAt: number   // 更新时间戳
 }
@@ -26,15 +27,11 @@ Model {
 - **THEN** 系统生成唯一 ID，记录创建和更新时间，存储所有必填字段
 
 ### Requirement: Add provider
-系统 SHALL 允许用户添加自定义模型提供商。用户 MUST 提供提供商名称、API 端点 URL 和 API 密钥。添加提供商时，系统 SHALL 尝试连接 API 端点验证可用性。用户 SHALL 可选择手动输入模型列表，或通过 API 自动获取可用模型列表（如果端点支持）。
+系统 SHALL 允许用户添加自定义模型提供商。用户 MUST 提供提供商名称、API 端点 URL 和 API 密钥。用户 SHALL 可选择手动输入模型列表，或通过 API 自动获取可用模型列表（如果端点支持）。
 
 #### Scenario: Add provider with valid configuration
 - **WHEN** 用户填写提供商名称、API 端点和 API 密钥，并提交
-- **THEN** 系统验证 API 连接，成功后保存提供商配置，并显示在提供商列表中
-
-#### Scenario: Add provider with invalid endpoint
-- **WHEN** 用户填写的 API 端点无法连接
-- **THEN** 系统显示连接失败错误信息，不保存该提供商配置，允许用户修改后重试
+- **THEN** 系统保存提供商配置，并显示在提供商列表中
 
 #### Scenario: Add provider and auto-fetch models
 - **WHEN** 用户添加提供商后选择"获取模型列表"
@@ -60,7 +57,7 @@ Model {
 - **THEN** 系统更新模型列表，模型选择下拉框同步更新
 
 ### Requirement: Delete provider
-系统 SHALL 允许用户删除已有的提供商配置。删除前 SHALL 显示确认对话框。删除提供商后，使用该提供商的会话 SHALL 标记为"提供商不可用"状态，但不删除会话数据。
+系统 SHALL 允许用户删除已有的提供商配置。删除前 SHALL 显示确认对话框。删除提供商后，使用该提供商的会话 SHALL 显示"当前模型不可用"状态，但不删除会话数据。
 
 #### Scenario: Delete provider with confirmation
 - **WHEN** 用户点击删除提供商并确认
@@ -68,7 +65,7 @@ Model {
 
 #### Scenario: Delete provider affects conversations
 - **WHEN** 用户删除一个提供商，且存在使用该提供商的会话
-- **THEN** 这些会话标记为"提供商不可用"，会话历史保留但不可发送新消息
+- **THEN** 这些会话在 ChatPage 中显示"当前模型不可用"，会话历史保留但不可发送新消息
 
 ### Requirement: Provider preset templates
 系统 SHALL 提供常见提供商的预设模板（OpenAI、Anthropic/via compatible endpoint、DeepSeek、Ollama），一键填充 API 端点和默认模型列表。用户 SHALL 仍可修改预设的字段值。
