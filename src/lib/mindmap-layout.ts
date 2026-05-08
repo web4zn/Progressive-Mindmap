@@ -24,7 +24,6 @@ export function treeToFlow(
         content: n.content,
         contentType: n.contentType,
         editedByUser: n.editedByUser,
-        sourceCount: n.sourceConversationIds.length,
         hasChildren,
         collapsed: isCollapsed,
       }

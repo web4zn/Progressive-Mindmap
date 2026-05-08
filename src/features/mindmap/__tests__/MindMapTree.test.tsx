@@ -2,29 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import MindMapTree from '../MindMapTree'
 
-vi.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="react-flow">{children}</div>
+vi.mock('@/components/flow-shell', () => ({
+  FlowShell: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="flow-shell">{children}</div>
   ),
-  Background: () => null,
-  Controls: () => null,
-  MiniMap: () => null,
-  useNodesState: () => [[], vi.fn(), vi.fn()],
-  useEdgesState: () => [[], vi.fn(), vi.fn()],
-  Handle: () => null,
-  Position: { Left: 'left', Right: 'right' },
-  BaseEdge: () => null,
-  getSmoothStepPath: () => [''],
 }))
 
-vi.mock('../MindMapNodeComponent', () => ({ default: () => null }))
-vi.mock('../MindMapEdgeComponent', () => ({ default: () => null }))
 vi.mock('../MindMapEditModal', () => ({ default: () => null }))
 vi.mock('../MindMapContextMenu', () => ({ default: () => null }))
 vi.mock('../useMindmapLayout', () => ({
   useMindmapLayout: () => ({
-    nodes: [],
-    edges: [],
+    collapsedIds: new Set<string>(),
     toggleCollapse: vi.fn(),
     resetCollapse: vi.fn(),
   }),
@@ -43,8 +31,6 @@ function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
     label: overrides.label ?? 'Test',
     summary: overrides.summary ?? '',
     children: overrides.children ?? [],
-    sourceConversationIds: overrides.sourceConversationIds ?? [],
-    sourceExcerpts: {},
     editedByUser: overrides.editedByUser ?? false,
   }
 }
@@ -71,9 +57,9 @@ describe('MindMapTree', () => {
     expect(screen.getByText('重试')).toBeDefined()
   })
 
-  it('renders ReactFlow when tree has nodes', () => {
+  it('renders FlowShell when tree has nodes', () => {
     render(<MindMapTree tree={[makeNode({ id: 'root', label: 'Root' })]} />)
-    expect(screen.getByTestId('react-flow')).toBeDefined()
+    expect(screen.getByTestId('flow-shell')).toBeDefined()
   })
 
   it('shows streaming indicator', () => {

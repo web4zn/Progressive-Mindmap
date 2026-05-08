@@ -1,29 +1,66 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  type NodeMouseHandler,
-  type ReactFlowInstance,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import { Loader2, AlertCircle, RefreshCw, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
-import MindMapNodeComponent from './MindMapNodeComponent'
-import MindMapEdgeComponent from './MindMapEdgeComponent'
+import { FlowShell } from '@/components/flow-shell'
+import type { FlowNodeData } from '@/components/flow-shell'
+import type { Node, Edge } from '@xyflow/react'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
 import type { MindMapNode } from '@/types/mindmap'
-import type { MindMapFlowNode, MindMapFlowEdge } from './types'
 
-const nodeTypes = { mindmap: MindMapNodeComponent }
-const edgeTypes = { mindmap: MindMapEdgeComponent }
+function treeToFlowShell(
+  tree: MindMapNode[],
+  collapsedIds: Set<string>,
+  toggleCollapse: (id: string) => void,
+  pattern: string,
+  depth = 0,
+): { nodes: Node<FlowNodeData, 'flow'>[]; edges: Edge[] } {
+  const flowNodes: Node<FlowNodeData, 'flow'>[] = []
+  const flowEdges: Edge[] = []
+
+  function walk(list: MindMapNode[], parentId: string | null, d: number) {
+    for (const n of list) {
+      const hasChildren = n.children.length > 0
+      const isCollapsed = collapsedIds.has(n.id)
+
+      flowNodes.push({
+        id: n.id,
+        type: 'flow',
+        position: { x: 0, y: 0 },
+        data: {
+          label: n.label,
+          summary: n.summary,
+          content: n.content,
+          contentType: n.contentType,
+          depth: d,
+          pattern,
+          editedByUser: n.editedByUser,
+          hasChildren,
+          collapsed: isCollapsed,
+          onToggle: toggleCollapse,
+        },
+      })
+
+      if (parentId) {
+        flowEdges.push({
+          id: `${parentId}-${n.id}`,
+          source: parentId,
+          target: n.id,
+        })
+      }
+
+      if (!isCollapsed) {
+        walk(n.children, n.id, d + 1)
+      }
+    }
+  }
+
+  walk(tree, null, depth)
+  return { nodes: flowNodes, edges: flowEdges }
+}
 
 interface MindMapTreeProps {
   tree: MindMapNode[]
@@ -43,10 +80,7 @@ export default function MindMapTree({
   onRetry,
 }: MindMapTreeProps) {
   const { updateNode, addChildNode, deleteNode, moveNode, reparentNode } = useMindmapStore()
-  const { nodes: layoutedNodes, edges: layoutedEdges, toggleCollapse } = useMindmapLayout(tree)
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
+  const { collapsedIds, toggleCollapse } = useMindmapLayout(tree)
 
   const [editNode, setEditNode] = useState<MindMapNode | null>(null)
   const [contextMenu, setContextMenu] = useState<{
@@ -64,20 +98,17 @@ export default function MindMapTree({
     treeRef.current = tree
   })
 
-  useEffect(() => {
-    setNodes(layoutedNodes)
-    setEdges(layoutedEdges)
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges])
+  const pattern = useMindmapStore((s) => {
+    if (!s.activeMindmapId) return 'auto'
+    return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.pattern ?? 'auto'
+  })
 
-  useEffect(() => {
-    ;(window as unknown as Record<string, unknown>).__mindmapToggle = toggleCollapse
-    return () => {
-      delete (window as unknown as Record<string, unknown>).__mindmapToggle
+  const { nodes, edges } = treeToFlowShell(tree, collapsedIds, toggleCollapse, pattern)
+
+  const handleInit = useCallback((instance: unknown) => {
+    ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
+      return (instance as { getNodes?: () => unknown }).getNodes?.() ?? []
     }
-  }, [toggleCollapse])
-
-  const handleInit = useCallback((instance: ReactFlowInstance<MindMapFlowNode, MindMapFlowEdge>) => {
-    ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => instance.getNodes()
   }, [])
 
   const checkCanMoveUp = (nodeId: string): boolean => {
@@ -94,22 +125,28 @@ export default function MindMapTree({
     return idx !== -1 && idx < parent.children.length - 1
   }
 
-  const handleNodeDoubleClick: NodeMouseHandler<MindMapFlowNode> = useCallback((_, node) => {
-    const found = findNodeInTree(treeRef.current, node.id)
-    if (found) setEditNode(found)
-  }, [])
+  const handleNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      const found = findNodeInTree(treeRef.current, node.id)
+      if (found) setEditNode(found)
+    },
+    [],
+  )
 
-  const handleNodeContextMenu: NodeMouseHandler<MindMapFlowNode> = useCallback((event, node) => {
-    event.preventDefault()
-    setContextMenu({
-      x: (event as unknown as MouseEvent).clientX,
-      y: (event as unknown as MouseEvent).clientY,
-      nodeId: node.id,
-      canMoveUp: checkCanMoveUp(node.id),
-      canMoveDown: checkCanMoveDown(node.id),
-    })
-    setConfirmDelete(false)
-  }, [])
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault()
+      setContextMenu({
+        x: (event as unknown as MouseEvent).clientX,
+        y: (event as unknown as MouseEvent).clientY,
+        nodeId: node.id,
+        canMoveUp: checkCanMoveUp(node.id),
+        canMoveDown: checkCanMoveDown(node.id),
+      })
+      setConfirmDelete(false)
+    },
+    [],
+  )
 
   const handleEditConfirm = useCallback(
     (
@@ -155,7 +192,7 @@ export default function MindMapTree({
   }, [mindmapId, contextMenu, deleteNode])
 
   const handleNodeDragStop = useCallback(
-    (_: unknown, draggedNode: MindMapFlowNode) => {
+    (_: React.MouseEvent, draggedNode: Node) => {
       if (!mindmapId) return
 
       const currentTree = treeRef.current
@@ -244,30 +281,16 @@ export default function MindMapTree({
           生成中…
         </div>
       )}
-      <ReactFlow
+      <FlowShell
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        theme="light"
+        layout="dagre-lr"
+        onInit={handleInit}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeDragStop={handleNodeDragStop}
-        onInit={handleInit}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.1}
-        maxZoom={2}
-        nodesDraggable
-        nodesConnectable={false}
-        elementsSelectable
-        deleteKeyCode="Delete"
-      >
-        <Background />
-        <Controls showInteractive={false} />
-        <MiniMap nodeStrokeWidth={2} pannable zoomable />
-      </ReactFlow>
+      />
 
       {editNode && (
         <MindMapEditModal

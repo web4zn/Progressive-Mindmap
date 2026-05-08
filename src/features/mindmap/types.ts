@@ -6,7 +6,6 @@ export interface MindMapNodeData extends Record<string, unknown> {
   content?: string
   contentType?: 'text' | 'markdown'
   editedByUser: boolean
-  sourceCount: number
   hasChildren: boolean
   collapsed: boolean
 }

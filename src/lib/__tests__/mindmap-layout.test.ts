@@ -8,8 +8,6 @@ function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
     label: overrides.label ?? 'Test',
     summary: overrides.summary ?? '',
     children: overrides.children ?? [],
-    sourceConversationIds: overrides.sourceConversationIds ?? [],
-    sourceExcerpts: {},
     editedByUser: overrides.editedByUser ?? false,
   }
 }
