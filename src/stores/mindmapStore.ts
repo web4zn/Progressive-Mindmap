@@ -7,7 +7,7 @@ import type { MindMap, MindMapNode } from '../types/mindmap'
 interface MindMapState {
   mindmaps: MindMap[]
   activeMindmapId: string | null
-  addMindmap: (title: string) => MindMap
+  addMindmap: (title: string, pattern?: string) => MindMap
   removeMindmap: (id: string) => void
   updateMindmapTree: (id: string, tree: MindMapNode[]) => void
   updateMindmapTitle: (id: string, title: string) => void
@@ -90,11 +90,12 @@ export const useMindmapStore = create<MindMapState>()(
       mindmaps: [],
       activeMindmapId: null,
 
-      addMindmap: (title) => {
+      addMindmap: (title, pattern = 'auto') => {
         const now = Date.now()
         const mindmap: MindMap = {
           id: generateId(),
           title,
+          pattern,
           tree: [],
           monitoredConversationIds: [],
           createdAt: now,
@@ -166,8 +167,6 @@ export const useMindmapStore = create<MindMapState>()(
           content: '',
           contentType: 'text',
           children: [],
-          sourceConversationIds: [],
-          sourceExcerpts: {},
           editedByUser: true,
         }
         set((state) => ({
