@@ -1,52 +1,39 @@
 ## Purpose
 
 Define the core data model for mindmap nodes and mindmap collections, supporting tree structures, source provenance tracking, and IndexedDB persistence.
-
 ## Requirements
-
 ### Requirement: MindMap data model
 系统 SHALL 使用以下数据模型表示思维导图：
 
 ```
 MindMap {
-  id: string                       // UUID
-  title: string                    // 图谱标题
-  tree: MindMapNode[]              // 根层级节点列表
-  maxDepth?: number                // 最大生成深度：3-5 或 0（自动），默认 3
-  corpus: CorpusEntry[]            // 语料库条目列表
-  monitoredConversationIds: string[] // 监听的对话 ID 列表
-  collapsedNodeIds?: string[]      // 折叠节点 ID 列表
-  forceFullRebuild?: boolean       // 强制全量重建模式
-  lastGeneratedAt?: number         // 上次生成时间戳
-  createdAt: number                // 创建时间戳
-  updatedAt: number                // 更新时间戳
-  generatorProviderId?: string
-  generatorModelId?: string
+  id: string
+  title: string
+  tree: MindMapNode[]
+  monitoredConversationIds: string[]
+  collapsedNodeIds?: string[]
+  createdAt: number
+  updatedAt: number
 }
 
 MindMapNode {
-  id: string                      // UUID
-  label: string                   // 节点显示文本
-  summary: string                 // 节点描述
-  content?: string                // 可选 Markdown 内容
-  contentType?: 'text' | 'markdown' // 内容类型，默认 'text'
-  children: MindMapNode[]         // 子节点列表
-  sourceConversationIds: string[] // 贡献该节点的 Conversation ID 列表
-  sourceExcerpts: Record<string, string> // Conversation ID → 消息文本摘录
-  editedByUser: boolean           // 是否被用户手动编辑过（默认 false）
+  id: string
+  label: string
+  summary: string
+  content?: string
+  contentType?: 'text' | 'markdown'
+  children: MindMapNode[]
+  editedByUser: boolean
 }
+```
 
 #### Scenario: MindMap data structure
 - **WHEN** 系统创建新的思维导图
-- **THEN** 生成唯一 ID，记录创建时间，tree 初始为空数组，maxDepth 设为 3
-
-#### Scenario: MindMapNode with source tracking
-- **WHEN** 图谱生成完成
-- **THEN** 每个节点的 `sourceConversationIds` 填充对话来源，`sourceExcerpts` 存储对应的消息摘录文本
+- **THEN** 生成唯一 ID，记录创建时间，tree 初始为空数组
 
 #### Scenario: Edited node marks
 - **WHEN** 用户手动编辑节点
-- **THEN** 节点 `editedByUser` 设为 true，`sourceConversationIds` 清空
+- **THEN** 节点 `editedByUser` 设为 true
 
 #### Scenario: New node with markdown content
 - **WHEN** 创建 MindMapNode 且指定 `contentType: 'markdown'` 和 `content: '## Title\n\nContent'`

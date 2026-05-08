@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Tree rendering
-系统 SHALL 使用 React Flow（@xyflow/react）+ dagre 布局渲染 MindMapNode 树结构，替代原有 DOM 缩进列表方式。渲染内容 SHALL 包括：自定义节点（label + summary + ✎/💬N）、节点间 smoothstep 贝塞尔连接线、Background 网格、Controls 缩放控件、MiniMap 导航。树 SHALL 使用层级布局（dagre rankdir: LR，左→右）。
+系统 SHALL 使用 React Flow（@xyflow/react）+ dagre 布局渲染 MindMapNode 树结构，替代原有 DOM 缩进列表方式。渲染内容 SHALL 包括：自定义节点（label + summary + ✎ 编辑标记）、节点间 smoothstep 贝塞尔连接线、Background 网格、Controls 缩放控件、MiniMap 导航。树 SHALL 使用层级布局（dagre rankdir: LR，左→右）。
 
 #### Scenario: Render multi-level tree
 - **WHEN** 图谱包含 4 层节点结构
@@ -29,9 +29,9 @@
 ### Requirement: Node visual states
 系统 SHALL 实现以下节点视觉状态：
 - **编辑标记**: `editedByUser === true` → 显示 Pencil 图标
-- **来源标记**: `sourceConversationIds.length > 0` → 显示 💬N 徽章
 - **有子节点**: 显示 ChevronDown/ChevronRight 展开按钮
 - **叶子节点**: 无展开按钮
+- **Markdown 内容节点**: `contentType === 'markdown'` → 在节点内渲染 Markdown 正文（react-markdown + remarkGfm）
 
 ### Requirement: Empty state
 tree 为空时 SHALL 显示 "此图谱暂无内容" 提示。

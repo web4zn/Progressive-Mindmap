@@ -22,6 +22,8 @@
 ### Requirement: Streaming response display
 系统 SHALL 以流式方式显示 LLM 的响应内容，逐字或逐 token 渲染到对话区域。流式输出期间 SHALL 显示加载状态指示器（如光标闪烁）。当流式传输完成时，系统 SHALL 停止加载指示器。
 
+> 注：当前 ChatPage.doSend 使用非流式 `chat()`（`stream: false`），流式生成函数 `streamChat` 已存在于 `llm-client.ts` 但未被调用。此 requirement 描述的是目标行为。
+
 #### Scenario: Streaming response rendering
 - **WHEN** LLM 返回流式响应
 - **THEN** 系统逐 token 将内容渲染到消息气泡中，用户可实时看到生成过程
@@ -30,16 +32,12 @@
 - **WHEN** 流式响应传输完成
 - **THEN** 系统移除加载指示器，完整消息渲染为最终格式
 
-#### Scenario: Stream interruption
-- **WHEN** 流式响应因网络错误中断
-- **THEN** 系统保留已接收的部分内容，显示错误提示，并提供"重新生成"选项
-
 ### Requirement: Markdown rendering
-系统 SHALL 将 LLM 响应中的 Markdown 语法正确渲染为富文本。支持的标准 SHALL 包括：标题、加粗、斜体、代码块（带语法高亮）、行内代码、列表（有序/无序）、表格、链接、引用块。
+系统 SHALL 将 LLM 响应中的 Markdown 语法正确渲染为富文本。支持的标准 SHALL 包括：标题、加粗、斜体、代码块、行内代码、列表（有序/无序）、表格、链接、引用块。
 
-#### Scenario: Code block with syntax highlighting
+#### Scenario: Code block rendering
 - **WHEN** LLM 返回包含代码块的 Markdown 响应
-- **THEN** 系统渲染代码块并应用语法高亮，代码块包含语言标签和复制按钮
+- **THEN** 系统渲染代码块（使用 `@tailwindcss/typography` 样式），代码块包含语言标签
 
 #### Scenario: Table rendering
 - **WHEN** LLM 返回包含 Markdown 表格的响应
@@ -120,11 +118,11 @@
 
 #### Scenario: Wide screen centering without panel
 - **WHEN** 用户在大屏幕（≥1024px）上使用应用，图谱面板隐藏
-- **THEN** 消息列表和输入栏在水平方向居中，最大宽度为 max-w-3xl，两侧保留空白
+- **THEN** 消息列表和输入栏在水平方向居中，最大宽度为 max-w-lg，两侧保留空白
 
 #### Scenario: Wide screen centering with panel
 - **WHEN** 用户在大屏幕（≥1024px）上使用应用，图谱面板可见
-- **THEN** 消息列表和输入栏在聊天区剩余空间内居中，最大宽度适配至 max-w-2xl 或更窄以保持可读性
+- **THEN** 消息列表和输入栏在聊天区剩余空间内显示，面板占 flex-1
 
 #### Scenario: Narrow screen full width
 - **WHEN** 用户在小屏幕（<768px）上使用应用

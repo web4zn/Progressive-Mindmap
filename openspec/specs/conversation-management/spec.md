@@ -12,15 +12,11 @@
 - **THEN** 系统先创建新图谱，再创建新会话
 
 ### Requirement: Switch conversation
-系统 SHALL 提供会话列表侧边栏，用户可点击切换到不同的会话。侧边栏 SHALL 使用深色背景，会话项使用 Lucide 图标操作按钮。切换会话时 SHALL 保存当前会话状态，加载目标会话的消息历史。
+系统 SHALL 提供会话列表侧边栏，用户可点击切换到不同的会话。侧边栏 SHALL 使用主题自适应背景，会话项使用 Lucide 图标操作按钮。切换会话时 SHALL 保存当前会话状态，加载目标会话的消息历史。
 
 #### Scenario: Switch between conversations
 - **WHEN** 用户在侧边栏点击另一个会话
 - **THEN** 当前会话状态保存，目标会话的消息历史加载到对话区域，模型选择器切换到该会话关联的模型，被选中的会话项高亮显示
-
-#### Scenario: Switch during generation
-- **WHEN** 用户在 AI 响应生成期间切换到另一个会话
-- **THEN** 当前会话的生成继续在后台进行，用户切换回时显示完整响应
 
 ### Requirement: Delete conversation
 系统 SHALL 允许用户删除会话。删除前 SHALL 显示确认对话框。删除后 SHALL 不可恢复。
@@ -31,7 +27,7 @@
 
 #### Scenario: Delete current conversation
 - **WHEN** 用户删除当前正在查看的会话
-- **THEN** 系统自动切换到列表中的下一个会话，若无其他会话则创建新的空白会话
+- **THEN** 系统自动切换到列表中的下一个会话，若无其他会话则 `activeConversationId` 设为 null
 
 ### Requirement: Conversation title auto-generation
 系统 SHALL 根据用户第一条消息的内容自动生成会话标题。标题 SHALL 截取消息前 20 个字符，超出部分用省略号替代。用户 SHALL 可手动编辑会话标题。
@@ -63,11 +59,11 @@
 - **THEN** 所有会话和历史消息从 IndexedDB 完整恢复
 
 ### Requirement: Conversation search
-系统 SHALL 提供会话搜索功能，用户可根据关键词搜索会话标题和消息内容。
+系统 SHALL 提供会话搜索功能，用户可根据关键词搜索会话标题。
 
 #### Scenario: Search by keyword
 - **WHEN** 用户在搜索框输入关键词
-- **THEN** 会话列表过滤为包含该关键词的会话（匹配标题或消息内容），高亮匹配文本
+- **THEN** 会话列表过滤为标题包含该关键词的会话
 
 #### Scenario: Clear search
 - **WHEN** 用户清空搜索框
@@ -80,16 +76,12 @@
 - **WHEN** 用户选择导出会话
 - **THEN** 系统生成 Markdown 格式的文件并触发下载，文件包含完整的对话内容（用户消息和 AI 回复）
 
-### Requirement: Sidebar dark theme
-侧边栏 SHALL 使用深色背景，与浅色内容区形成视觉对比。侧边栏背景 SHALL 覆盖整个侧边栏高度，包括搜索区、列表区和底部按钮区。
+### Requirement: Sidebar theme
+侧边栏 SHALL 使用主题自适应的背景色（`bg-sidebar`），与内容区形成视觉区分。
 
-#### Scenario: Sidebar appearance in light mode
-- **WHEN** 系统为浅色主题
-- **THEN** 侧边栏使用深灰色背景，文字使用浅色
-
-#### Scenario: Sidebar appearance in dark mode
-- **WHEN** 系统为深色主题
-- **THEN** 侧边栏使用黑色背景
+#### Scenario: Sidebar appearance
+- **WHEN** 系统切换主题
+- **THEN** 侧边栏背景色跟随主题自适应变化
 
 ### Requirement: Icon-driven action buttons
 侧边栏中的会话操作按钮（新建、重命名、删除、导出）SHALL 使用 Lucide 图标组件而非文字。操作按钮仅在 hover 会话项时显示，默认隐藏。
