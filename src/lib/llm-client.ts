@@ -82,7 +82,8 @@ export async function chat(
     { signal: params.signal },
   )
   const result = response as OpenAI.Chat.Completions.ChatCompletion
-  return result.choices[0]?.message?.content ?? ''
+  const msg = result.choices[0]?.message
+  return (msg?.content || (msg as { reasoning_content?: string })?.reasoning_content) ?? ''
 }
 
 export async function* streamChatWithRetry(
