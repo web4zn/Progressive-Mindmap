@@ -40,6 +40,15 @@ export type MainToWorkerMessage =
         pattern: string
       }
     }
+  | {
+      type: 'MEDIATE_MESSAGE'
+      payload: {
+        conversationId: string
+        content: string
+        recentMessages: { role: string; content: string }[]
+        mindmapTreeJson: string
+      }
+    }
 
 // ========================================
 // Worker → 主线程消息
@@ -70,6 +79,14 @@ export type WorkerToMainMessage =
   | {
       type: 'AGENT_ERROR'
       payload: { error: string }
+    }
+  | {
+      type: 'STREAM_TOKEN'
+      payload: { token: string }
+    }
+  | {
+      type: 'STREAM_DONE'
+      payload: { mindmapUpdated: boolean }
     }
 
 // ========================================

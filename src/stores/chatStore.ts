@@ -14,6 +14,8 @@ interface ChatState {
   agentStatus: AgentStatus
   agentMessage: string | null
   setAgentStatus: (s: AgentStatus, msg?: string | null) => void
+  agentMode: 'enhance' | 'mediate'
+  setAgentMode: (m: 'enhance' | 'mediate') => void
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
@@ -40,4 +42,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   agentStatus: 'idle',
   agentMessage: null,
   setAgentStatus: (s, msg) => set({ agentStatus: s, agentMessage: msg ?? null }),
+  agentMode: 'enhance',
+  setAgentMode: (m) => set({ agentMode: m }),
 }))

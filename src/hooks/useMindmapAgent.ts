@@ -111,6 +111,36 @@ export function useMindmapAgent() {
           console.error(LOG, '❌ Agent 错误:', msg.payload.error)
           setAgentStatus('error', msg.payload.error)
           break
+
+        case 'STREAM_TOKEN': {
+          // 中介模式：流式更新 assistant 消息
+          const convId = useConversationStore.getState().activeConversationId
+          if (!convId) break
+          const state = useConversationStore.getState()
+          const conv = state.conversations.find((c) => c.id === convId)
+          if (!conv) break
+          const lastMsg = conv.messages[conv.messages.length - 1]
+          if (!lastMsg || lastMsg.role !== 'assistant') break
+          state.updateMessageInConversation(convId, lastMsg.id, {
+            content: (lastMsg.content || '') + msg.payload.token,
+          })
+          break
+        }
+
+        case 'STREAM_DONE': {
+          const convId = useConversationStore.getState().activeConversationId
+          if (!convId) break
+          const state = useConversationStore.getState()
+          const conv = state.conversations.find((c) => c.id === convId)
+          if (!conv) break
+          const lastMsg = conv.messages[conv.messages.length - 1]
+          if (!lastMsg || lastMsg.role !== 'assistant') break
+          state.updateMessageInConversation(convId, lastMsg.id, {
+            status: 'complete',
+          })
+          setAgentStatus('idle')
+          break
+        }
       }
     }
 
@@ -208,6 +238,41 @@ export function useMindmapAgent() {
     [setAgentStatus],
   )
 
+  const mediateMessage = useCallback(
+    (content: string, conversationId: string) => {
+      const worker = workerRef.current
+      if (!worker) return
+
+      const conv = useConversationStore
+        .getState()
+        .conversations.find((c) => c.id === conversationId)
+      if (!conv) return
+
+      const mm = useMindmapStore
+        .getState()
+        .mindmaps.find((m) =>
+          m.monitoredConversationIds?.includes(conversationId),
+        )
+
+      setAgentStatus('thinking', '正在处理...')
+
+      const msg: MainToWorkerMessage = {
+        type: 'MEDIATE_MESSAGE',
+        payload: {
+          conversationId,
+          content,
+          recentMessages: conv.messages.slice(-4).map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          mindmapTreeJson: mm?.tree.length ? JSON.stringify(mm.tree) : '',
+        },
+      }
+      worker.postMessage(msg)
+    },
+    [setAgentStatus],
+  )
+
   useEffect(() => {
     return () => {
       if (workerRef.current) {
@@ -218,5 +283,5 @@ export function useMindmapAgent() {
     }
   }, [])
 
-  return { initialize, enhanceMessage }
+  return { initialize, enhanceMessage, mediateMessage }
 }

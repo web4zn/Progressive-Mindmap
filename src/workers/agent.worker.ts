@@ -241,5 +241,49 @@ ${msg.payload.recentMessages
       }
       break
     }
+
+    case 'MEDIATE_MESSAGE': {
+      console.log(LOG, '开始 MEDIATE_MESSAGE 处理', {
+        conversationId: msg.payload.conversationId,
+      })
+
+      reportStatus('thinking', '正在处理...')
+
+      try {
+        const userPrompt = `用户提问：
+${msg.payload.content}
+
+${msg.payload.recentMessages.length > 0 ? `最近对话（上下文参考）：
+${msg.payload.recentMessages
+  .map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`)
+  .join('\n')}` : ''}
+
+请按系统指令工作：先读脑图 → 更新脑图（如需要）→ 回答用户。`
+
+        console.log(LOG, '进入 ReAct 循环')
+        const finalAnswer = await runReActLoop(userPrompt)
+        console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
+
+        // 流式输出到主线程
+        self.postMessage({
+          type: 'STREAM_TOKEN',
+          payload: { token: finalAnswer },
+        } satisfies WorkerToMainMessage)
+        self.postMessage({
+          type: 'STREAM_DONE',
+          payload: { mindmapUpdated: true },
+        } satisfies WorkerToMainMessage)
+
+        reportStatus('generating_mindmap', '完成')
+      } catch (err) {
+        console.error(LOG, '❌ MEDIATE_MESSAGE 处理异常:', err)
+        const errorMsg: WorkerToMainMessage = {
+          type: 'AGENT_ERROR',
+          payload: { error: String(err) },
+        }
+        self.postMessage(errorMsg)
+      }
+      break
+    }
   }
 }
