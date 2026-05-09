@@ -110,6 +110,20 @@ export function applyOperations(
   return result
 }
 
+function addChildToNode(
+  node: MindMapNode,
+  op: Extract<
+    import('@/lib/agent/types').MindmapOperation,
+    { type: 'add_child' }
+  >,
+): MindMapNode {
+  if (node.editedByUser) {
+    console.warn(LOG, `跳过 add_child: 父节点 "${node.label}" 已被用户编辑`)
+    return node
+  }
+  return { ...node, children: [...node.children, newNodeFromOp(op)] }
+}
+
 function applyOne(
   nodes: MindMapNode[],
   op: import('@/lib/agent/types').MindmapOperation,
@@ -118,20 +132,33 @@ function applyOne(
     case 'add_root':
       return [...nodes, newNodeFromOp(op)]
 
-    case 'add_child':
-      return nodes.map((node) => {
-        if (node.id === op.parentId) {
-          if (node.editedByUser) {
-            console.warn(LOG, `跳过 add_child: 父节点 "${node.label}" 已被用户编辑`)
-            return node
-          }
-          return { ...node, children: [...node.children, newNodeFromOp(op)] }
-        }
+    case 'add_child': {
+      const pid = op.parentId ?? ''
+      let matched = false
+
+      const tryAdd = (node: MindMapNode): MindMapNode => {
+        if (node.id === pid) { matched = true; return addChildToNode(node, op) }
+        if (pid && node.label === pid) { matched = true; return addChildToNode(node, op) }
         if (node.children.length > 0) {
           return { ...node, children: applyOne(node.children, op) }
         }
         return node
+      }
+
+      const result = nodes.map((n, i) => {
+        // 无 parentId → 默认第一个根节点
+        if (!pid && i === 0 && !n.editedByUser) {
+          matched = true
+          return addChildToNode(n, op)
+        }
+        return tryAdd(n)
       })
+
+      if (!matched && pid) {
+        console.warn(LOG, `add_child: 未找到父节点 "${pid}"`)
+      }
+      return result
+    }
 
     case 'update':
       return nodes.map((node) => {
