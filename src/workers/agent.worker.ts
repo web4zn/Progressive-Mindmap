@@ -259,7 +259,7 @@ ${msg.payload.recentMessages
   .map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`)
   .join('\n')}` : ''}
 
-请按系统指令工作：先读脑图 → 更新脑图（如需要）→ 回答用户。`
+请按系统指令工作：先读脑图 → 更新脑图（几乎总是应该添加新节点来组织用户问题的相关内容）→ 回答用户。`
 
         console.log(LOG, '进入 ReAct 循环')
         const finalAnswer = await runReActLoop(userPrompt)
