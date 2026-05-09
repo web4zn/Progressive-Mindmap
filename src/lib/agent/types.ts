@@ -4,10 +4,10 @@
 
 // ─── 增量操作类型 ───
 export type MindmapOperation =
-  | { type: 'add_child'; parentId: string; label: string; summary?: string }
+  | { type: 'add_child'; parentId?: string; id?: string; label: string; summary?: string }
   | { type: 'update'; nodeId: string; patch: Partial<{ label: string; summary: string }> }
   | { type: 'delete_leaf'; nodeId: string }
-  | { type: 'add_root'; label: string; summary?: string }
+  | { type: 'add_root'; id?: string; label: string; summary?: string }
   | { type: 'noop' }
 
 // ─── Agent 状态 ───
@@ -40,6 +40,17 @@ export type MainToWorkerMessage =
         pattern: string
       }
     }
+  | {
+      type: 'MEDIATE_MESSAGE'
+      payload: {
+        conversationId: string
+        content: string
+        recentMessages: { role: string; content: string }[]
+        mindmapTreeJson: string
+        providerConfig: { apiEndpoint: string; apiKey: string }
+        model: string
+      }
+    }
 
 // ========================================
 // Worker → 主线程消息
@@ -70,6 +81,14 @@ export type WorkerToMainMessage =
   | {
       type: 'AGENT_ERROR'
       payload: { error: string }
+    }
+  | {
+      type: 'STREAM_TOKEN'
+      payload: { token: string }
+    }
+  | {
+      type: 'STREAM_DONE'
+      payload: { mindmapUpdated: boolean }
     }
 
 // ========================================
