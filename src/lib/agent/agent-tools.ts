@@ -217,7 +217,7 @@ function newNodeFromOp(
   >,
 ): MindMapNode {
   return {
-    id: deriveNodeId(op.label, []),
+    id: op.id || deriveNodeId(op.label, []),
     label: op.label,
     summary: op.summary ?? '',
     children: [],

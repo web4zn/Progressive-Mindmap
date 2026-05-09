@@ -71,8 +71,9 @@ const agentTools = {
     inputSchema: z.object({
       operations: z.array(z.object({
         type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root']).describe('操作类型'),
-        parentId: z.string().optional().describe('add_child 时可选，目标父节点 ID。不填则添加到第一个根节点下'),
-        nodeId: z.string().optional().describe('update/delete_leaf 时必填，目标节点 ID'),
+        parentId: z.string().optional().describe('add_child 时，目标父节点 ID。不填默认第一个根节点'),
+        nodeId: z.string().optional().describe('update/delete_leaf 的目标节点 ID'),
+        id: z.string().optional().describe('add_child/add_root 时可选，为新节点指定 ID。指定后可在同批次后续操作中用 parentId 引用'),
         label: z.string().optional().describe('add_child/add_root 时必填，节点标题'),
         summary: z.string().optional().describe('节点摘要'),
         patch: z.object({

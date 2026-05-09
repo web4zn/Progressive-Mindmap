@@ -169,7 +169,8 @@ export function useMindmapAgent() {
 步骤 1: 调用 readMindmap 获取树结构 + 节点 ID
 步骤 2: 根据对话内容，分析需要添加/更新/删除的内容，构建 operations，调用 generateMindmapOps 提交。注意：
   - parentId 和 nodeId 必须用 readMindmap 返回的真实 ID，新脑图时 add_child 可不传 parentId（默认加到第一个根节点）
-  - 不能用数字 1、2、3 等作为 parentId/nodeId，必须是 readMindmap 返回的 [id: xxx] 格式
+  - 创建新节点时（add_child/add_root），请用 id 字段指定一个有意义的英文 ID（如 "python", "rust-vs-cangjie"），后续操作用 parentId 引用
+  - 不能用数字 1、2、3 等作为 ID
   - [用户编辑] 节点不要 update 或 delete
   - delete_leaf 只能删无子节点的叶子
   - 重复概念用 update 更新摘要，而不是 add_child
