@@ -66,3 +66,13 @@ CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx e
 - Never push to remote without asking.
 - OpenSpec workflow in `openspec/` dir.
 - Plugins in `.opencode/plugins/`, skills in `.opencode/skills/`.
+
+### After PR merge — sync without branch switching
+
+After a PR from `opencode` is merged into `main`, sync all branches in one command:
+
+```bash
+git fetch origin && git merge origin/main && git push origin opencode && git branch -f main origin/main
+```
+
+This updates `opencode` (local + remote) and `main` (local) to match remote `main`. Never checkout `main` just to sync.
