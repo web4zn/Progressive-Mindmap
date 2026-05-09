@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { MessageSquare, Settings, PanelLeft, X, Network, Archive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -7,10 +7,9 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useMindmapStore } from '@/stores/mindmapStore'
-import { createClient, chat, isAbortError } from '@/lib/llm-client'
-import { buildFullMindmapPrompt, mindmapTreeToContext, parseJsonToTree, findEditedNodes, mergeEditedNodes } from '@/lib/mindmap-generator'
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
-import type { MindMapNode } from '@/types/mindmap'
+import { useConversation } from '@/hooks/useConversation'
+import { useMindmapAgent } from '@/hooks/useMindmapAgent'
+import { AgentActivityPanel } from '@/features/chat/AgentActivityPanel'
 import ConversationSidebar, {
   ConversationSettingsDialog,
 } from '@/features/conversation/ConversationSidebar'
@@ -22,27 +21,10 @@ import EmptyState from '@/components/EmptyState'
 import NewConversationDialog from '@/features/chat/NewConversationDialog'
 import type { NewConversationResult } from '@/features/chat/NewConversationDialog'
 import MindMapPanel from '@/features/mindmap/MindMapPanel'
-import { generateId } from '@/lib/id'
 
 type View = 'chat' | 'providers'
 
 export default function ChatPage() {
-  const updateMindmapForConversation = useCallback(
-    (newTree: MindMapNode[], convId: string) => {
-      if (newTree.length === 0) return
-      const allMindmaps = useMindmapStore.getState().mindmaps
-      for (const mm of allMindmaps) {
-        if (!mm.monitoredConversationIds?.includes(convId)) continue
-        const editedNodes = findEditedNodes(mm.tree)
-        const merged =
-          editedNodes.length > 0
-            ? mergeEditedNodes(newTree, editedNodes)
-            : newTree
-        useMindmapStore.getState().updateMindmapTree(mm.id, merged)
-      }
-    },
-    [],
-  )
   const [view, setView] = useState<View>('chat')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -52,15 +34,11 @@ export default function ChatPage() {
   const conversations = useConversationStore((s) => s.conversations)
   const activeConversationId = useConversationStore((s) => s.activeConversationId)
   const addConversation = useConversationStore((s) => s.addConversation)
-  const addMessageToConversation = useConversationStore((s) => s.addMessageToConversation)
-  const updateMessageInConversation = useConversationStore((s) => s.updateMessageInConversation)
   const removeLastAssistantMessage = useConversationStore((s) => s.removeLastAssistantMessage)
 
   const providers = useProviderStore((s) => s.providers)
-  const isGenerating = useChatStore((s) => s.isGenerating)
-  const startGeneration = useChatStore((s) => s.startGeneration)
-  const stopGeneration = useChatStore((s) => s.stopGeneration)
-  const setError = useChatStore((s) => s.setError)
+  const agentStatus = useChatStore((s) => s.agentStatus)
+  const agentMessage = useChatStore((s) => s.agentMessage)
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const hasProviders = providers.length > 0
@@ -73,140 +51,32 @@ export default function ChatPage() {
       ? activeProvider.models.some((m) => m.id === activeConversation.modelId && m.enabled)
       : false
 
-  const doSend = useCallback(
-    async (content: string, conversationId: string) => {
-      const conv = useConversationStore
-        .getState()
-        .conversations.find((c) => c.id === conversationId)
-      if (!conv) return
-      const prov = useProviderStore.getState().providers.find((p) => p.id === conv.providerId)
-      if (!prov) return
-      const modelOk = prov.models.some((m) => m.id === conv.modelId && m.enabled)
-      if (!modelOk) return
-      const generating = useChatStore.getState().isGenerating
-      if (generating) return
-
-      const userMsg = {
-        id: generateId(),
-        role: 'user' as const,
-        content,
-        createdAt: Date.now(),
-        status: 'complete' as const,
-      }
-      addMessageToConversation(conversationId, userMsg)
-
-      const assistantMsg = {
-        id: generateId(),
-        role: 'assistant' as const,
-        content: '',
-        createdAt: Date.now(),
-        status: 'streaming' as const,
-      }
-      addMessageToConversation(conversationId, assistantMsg)
-
-      const controller = startGeneration()
-
-      try {
-        const client = createClient(prov)
-        const history = conv.messages
-          .concat(userMsg)
-          .map((m) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
-
-        const useJsonMode = prov.supportsJsonMode === true
-
-        const linkedMindmap = useMindmapStore
-          .getState()
-          .mindmaps.find(
-            (m) => m.monitoredConversationIds?.includes(conversationId),
-          )
-        const monitoredMindmap = linkedMindmap?.tree.length ? linkedMindmap : null
-        const pattern = linkedMindmap?.pattern ?? 'auto'
-
-        const effectiveSystemPrompt = conv.systemPrompt
-          ? `${conv.systemPrompt}\n\n${buildFullMindmapPrompt(pattern)}`
-          : buildFullMindmapPrompt(pattern)
-
-        let systemContent = effectiveSystemPrompt
-        if (monitoredMindmap) {
-          const treeCtx = mindmapTreeToContext(monitoredMindmap.tree)
-          if (treeCtx) {
-            systemContent += '\n\n' + treeCtx
-          }
-        }
-
-        const messages: ChatCompletionMessageParam[] = [
-          { role: 'system', content: systemContent },
-          ...history as ChatCompletionMessageParam[],
-        ]
-
-        let displayContent = ''
-        let accumulated = ''
-
-        try {
-          const responseText = await chat(client, {
-            model: conv.modelId,
-            messages,
-            signal: controller.signal,
-            useJsonMode,
-          })
-
-          accumulated = responseText
-
-          try {
-            const parsed = JSON.parse(accumulated) as { answer?: string; mindmap?: { nodes?: unknown[] } }
-            displayContent = parsed.answer ?? accumulated
-
-            if (parsed.mindmap?.nodes && Array.isArray(parsed.mindmap.nodes)) {
-              const mindmapJson = JSON.stringify({ nodes: parsed.mindmap.nodes })
-              const newTree = parseJsonToTree(mindmapJson)
-              updateMindmapForConversation(newTree, conversationId)
-            }
-          } catch (jsonErr) {
-            console.error('[mindmap] JSON parse failed:', jsonErr)
-            displayContent = accumulated
-          }
-        } finally {
-          if (displayContent) {
-            updateMessageInConversation(conversationId, assistantMsg.id, {
-              content: displayContent,
-              status: 'complete',
-            })
-          }
-        }
-
-        if (controller.signal.aborted) return
-      } catch (err: unknown) {
-        if (isAbortError(err)) {
-          updateMessageInConversation(conversationId, assistantMsg.id, { status: 'complete' })
-        } else {
-          const message = err instanceof Error ? err.message : '请求失败'
-          updateMessageInConversation(conversationId, assistantMsg.id, {
-            content: message,
-            status: 'error',
-          })
-          setError(message)
-        }
-      } finally {
-        stopGeneration()
-      }
+  // ── 使用抽取的 Chat Hook ──
+  const agent = useMindmapAgent()
+  const { sendMessage, stopGeneration, isGenerating } = useConversation({
+    onStreamComplete: (convId, _msgId) => {
+      // AI 回答完成后 → 触发 Agent 后台增强
+      agent.enhanceMessage(convId)
     },
-    [
-      addMessageToConversation,
-      updateMessageInConversation,
-      startGeneration,
-      stopGeneration,
-      setError,
-    ],
-  )
+  })
 
+  // ── 初始化 Agent (有活跃会话且有 provider 时) ──
+  useEffect(() => {
+    if (hasProviders && activeConversation) {
+      agent.initialize()
+    }
+  }, [hasProviders, activeConversation, agent])
+
+  // ── 发送消息 ──
   const handleSend = useCallback(
     (content: string) => {
       if (!activeConversation) return
-      doSend(content, activeConversation.id)
+      sendMessage(content, activeConversation.id)
     },
-    [activeConversation, doSend],
+    [activeConversation, sendMessage],
   )
 
+  // ── 重新生成 ──
   const handleRegenerate = useCallback(async () => {
     if (isGenerating) return
     const convId = activeConversation?.id
@@ -219,14 +89,11 @@ export default function ChatPage() {
     const lastUserMsg = [...conv.messages].reverse().find((m) => m.role === 'user')
     removeLastAssistantMessage(convId)
     if (lastUserMsg) {
-      doSend(lastUserMsg.content, convId)
+      sendMessage(lastUserMsg.content, convId)
     }
-  }, [activeConversation, isGenerating, removeLastAssistantMessage, doSend])
+  }, [activeConversation, isGenerating, removeLastAssistantMessage, sendMessage])
 
-  const handleStopGeneration = () => {
-    stopGeneration()
-  }
-
+  // ── 新建会话 ──
   const handleNewConversation = () => {
     const p = providers[0]
     if (!p) return
@@ -255,10 +122,12 @@ export default function ChatPage() {
     setView('chat')
   }
 
+  // ── Provider 设置页 ──
   if (view === 'providers') {
     return <ProviderSettingsPage onBack={() => setView('chat')} />
   }
 
+  // ── 主内容渲染 ──
   const renderContent = () => {
     if (!hasProviders) {
       return (
@@ -332,7 +201,7 @@ export default function ChatPage() {
           <div className="shrink-0">
             <MessageInput
               onSend={handleSend}
-              onStop={handleStopGeneration}
+              onStop={stopGeneration}
               isGenerating={isGenerating}
               disabled={
                 !hasProviders ||
@@ -341,6 +210,8 @@ export default function ChatPage() {
                 activeConversation.archived === true
               }
             />
+            {/* Agent 活动指示器 */}
+            <AgentActivityPanel status={agentStatus} message={agentMessage} />
           </div>
         </div>
         {!mindmapCollapsed && (

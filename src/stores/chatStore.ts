@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { AgentStatus } from '../lib/agent/types'
 
 interface ChatState {
   isGenerating: boolean
@@ -8,6 +9,11 @@ interface ChatState {
   setError: (e: string | null) => void
   startGeneration: () => AbortController
   stopGeneration: () => void
+
+  // Agent
+  agentStatus: AgentStatus
+  agentMessage: string | null
+  setAgentStatus: (s: AgentStatus, msg?: string | null) => void
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
@@ -29,4 +35,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     abortController?.abort()
     set({ isGenerating: false, abortController: null })
   },
+
+  // Agent state
+  agentStatus: 'idle',
+  agentMessage: null,
+  setAgentStatus: (s, msg) => set({ agentStatus: s, agentMessage: msg ?? null }),
 }))
