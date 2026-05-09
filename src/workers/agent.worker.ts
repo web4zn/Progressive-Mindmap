@@ -11,6 +11,7 @@ import type {
 // ─── 初始化状态 ───
 let languageModel: ReturnType<ReturnType<typeof createOpenAI>> | null = null
 let systemPrompt = ''
+const MAX_STEPS = 5
 
 const LOG = '[🧠 Worker]'
 
@@ -62,8 +63,7 @@ const agentTools = {
     inputSchema: z.object({}),
     execute: async () => {
       reportStatus('reading_mindmap', '正在读取脑图...')
-      const result = await callMain('readMindmap', {})
-      return JSON.stringify(result)
+      return callMain('readMindmap', {}) as Promise<Record<string, unknown>>
     },
   }),
   generateMindmapOps: tool({
@@ -84,8 +84,7 @@ const agentTools = {
     }),
     execute: async ({ operations }) => {
       reportStatus('generating_mindmap', `应用 ${operations.length} 个操作...`)
-      const result = await callMain('generateMindmapOps', { operations })
-      return JSON.stringify(result)
+      return callMain('generateMindmapOps', { operations }) as Promise<Record<string, unknown>>
     },
   }),
 }
@@ -121,17 +120,35 @@ async function runReActLoop(userPrompt: string): Promise<string> {
       console.log(LOG, 'LLM 文本前 200 字:', text.slice(0, 200))
     }
 
-    // 保存 LLM 回答（可能有 tool calls 或最终文本）
-    if (text) {
-      messages.push({ role: 'assistant' as const, content: text })
-    }
-
     // 检查 SDK 是否已自动执行了工具
+    const toolCallsRaw = result.toolCalls as unknown as
+      | Array<{ toolName: string; args: unknown; invalid?: boolean }>
+      | undefined
     const toolResults = result.toolResults as unknown as
       | Array<{ toolName: string; output: unknown }>
       | undefined
 
+    // 保存 LLM 本轮的行为（即使 text 为空，也表示 LLM 调了工具）
+    messages.push({
+      role: 'assistant' as const,
+      content: text || '（调用工具中...）',
+    })
+
     if (!toolResults || toolResults.length === 0) {
+      // 检查是否有工具调用但执行失败（如 JSON 太大/语法错误）
+      const invalidCalls = toolCallsRaw?.filter((t) => t.invalid)
+      if (invalidCalls && invalidCalls.length > 0) {
+        console.warn(LOG, `发现 ${invalidCalls.length} 个无效工具调用，重试中:`, invalidCalls.map((t) => t.toolName))
+        messages.push({
+          role: 'assistant' as const,
+          content: '上一次工具调用参数格式有误（可能 JSON 过长或未闭合），请精简 operations 数量或缩短 summary 后重试。',
+        })
+        continue
+      }
+      // 有 toolCalls 但没 results → 工具定义可能不匹配
+      if (toolCallsRaw && (toolCallsRaw as Array<{ toolName: string }>).length > 0) {
+        console.warn(LOG, 'toolCalls 存在但 toolResults 为空，跳过')
+      }
       // 没有工具调用 → 最终回答
       if (text) {
         const preview = text.length > 100 ? text.slice(0, 100) + '...' : text
@@ -144,16 +161,16 @@ async function runReActLoop(userPrompt: string): Promise<string> {
     console.log(LOG, `SDK 执行了 ${toolResults.length} 个工具:`, toolResults.map((t) => t.toolName).join(', '))
     reportStatus('thinking', `[${stepIndex}/${maxSteps}] 工具结果已返回，继续分析...`)
 
-    // 把工具结果作为消息加回 messages，让下一轮 LLM 看到
+    // 把工具结果直接塞进 messages
     for (const tr of toolResults) {
       messages.push({
         role: 'assistant' as const,
-        content: `[工具 ${tr.toolName} 结果]: ${JSON.stringify(tr.output)}`,
+        content: JSON.stringify({ tool: tr.toolName, result: tr.output }),
       })
     }
   }
 
-  console.warn(LOG, `达到最大步骤数 ${maxSteps}，循环结束`)
+  console.warn(LOG, `达到最大步骤数 ${MAX_STEPS}，循环结束`)
   return '已达到最大推理步骤数，请重试或简化问题。'
 }
 
@@ -246,7 +263,21 @@ ${msg.payload.recentMessages
     case 'MEDIATE_MESSAGE': {
       console.log(LOG, '开始 MEDIATE_MESSAGE 处理', {
         conversationId: msg.payload.conversationId,
+        model: msg.payload.model,
       })
+
+      // 用消息里最新的 provider 配置创建 model（避免用旧的 key）
+      try {
+        const openaiProvider = createOpenAI({
+          apiKey: msg.payload.providerConfig.apiKey,
+          baseURL: msg.payload.providerConfig.apiEndpoint,
+        })
+        languageModel = openaiProvider.chat(msg.payload.model) as never
+      } catch (err) {
+        console.error(LOG, '❌ 创建 model 失败:', err)
+        reportStatus('error', `模型初始化失败: ${String(err)}`)
+        return
+      }
 
       reportStatus('thinking', '正在处理...')
 
@@ -259,7 +290,7 @@ ${msg.payload.recentMessages
   .map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`)
   .join('\n')}` : ''}
 
-请按系统指令工作：先读脑图 → 更新脑图（几乎总是应该添加新节点来组织用户问题的相关内容）→ 回答用户。`
+请按系统指令工作：先读脑图 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
 
         console.log(LOG, '进入 ReAct 循环')
         const finalAnswer = await runReActLoop(userPrompt)

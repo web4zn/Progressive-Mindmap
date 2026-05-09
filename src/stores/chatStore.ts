@@ -43,5 +43,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   agentMessage: null,
   setAgentStatus: (s, msg) => set({ agentStatus: s, agentMessage: msg ?? null }),
   agentMode: 'enhance',
-  setAgentMode: (m) => set({ agentMode: m }),
+  setAgentMode: (m) => set({ agentMode: m, agentStatus: 'idle', agentMessage: null }),
 }))

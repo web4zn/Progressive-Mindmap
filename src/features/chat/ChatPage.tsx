@@ -76,7 +76,8 @@ export default function ChatPage() {
       if (!activeConversation) return
 
       if (agentMode === 'mediate') {
-        // 中介模式：创建消息占位，交给 Agent
+        stopGeneration()
+        agent.initialize()
         const store = useConversationStore.getState()
         store.addMessageToConversation(activeConversation.id, {
           id: generateId(),
@@ -97,7 +98,7 @@ export default function ChatPage() {
         sendMessage(content, activeConversation.id)
       }
     },
-    [activeConversation, agentMode, agent, sendMessage],
+    [activeConversation, agentMode, agent, sendMessage, stopGeneration],
   )
 
   // ── 重新生成 ──
@@ -278,18 +279,18 @@ export default function ChatPage() {
               </Button>
               <ModelSelector />
               <div className="flex items-center border rounded-md overflow-hidden text-xs">
-                <button
-                  onClick={() => setAgentMode('enhance')}
-                  className={`px-2 py-1 transition-colors ${agentMode === 'enhance' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                >
-                  ✨ 增强
-                </button>
-                <button
-                  onClick={() => setAgentMode('mediate')}
-                  className={`px-2 py-1 transition-colors ${agentMode === 'mediate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                >
-                  🤖 Agent
-                </button>
+              <button
+                onClick={() => { stopGeneration(); setAgentMode('enhance') }}
+                className={`px-2 py-1 transition-colors ${agentMode === 'enhance' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                ✨ 增强
+              </button>
+              <button
+                onClick={() => setAgentMode('mediate')}
+                className={`px-2 py-1 transition-colors ${agentMode === 'mediate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                🤖 Agent
+              </button>
               </div>
               {activeConversation?.archived && (
                 <Badge variant="secondary" className="text-xs gap-1">
