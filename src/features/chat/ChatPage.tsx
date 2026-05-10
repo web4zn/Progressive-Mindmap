@@ -60,11 +60,14 @@ export default function ChatPage() {
     (content: string) => {
       if (!activeConversation) return
 
-      const currentAgentMode = activeConversation.agentMode ?? 'enhance'
+      // 实时从 store 读取 agentMode，避免 useCallback 闭包缓存旧值
+      const { agentMode } = useConversationStore.getState().conversations.find(
+        (c) => c.id === activeConversation.id,
+      ) ?? { agentMode: 'enhance' as const }
+      const currentAgentMode = agentMode ?? 'enhance'
 
       if (currentAgentMode === 'mediate') {
         stopGeneration()
-        agent.initialize()
         const store = useConversationStore.getState()
         store.addMessageToConversation(activeConversation.id, {
           id: generateId(),
@@ -100,10 +103,30 @@ export default function ChatPage() {
     if (!lastMsg || lastMsg.role !== 'assistant') return
     const lastUserMsg = [...conv.messages].reverse().find((m) => m.role === 'user')
     removeLastAssistantMessage(convId)
-    if (lastUserMsg) {
+
+    if (!lastUserMsg) return
+
+    // 根据当前模式选择路径
+    const currentConv = useConversationStore.getState().conversations.find(
+      (c) => c.id === convId,
+    )
+    const agentMode = currentConv?.agentMode ?? 'enhance'
+
+    if (agentMode === 'mediate') {
+      // Agent 模式：通过 Worker 重新生成
+      const store = useConversationStore.getState()
+      store.addMessageToConversation(convId, {
+        id: generateId(),
+        role: 'assistant',
+        content: '',
+        createdAt: Date.now(),
+        status: 'streaming',
+      })
+      agent.mediateMessage(lastUserMsg.content, convId)
+    } else {
       sendMessage(lastUserMsg.content, convId)
     }
-  }, [activeConversation, isGenerating, removeLastAssistantMessage, sendMessage])
+  }, [activeConversation, isGenerating, removeLastAssistantMessage, sendMessage, agent])
 
   // ── 新建会话 ──
   const handleNewConversation = () => {

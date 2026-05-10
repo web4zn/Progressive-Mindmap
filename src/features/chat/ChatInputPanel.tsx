@@ -79,6 +79,7 @@ export default function ChatInputPanel({
     if (!activeConversation) return
     if (mode === 'enhance') {
       stopGeneration()
+      useChatStore.getState().setAgentStatus('idle')
     }
     updateConversation(activeConversation.id, { agentMode: mode })
   }

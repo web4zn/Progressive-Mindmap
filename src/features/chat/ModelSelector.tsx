@@ -27,11 +27,11 @@ export default function ModelSelector() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Button variant="outline" className="max-w-72 min-w-0 justify-between text-sm gap-2">
-          <span className="truncate">{label}</span>
-          <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" className="max-w-72 min-w-0 justify-between text-sm gap-2" />}
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56">
         {providers.length === 0 ? (
