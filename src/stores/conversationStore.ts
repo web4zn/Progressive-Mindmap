@@ -12,9 +12,9 @@ interface ConversationState {
     modelId: string
     systemPrompt?: string
   }) => Conversation
-  updateConversation: (
+      updateConversation: (
     id: string,
-    data: Partial<Pick<Conversation, 'title' | 'providerId' | 'modelId' | 'systemPrompt'>>,
+    data: Partial<Pick<Conversation, 'title' | 'providerId' | 'modelId' | 'systemPrompt' | 'agentMode'>>,
   ) => void
   removeConversation: (id: string) => void
   archiveConversation: (id: string) => void
@@ -49,6 +49,7 @@ export const useConversationStore = create<ConversationState>()(
           modelId: data.modelId,
           systemPrompt: data.systemPrompt ?? '',
           messages: [],
+          agentMode: 'enhance',
           createdAt: now,
           updatedAt: now,
         }

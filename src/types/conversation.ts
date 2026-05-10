@@ -8,6 +8,7 @@ export interface Conversation {
   systemPrompt: string
   messages: Message[]
   archived?: boolean
+  agentMode?: 'enhance' | 'mediate'
   createdAt: number
   updatedAt: number
 }

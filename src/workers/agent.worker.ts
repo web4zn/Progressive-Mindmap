@@ -217,9 +217,23 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     case 'ENHANCE_MESSAGE': {
       console.log(LOG, '开始 ENHANCE_MESSAGE 处理', {
         conversationId: msg.payload.conversationId,
+        model: msg.payload.model,
         消息数: msg.payload.recentMessages.length,
         有现有脑图: !!msg.payload.mindmapTreeJson,
       })
+
+      // 用消息里最新的 provider 配置创建 model（避免跨会话用错模型）
+      try {
+        const openaiProvider = createOpenAI({
+          apiKey: msg.payload.providerConfig.apiKey,
+          baseURL: msg.payload.providerConfig.apiEndpoint,
+        })
+        languageModel = openaiProvider.chat(msg.payload.model) as never
+      } catch (err) {
+        console.error(LOG, '❌ 创建 model 失败:', err)
+        reportStatus('error', `模型初始化失败: ${String(err)}`)
+        return
+      }
 
       reportStatus('thinking', '开始分析对话内容...')
 
