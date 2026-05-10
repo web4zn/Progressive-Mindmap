@@ -5,19 +5,16 @@ import { Badge } from '@/components/ui/badge'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
-import { useChatStore } from '@/stores/chatStore'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversation } from '@/hooks/useConversation'
 import { useMindmapAgent } from '@/hooks/useMindmapAgent'
-import { AgentActivityPanel } from '@/features/chat/AgentActivityPanel'
+import ChatInputPanel from '@/features/chat/ChatInputPanel'
 import { generateId } from '@/lib/id'
 import ConversationSidebar, {
   ConversationSettingsDialog,
 } from '@/features/conversation/ConversationSidebar'
 import ProviderSettingsPage from '@/features/provider/ProviderSettingsPage'
-import ModelSelector from '@/features/chat/ModelSelector'
 import MessageList from '@/features/chat/MessageList'
-import MessageInput from '@/features/chat/MessageInput'
 import EmptyState from '@/components/EmptyState'
 import NewConversationDialog from '@/features/chat/NewConversationDialog'
 import type { NewConversationResult } from '@/features/chat/NewConversationDialog'
@@ -38,21 +35,9 @@ export default function ChatPage() {
   const removeLastAssistantMessage = useConversationStore((s) => s.removeLastAssistantMessage)
 
   const providers = useProviderStore((s) => s.providers)
-  const agentStatus = useChatStore((s) => s.agentStatus)
-  const agentMessage = useChatStore((s) => s.agentMessage)
-  const agentMode = useChatStore((s) => s.agentMode)
-  const setAgentMode = useChatStore((s) => s.setAgentMode)
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const hasProviders = providers.length > 0
-
-  const activeProvider = activeConversation
-    ? providers.find((p) => p.id === activeConversation.providerId)
-    : null
-  const hasValidModel =
-    activeProvider && activeConversation
-      ? activeProvider.models.some((m) => m.id === activeConversation.modelId && m.enabled)
-      : false
 
   // ── 使用抽取的 Chat Hook ──
   const agent = useMindmapAgent()
@@ -75,7 +60,9 @@ export default function ChatPage() {
     (content: string) => {
       if (!activeConversation) return
 
-      if (agentMode === 'mediate') {
+      const currentAgentMode = activeConversation.agentMode ?? 'enhance'
+
+      if (currentAgentMode === 'mediate') {
         stopGeneration()
         agent.initialize()
         const store = useConversationStore.getState()
@@ -98,7 +85,7 @@ export default function ChatPage() {
         sendMessage(content, activeConversation.id)
       }
     },
-    [activeConversation, agentMode, agent, sendMessage, stopGeneration],
+    [activeConversation, agent, sendMessage, stopGeneration],
   )
 
   // ── 重新生成 ──
@@ -224,21 +211,12 @@ export default function ChatPage() {
             />
           </div>
           <div className="shrink-0">
-            <MessageInput
+            <ChatInputPanel
               onSend={handleSend}
               onStop={stopGeneration}
               isGenerating={isGenerating}
-              disabled={
-                !hasProviders ||
-                !activeConversation ||
-                !hasValidModel ||
-                activeConversation.archived === true
-              }
+              disabled={!hasProviders || !activeConversation || activeConversation.archived === true}
             />
-            {/* Agent 活动指示器 — 只增强模式显示 */}
-            {agentMode === 'enhance' && (
-              <AgentActivityPanel status={agentStatus} message={agentMessage} />
-            )}
           </div>
         </div>
         {!mindmapCollapsed && (
@@ -277,28 +255,12 @@ export default function ChatPage() {
               >
                 {sidebarOpen ? <X className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
               </Button>
-              <ModelSelector />
-              <div className="flex items-center border rounded-md overflow-hidden text-xs">
-              <button
-                onClick={() => { stopGeneration(); setAgentMode('enhance') }}
-                className={`px-2 py-1 transition-colors ${agentMode === 'enhance' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              >
-                ✨ 增强
-              </button>
-              <button
-                onClick={() => setAgentMode('mediate')}
-                className={`px-2 py-1 transition-colors ${agentMode === 'mediate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              >
-                🤖 Agent
-              </button>
-              </div>
               {activeConversation?.archived && (
                 <Badge variant="secondary" className="text-xs gap-1">
                   <Archive className="w-3 h-3" />
                   已归档
                 </Badge>
               )}
-              {!hasValidModel && <span className="text-sm text-destructive">当前模型不可用</span>}
             </div>
             <div className="flex items-center gap-2">
               <Button

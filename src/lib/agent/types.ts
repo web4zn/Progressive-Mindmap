@@ -38,6 +38,8 @@ export type MainToWorkerMessage =
         recentMessages: { role: string; content: string }[]
         mindmapTreeJson: string
         pattern: string
+        providerConfig: { apiEndpoint: string; apiKey: string }
+        model: string
       }
     }
   | {

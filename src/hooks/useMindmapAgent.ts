@@ -230,6 +230,9 @@ export function useMindmapAgent() {
         return
       }
 
+      const providers = useProviderStore.getState().providers
+      const provider = providers.find((p) => p.id === conv.providerId)
+
       const recentMessages = conv.messages.slice(-6)
       console.log(LOG, '发送 ENHANCE_MESSAGE', {
         conversationId,
@@ -251,6 +254,10 @@ export function useMindmapAgent() {
           mindmapTreeJson:
             mm.tree.length > 0 ? JSON.stringify(mm.tree) : '',
           pattern: mm.pattern ?? 'auto',
+          providerConfig: provider
+            ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
+            : { apiEndpoint: '', apiKey: '' },
+          model: conv.modelId,
         },
       }
       worker.postMessage(msg)
