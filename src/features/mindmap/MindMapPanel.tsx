@@ -5,7 +5,6 @@ import {
   Download,
   FileImage,
   FileText,
-  Link2,
   Maximize2,
   Minimize2,
   X,
@@ -47,17 +46,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   )
 
   const activeConvId = useConversationStore((s) => s.activeConversationId)
-
-  const isCurrentLinked =
-    activeMindmapId != null && activeConvId != null
-      ? (activeMindmap?.monitoredConversationIds ?? []).includes(activeConvId)
-      : false
-
-  const handleLinkCurrent = useCallback(() => {
-    if (activeConvId && activeMindmapId) {
-      useMindmapStore.getState().addMonitoredConversation(activeMindmapId, activeConvId)
-    }
-  }, [activeConvId, activeMindmapId])
 
   const handleUnlink = useCallback(
     (convId: string) => {
@@ -186,9 +174,12 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
 
       {activeMindmap && (
         <div className="border-t border-sidebar-border pt-2 px-3">
-          <button
-            className="flex items-center gap-1 text-xs font-medium text-sidebar-foreground/80 hover:text-sidebar-foreground w-full"
+          <div
+            className="flex items-center gap-1 text-xs font-medium text-sidebar-foreground/80 hover:text-sidebar-foreground w-full cursor-pointer"
             onClick={() => setLinkedOpen((o) => !o)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLinkedOpen((o) => !o) } }}
           >
             {linkedOpen ? (
               <ChevronDown className="w-3 h-3 shrink-0" />
@@ -196,24 +187,7 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
               <ChevronRight className="w-3 h-3 shrink-0" />
             )}
             关联会话 ({linkedConversations.length})
-            {activeConvId && (
-              <button
-                className="ml-auto inline-flex items-center gap-1 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (isCurrentLinked) {
-                    handleUnlink(activeConvId)
-                  } else {
-                    handleLinkCurrent()
-                  }
-                }}
-                title={isCurrentLinked ? '取消关联当前会话' : '关联当前会话'}
-              >
-                <Link2 className="w-3 h-3" />
-                {isCurrentLinked ? '已关联' : '关联当前'}
-              </button>
-            )}
-          </button>
+          </div>
           {linkedOpen && (
             <div className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
               {linkedConversations.length === 0 ? (

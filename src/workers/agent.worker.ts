@@ -1,180 +1,13 @@
 /// <reference lib="WebWorker" />
-import { generateText, tool } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
-import { z } from 'zod'
-import type {
-  MainToWorkerMessage,
-  WorkerToMainMessage,
-  MainToWorkerResponse,
-} from '../lib/agent/types'
+import type { MainToWorkerMessage, WorkerToMainMessage } from '../lib/agent/types'
+import { ReActRunner } from '../lib/agent/ReActRunner'
+import { agentTools, reportStatus } from './agent-tools.def'
 
-// ─── 初始化状态 ───
-let languageModel: ReturnType<ReturnType<typeof createOpenAI>> | null = null
+let runner: ReActRunner | null = null
 let systemPrompt = ''
-const MAX_STEPS = 5
-
 const LOG = '[🧠 Worker]'
 
-// ─── Round-trip: Worker 请求主线程执行工具 ───
-function callMain(toolName: string, args: unknown): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const callId = crypto.randomUUID()
-    console.log(LOG, `→ 请求主线程执行工具: ${toolName}`, { args, callId })
-
-    const handler = (event: MessageEvent<MainToWorkerResponse>) => {
-      const msg = event.data
-      if (msg.type === 'TOOL_RESULT' && msg.payload.callId === callId) {
-        self.removeEventListener('message', handler)
-        console.log(LOG, `← 工具 ${toolName} 结果已返回`)
-        resolve(msg.payload.result)
-      }
-      if (msg.type === 'TOOL_ERROR' && msg.payload.callId === callId) {
-        self.removeEventListener('message', handler)
-        console.error(LOG, `← 工具 ${toolName} 返回错误:`, msg.payload.error)
-        reject(new Error(msg.payload.error))
-      }
-    }
-    self.addEventListener('message', handler)
-
-    const postMsg: WorkerToMainMessage = {
-      type: 'TOOL_RESULT_NEEDED',
-      payload: { callId, toolName, args },
-    }
-    self.postMessage(postMsg)
-  })
-}
-
-// ─── 报告状态 ───
-function reportStatus(
-  status: 'idle' | 'thinking' | 'reading_mindmap' | 'generating_mindmap' | 'complete' | 'error',
-  message?: string,
-) {
-  const postMsg: WorkerToMainMessage = {
-    type: 'AGENT_STATUS',
-    payload: { status: status as never, message },
-  }
-  self.postMessage(postMsg)
-}
-
-// ─── 工具定义（使用 AI SDK 原生 tool，含 inputSchema） ───
-const agentTools = {
-  readMindmap: tool({
-    description: '读取当前脑图结构，返回每个节点的 ID、标签、摘要。用于了解现有结构后再决定操作。',
-    inputSchema: z.object({}),
-    execute: async () => {
-      reportStatus('reading_mindmap', '正在读取脑图...')
-      return callMain('readMindmap', {}) as Promise<Record<string, unknown>>
-    },
-  }),
-  generateMindmapOps: tool({
-    description: '应用脑图增量更新操作。先调用 readMindmap 获取节点 ID，然后根据对话内容决定操作，最后调用本工具提交操作。',
-    inputSchema: z.object({
-      operations: z.array(z.object({
-        type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root']).describe('操作类型'),
-        parentId: z.string().optional().describe('add_child 时，目标父节点 ID。不填默认第一个根节点'),
-        nodeId: z.string().optional().describe('update/delete_leaf 的目标节点 ID'),
-        id: z.string().optional().describe('add_child/add_root 时可选，为新节点指定 ID。指定后可在同批次后续操作中用 parentId 引用'),
-        label: z.string().optional().describe('add_child/add_root 时必填，节点标题'),
-        summary: z.string().optional().describe('节点摘要'),
-        patch: z.object({
-          label: z.string().optional(),
-          summary: z.string().optional(),
-        }).optional().describe('update 时使用，要更新的字段'),
-      })),
-    }),
-    execute: async ({ operations }) => {
-      reportStatus('generating_mindmap', `应用 ${operations.length} 个操作...`)
-      return callMain('generateMindmapOps', { operations }) as Promise<Record<string, unknown>>
-    },
-  }),
-}
-
-// ─── ReAct 循环（AI SDK 原生工具调用） ───
-async function runReActLoop(userPrompt: string): Promise<string> {
-  if (!languageModel) throw new Error('Agent 未初始化')
-
-  console.log(LOG, '===== ReAct 循环开始 =====')
-
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    { role: 'user', content: userPrompt },
-  ]
-
-  let stepIndex = 0
-  const maxSteps = 5
-
-  while (stepIndex < maxSteps) {
-    stepIndex++
-    console.log(LOG, `--- Step ${stepIndex}/${maxSteps} ---`)
-    reportStatus('thinking', `[${stepIndex}/${maxSteps}] 分析对话，决定下一步...`)
-
-    const result = await generateText({
-      model: languageModel,
-      system: systemPrompt,
-      messages,
-      tools: agentTools as never,
-    })
-
-    const text = result.text
-    console.log(LOG, `LLM 回答 ${text?.length ?? 0} 字`)
-    if (text && text.length > 0) {
-      console.log(LOG, 'LLM 文本前 200 字:', text.slice(0, 200))
-    }
-
-    // 检查 SDK 是否已自动执行了工具
-    const toolCallsRaw = result.toolCalls as unknown as
-      | Array<{ toolName: string; args: unknown; invalid?: boolean }>
-      | undefined
-    const toolResults = result.toolResults as unknown as
-      | Array<{ toolName: string; output: unknown }>
-      | undefined
-
-    // 保存 LLM 本轮的行为（即使 text 为空，也表示 LLM 调了工具）
-    messages.push({
-      role: 'assistant' as const,
-      content: text || '（调用工具中...）',
-    })
-
-    if (!toolResults || toolResults.length === 0) {
-      // 检查是否有工具调用但执行失败（如 JSON 太大/语法错误）
-      const invalidCalls = toolCallsRaw?.filter((t) => t.invalid)
-      if (invalidCalls && invalidCalls.length > 0) {
-        console.warn(LOG, `发现 ${invalidCalls.length} 个无效工具调用，重试中:`, invalidCalls.map((t) => t.toolName))
-        messages.push({
-          role: 'assistant' as const,
-          content: '上一次工具调用参数格式有误（可能 JSON 过长或未闭合），请精简 operations 数量或缩短 summary 后重试。',
-        })
-        continue
-      }
-      // 有 toolCalls 但没 results → 工具定义可能不匹配
-      if (toolCallsRaw && (toolCallsRaw as Array<{ toolName: string }>).length > 0) {
-        console.warn(LOG, 'toolCalls 存在但 toolResults 为空，跳过')
-      }
-      // 没有工具调用 → 最终回答
-      if (text) {
-        const preview = text.length > 100 ? text.slice(0, 100) + '...' : text
-        console.log(LOG, '✅ Agent 最终回答:', preview)
-        reportStatus('generating_mindmap', `完成: ${preview}`)
-      }
-      return text ?? ''
-    }
-
-    console.log(LOG, `SDK 执行了 ${toolResults.length} 个工具:`, toolResults.map((t) => t.toolName).join(', '))
-    reportStatus('thinking', `[${stepIndex}/${maxSteps}] 工具结果已返回，继续分析...`)
-
-    // 把工具结果直接塞进 messages
-    for (const tr of toolResults) {
-      messages.push({
-        role: 'assistant' as const,
-        content: JSON.stringify({ tool: tr.toolName, result: tr.output }),
-      })
-    }
-  }
-
-  console.warn(LOG, `达到最大步骤数 ${MAX_STEPS}，循环结束`)
-  return '已达到最大推理步骤数，请重试或简化问题。'
-}
-
-// ─── 模式提示 ───
 function getPatternHint(pattern: string): string {
   const hints: Record<string, string> = {
     '5w1h': '知识组织模式：5W1H（What/Why/Who/When/Where/How）',
@@ -185,7 +18,11 @@ function getPatternHint(pattern: string): string {
   return hint ? `${hint}\n\n` : ''
 }
 
-// ─── 主消息处理 ───
+function createModel(apiKey: string, apiEndpoint: string, modelId: string) {
+  const openaiProvider = createOpenAI({ apiKey, baseURL: apiEndpoint })
+  return openaiProvider.chat(modelId) as never
+}
+
 self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
   const msg = event.data
   console.log(LOG, '收到消息:', msg.type)
@@ -194,17 +31,10 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     case 'INIT': {
       const { providerConfig, model: modelId, mindmapSystemPrompt } = msg.payload
       systemPrompt = mindmapSystemPrompt
-      console.log(LOG, '初始化 Agent', {
-        model: modelId,
-        endpoint: providerConfig.apiEndpoint,
-      })
-
+      console.log(LOG, '初始化 Agent', { model: modelId, endpoint: providerConfig.apiEndpoint })
       try {
-        const openaiProvider = createOpenAI({
-          apiKey: providerConfig.apiKey,
-          baseURL: providerConfig.apiEndpoint,
-        })
-        languageModel = openaiProvider.chat(modelId) as never
+        const model = createModel(providerConfig.apiKey, providerConfig.apiEndpoint, modelId)
+        runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus })
         console.log(LOG, '✅ Agent 初始化成功')
         reportStatus('idle', 'Agent 就绪')
       } catch (err) {
@@ -219,57 +49,46 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         conversationId: msg.payload.conversationId,
         model: msg.payload.model,
         消息数: msg.payload.recentMessages.length,
-        有现有脑图: !!msg.payload.mindmapTreeJson,
       })
-
-      // 用消息里最新的 provider 配置创建 model（避免跨会话用错模型）
       try {
-        const openaiProvider = createOpenAI({
-          apiKey: msg.payload.providerConfig.apiKey,
-          baseURL: msg.payload.providerConfig.apiEndpoint,
-        })
-        languageModel = openaiProvider.chat(msg.payload.model) as never
+        const model = createModel(
+          msg.payload.providerConfig.apiKey,
+          msg.payload.providerConfig.apiEndpoint,
+          msg.payload.model,
+        )
+        runner?.setModel(model)
+        runner?.setSystemPrompt(systemPrompt)
       } catch (err) {
         console.error(LOG, '❌ 创建 model 失败:', err)
         reportStatus('error', `模型初始化失败: ${String(err)}`)
         return
       }
-
       reportStatus('thinking', '开始分析对话内容...')
-
       try {
         const patternHint = getPatternHint(msg.payload.pattern)
-
         const userPrompt = `基于以下对话内容，更新思维导图。
 
 ${patternHint}
 对话内容：
-${msg.payload.recentMessages
-  .map((m) => `[${m.role}]: ${m.content}`)
-  .join('\n')}
+${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
 
 请按系统指令中的工作流程执行。`
-
         console.log(LOG, '进入 ReAct 循环')
-        const finalAnswer = await runReActLoop(userPrompt)
+        const finalAnswer = await runner!.run(userPrompt)
         console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
         void finalAnswer
-
         reportStatus('generating_mindmap', '脑图生成完成')
-
-        const completeMsg: WorkerToMainMessage = {
+        self.postMessage({
           type: 'AGENT_COMPLETE',
           payload: { operations: [], newTreeJson: '' },
-        }
-        self.postMessage(completeMsg)
+        } satisfies WorkerToMainMessage)
         console.log(LOG, '✅ 已发送 AGENT_COMPLETE')
       } catch (err) {
         console.error(LOG, '❌ ENHANCE_MESSAGE 处理异常:', err)
-        const errorMsg: WorkerToMainMessage = {
+        self.postMessage({
           type: 'AGENT_ERROR',
           payload: { error: String(err) },
-        }
-        self.postMessage(errorMsg)
+        } satisfies WorkerToMainMessage)
       }
       break
     }
@@ -279,38 +98,35 @@ ${msg.payload.recentMessages
         conversationId: msg.payload.conversationId,
         model: msg.payload.model,
       })
-
-      // 用消息里最新的 provider 配置创建 model（避免用旧的 key）
       try {
-        const openaiProvider = createOpenAI({
-          apiKey: msg.payload.providerConfig.apiKey,
-          baseURL: msg.payload.providerConfig.apiEndpoint,
-        })
-        languageModel = openaiProvider.chat(msg.payload.model) as never
+        const model = createModel(
+          msg.payload.providerConfig.apiKey,
+          msg.payload.providerConfig.apiEndpoint,
+          msg.payload.model,
+        )
+        runner?.setModel(model)
+        runner?.setSystemPrompt(systemPrompt)
       } catch (err) {
         console.error(LOG, '❌ 创建 model 失败:', err)
         reportStatus('error', `模型初始化失败: ${String(err)}`)
         return
       }
-
       reportStatus('thinking', '正在处理...')
-
       try {
+        const recentContext =
+          msg.payload.recentMessages.length > 0
+            ? `最近对话（上下文参考）：
+${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`).join('\n')}`
+            : ''
         const userPrompt = `用户提问：
 ${msg.payload.content}
 
-${msg.payload.recentMessages.length > 0 ? `最近对话（上下文参考）：
-${msg.payload.recentMessages
-  .map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`)
-  .join('\n')}` : ''}
+${recentContext}
 
 请按系统指令工作：先读脑图 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
-
         console.log(LOG, '进入 ReAct 循环')
-        const finalAnswer = await runReActLoop(userPrompt)
+        const finalAnswer = await runner!.run(userPrompt)
         console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
-
-        // 流式输出到主线程
         self.postMessage({
           type: 'STREAM_TOKEN',
           payload: { token: finalAnswer },
@@ -319,15 +135,13 @@ ${msg.payload.recentMessages
           type: 'STREAM_DONE',
           payload: { mindmapUpdated: true },
         } satisfies WorkerToMainMessage)
-
         reportStatus('generating_mindmap', '完成')
       } catch (err) {
         console.error(LOG, '❌ MEDIATE_MESSAGE 处理异常:', err)
-        const errorMsg: WorkerToMainMessage = {
+        self.postMessage({
           type: 'AGENT_ERROR',
           payload: { error: String(err) },
-        }
-        self.postMessage(errorMsg)
+        } satisfies WorkerToMainMessage)
       }
       break
     }

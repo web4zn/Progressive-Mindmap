@@ -5,6 +5,7 @@ import {
 } from '@/lib/mindmap-generator'
 import { deriveNodeId } from '@/lib/id'
 import type { MindMapNode } from '@/types/mindmap'
+import { validateOperations } from './schema'
 
 const LOG = '[🧠 Tools]'
 
@@ -62,15 +63,22 @@ export const agentToolHandlers: Record<
       return { success: true, nodeCount: 0, operations: [] }
     }
 
+    // ─── Zod schema 校验：拒绝格式错误的 operations ───
+    const validation = validateOperations(operations)
+    if (!validation.success) {
+      console.error(LOG, '操作校验失败:', validation.error)
+      return { error: validation.error, success: false }
+    }
+    const validatedOps = validation.data
+
     const conv = useConversationStore.getState().getActiveConversation()
     if (!conv) return { error: '无活跃会话' }
 
     const targetMindmap = getMindmapForConversation(conv.id)
     if (!targetMindmap) return { error: '会话未关联脑图' }
 
-    const ops = operations.filter(
-      (op) => op.type && ['add_child', 'update', 'delete_leaf', 'add_root'].includes(op.type),
-    ) as import('@/lib/agent/types').MindmapOperation[]
+    // 操作已通过 Zod 校验，直接使用
+    const ops = validatedOps as import('@/lib/agent/types').MindmapOperation[]
 
     if (ops.length === 0) {
       console.warn(LOG, '操作列表无有效操作')
@@ -102,12 +110,28 @@ export function applyOperations(
   for (const op of operations) {
     try {
       result = applyOne(result, op)
+      // 顶层验证：add_child 操作后检查父节点是否存在
+      if (op.type === 'add_child' && op.parentId && !hasNode(result, op.parentId)) {
+        console.warn(LOG, `add_child: 未找到父节点 "${op.parentId}"`)
+      }
     } catch (err) {
       console.warn(LOG, `跳过操作 ${op.type}: ${String(err)}`)
     }
   }
 
   return result
+}
+
+/**
+ * 检查树中是否包含指定 ID 的节点。
+ * 用于在 add_child 操作后验证目标父节点是否存在。
+ */
+function hasNode(nodes: MindMapNode[], nodeId: string): boolean {
+  for (const n of nodes) {
+    if (n.id === nodeId) return true
+    if (n.children.length > 0 && hasNode(n.children, nodeId)) return true
+  }
+  return false
 }
 
 function addChildToNode(
@@ -134,11 +158,10 @@ function applyOne(
 
     case 'add_child': {
       const pid = op.parentId ?? ''
-      let matched = false
 
       const tryAdd = (node: MindMapNode): MindMapNode => {
-        if (node.id === pid) { matched = true; return addChildToNode(node, op) }
-        if (pid && node.label === pid) { matched = true; return addChildToNode(node, op) }
+        if (node.id === pid) { return addChildToNode(node, op) }
+        if (pid && node.label === pid) { return addChildToNode(node, op) }
         if (node.children.length > 0) {
           return { ...node, children: applyOne(node.children, op) }
         }
@@ -148,15 +171,11 @@ function applyOne(
       const result = nodes.map((n, i) => {
         // 无 parentId → 默认第一个根节点
         if (!pid && i === 0 && !n.editedByUser) {
-          matched = true
           return addChildToNode(n, op)
         }
         return tryAdd(n)
       })
 
-      if (!matched && pid) {
-        console.warn(LOG, `add_child: 未找到父节点 "${pid}"`)
-      }
       return result
     }
 
