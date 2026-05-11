@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { sanitizeHtml } from '@/lib/html-sanitizer'
 import { Button } from '@/components/ui/button'
 import type { MindMapNode } from '@/types/mindmap'
 
@@ -12,7 +11,7 @@ interface MindMapEditModalProps {
     label: string,
     summary: string,
     content?: string,
-    contentType?: 'text' | 'markdown',
+    contentType?: 'text' | 'html',
   ) => void
   onCancel: () => void
 }
@@ -21,8 +20,8 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
   const [label, setLabel] = useState(node.label)
   const [summary, setSummary] = useState(node.summary)
   const [content, setContent] = useState(node.content ?? '')
-  const [contentType, setContentType] = useState<'text' | 'markdown'>(
-    node.contentType === 'markdown' ? 'markdown' : 'text',
+  const [contentType, setContentType] = useState<'text' | 'html'>(
+    node.contentType === 'html' ? 'html' : 'text',
   )
   const [previewing, setPreviewing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -38,13 +37,18 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
         node.id,
         label.trim(),
         summary.trim(),
-        contentType === 'markdown' ? content.trim() : undefined,
+        contentType === 'html' ? content.trim() : undefined,
         contentType,
       )
     }
   }
 
-  const isMarkdown = contentType === 'markdown'
+  const isHtml = contentType === 'html'
+
+  const previewHtml = useMemo(
+    () => (isHtml && content ? { __html: sanitizeHtml(content) } : undefined),
+    [content, isHtml],
+  )
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -98,20 +102,20 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
                   纯文本
                 </Button>
                 <Button
-                  variant={contentType === 'markdown' ? 'default' : 'outline'}
+                  variant={contentType === 'html' ? 'default' : 'outline'}
                   size="sm"
                   className="h-6 text-[11px] px-2"
-                  onClick={() => setContentType('markdown')}
+                  onClick={() => setContentType('html')}
                 >
-                  Markdown
+                  HTML
                 </Button>
               </div>
             </div>
-            {isMarkdown && (
+            {isHtml && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] text-muted-foreground">
-                    Markdown 内容（可选）
+                    HTML 内容（可选）
                   </span>
                   <Button
                     variant="ghost"
@@ -123,11 +127,10 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
                   </Button>
                 </div>
                 {previewing ? (
-                  <div className="w-full min-h-[60px] max-h-[200px] overflow-y-auto border border-input rounded px-3 py-2 text-xs prose prose-sm dark:prose-invert max-w-none prose-code:text-[11px] prose-pre:bg-muted prose-pre:text-[11px] prose-table:text-[11px]">
-                    <Markdown remarkPlugins={[remarkGfm]}>
-                      {content || '_无内容_'}
-                    </Markdown>
-                  </div>
+                  <div
+                    className="w-full min-h-[60px] max-h-[200px] overflow-y-auto border border-input rounded px-3 py-2 text-xs prose prose-sm dark:prose-invert max-w-none prose-code:text-[11px] prose-pre:bg-muted prose-pre:text-[11px] prose-table:text-[11px]"
+                    dangerouslySetInnerHTML={previewHtml ?? { __html: '<em>无内容</em>' }}
+                  />
                 ) : (
                   <textarea
                     className="w-full text-sm bg-background border border-input rounded px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30 resize-none font-mono text-xs"
@@ -142,15 +145,16 @@ export default function MindMapEditModal({ node, onConfirm, onCancel }: MindMapE
                         }
                       }
                     }}
-                    placeholder={`**bold** *italic* \`code\` ~~strike~~
-
-\`\`\`python
-print("code block")
-\`\`\`
-
-| A | B |
-|---|---|
-| 1 | 2 |`}
+                    placeholder={`<h3>标题</h3>
+<p>段落内容，可以使用 <strong>加粗</strong> 和 <em>斜体</em>。</p>
+<ul>
+  <li>列表项一</li>
+  <li>列表项二</li>
+</ul>
+<table>
+  <tr><th>列A</th><th>列B</th></tr>
+  <tr><td>1</td><td>2</td></tr>
+</table>`}
                     rows={6}
                   />
                 )}

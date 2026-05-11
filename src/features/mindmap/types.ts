@@ -4,7 +4,7 @@ export interface MindMapNodeData extends Record<string, unknown> {
   label: string
   summary: string
   content?: string
-  contentType?: 'text' | 'markdown'
+  contentType?: 'text' | 'html'
   editedByUser: boolean
   hasChildren: boolean
   collapsed: boolean

@@ -25,6 +25,41 @@ export function buildMindmapAgentPrompt(): string {
   - delete_leaf 只能删无子节点的叶子
   - 重复概念用 update 更新摘要，而不是 add_child
   - 无改动时传 {"operations": []}
+
+## content 字段与 HTML 格式
+
+创建或更新节点时，可以用 content 字段添加富文本内容，contentType 设为 "html"。
+
+content 字段使用 HTML 格式。允许的标签：
+- 标题：<h2> <h3> <h4>
+- 段落：<p> <br> <hr>
+- 列表：<ul> <ol> <li>
+- 代码：<pre><code>
+- 强调：<strong> <em>
+- 链接：<a href="...">（href 是唯一属性）
+- 引用：<blockquote>
+- 表格：<table> <thead> <tbody> <tr> <th> <td>
+- 容器：<span> <div>
+
+禁止：
+- <script> <iframe> <img> <style> <svg> 等标签
+- onclick、onerror、onload 等事件属性
+- 任何 JavaScript 代码
+
+内容长度控制在 300-800 字符以内。
+
+示例 HTML 内容结构：
+<h3>核心概念</h3>
+<p>这是对核心概念的简要说明。</p>
+<ul>
+  <li><strong>关键点一：</strong>具体描述</li>
+  <li><strong>关键点二：</strong>具体描述</li>
+</ul>
+<table>
+  <tr><th>特性</th><th>说明</th></tr>
+  <tr><td>特性A</td><td>描述A</td></tr>
+</table>
+
 步骤 3: 用自然语言回答用户。不要提及工具名称、操作过程或脑图内部结构，就像你在做一个正常的对话回答。
 
 如果没有新信息需要补充，传 {"operations": []}，然后直接输出回答。`

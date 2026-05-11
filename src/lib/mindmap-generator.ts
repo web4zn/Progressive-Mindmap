@@ -64,7 +64,7 @@ function jsonNodeToMindMapNode(
   const label = (raw.label ?? '未命名').trim()
   const summary = (raw.summary ?? '').trim()
   const contentType =
-    raw.contentType === 'markdown' || raw.contentType === 'text' ? raw.contentType : undefined
+    raw.contentType === 'html' || raw.contentType === 'text' ? raw.contentType : undefined
   const content = typeof raw.content === 'string' ? raw.content : undefined
   const children = (raw.children ?? []).map((c: JsonNode) =>
     jsonNodeToMindMapNode(c, depth + 1, maxDepth, [...parentLabels, label || '未命名']),

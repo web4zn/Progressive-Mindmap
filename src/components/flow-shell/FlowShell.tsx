@@ -24,7 +24,7 @@ import type { FlowNodeData } from './index'
 
 const NODE_WIDTH = 200
 const NODE_HEIGHT = 100
-const RICH_NODE_HEIGHT = 220
+const RICH_NODE_HEIGHT = 380
 
 const _nodeTypes = { flow: FlowNodeComponent }
 
@@ -63,7 +63,7 @@ function applyLayout(
   })
 
   for (const n of flowNodes) {
-    const hasRichContent = n.data?.contentType === 'markdown' && n.data?.content
+    const hasRichContent = n.data?.contentType === 'html' && n.data?.content
     g.setNode(n.id, {
       width: NODE_WIDTH,
       height: hasRichContent ? RICH_NODE_HEIGHT : NODE_HEIGHT,
@@ -78,9 +78,11 @@ function applyLayout(
   const layoutedNodes = flowNodes.map((n) => {
     const pos = g.node(n.id)
     if (!pos) return n
+    const hasRich = n.data?.contentType === 'html' && n.data?.content
+    const nodeH = hasRich ? RICH_NODE_HEIGHT : NODE_HEIGHT
     return {
       ...n,
-      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
+      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - nodeH / 2 },
     }
   })
 
@@ -107,21 +109,24 @@ export default function FlowShell(props: FlowShellProps) {
     onNodeDragStop,
   } = props
 
-  // Stable key: only changes when node IDs or edge connections actually differ
+  // Stable key: changes when node IDs, edge connections, or content data differ
   const structureKey = useMemo(
     () =>
       JSON.stringify({
-        n: rawNodes.map((n) => n.id),
+        n: rawNodes.map((n) => ({
+          id: n.id,
+          ct: n.data?.contentType,
+          hasContent: !!n.data?.content,
+        })),
         e: rawEdges.map((e) => `${e.source}→${e.target}`),
       }),
     [rawNodes, rawEdges],
   )
 
-  // Layout: dagre runs only when structure or direction changes
+  // Layout: dagre runs when structure, content type, or direction changes
   const layoutResult = useMemo(
     () => applyLayout(rawNodes, rawEdges, layout),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [structureKey, layout],
+    [rawNodes, rawEdges, layout],
   )
 
   const initialPositionsRef = useRef(layoutResult.nodes as Node[])
@@ -198,6 +203,7 @@ export default function FlowShell(props: FlowShellProps) {
         nodesConnectable={nodesConnectable}
         elementsSelectable={elementsSelectable}
         deleteKeyCode={deleteKeyCode}
+        noWheelClassName="nowheel"
       >
         <Background variant={'dots' as BackgroundVariant} gap={16} size={1} />
         <Controls className="flow-controls" showInteractive />

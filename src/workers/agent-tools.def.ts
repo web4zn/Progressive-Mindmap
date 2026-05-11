@@ -71,8 +71,18 @@ export const agentTools = {
           ),
           label: z.string().optional().describe('add_child/add_root 时必填，节点标题'),
           summary: z.string().optional().describe('节点摘要'),
+          content: z.string().optional().describe('节点富文本内容（HTML 格式）'),
+          contentType: z
+            .enum(['text', 'html'])
+            .optional()
+            .describe('内容类型，html 时 content 字段为 HTML'),
           patch: z
-            .object({ label: z.string().optional(), summary: z.string().optional() })
+            .object({
+              label: z.string().optional(),
+              summary: z.string().optional(),
+              content: z.string().optional(),
+              contentType: z.enum(['text', 'html']).optional(),
+            })
             .optional()
             .describe('update 时使用，要更新的字段'),
         }),

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, memo } from 'react'
 import { MessageSquare, Settings, PanelLeft, X, Network, Archive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,8 @@ import NewConversationDialog from '@/features/chat/NewConversationDialog'
 import type { NewConversationResult } from '@/features/chat/NewConversationDialog'
 import MindMapPanel from '@/features/mindmap/MindMapPanel'
 
+const MemoMindMapPanel = memo(MindMapPanel)
+
 type View = 'chat' | 'providers'
 
 export default function ChatPage() {
@@ -38,6 +40,8 @@ export default function ChatPage() {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const hasProviders = providers.length > 0
+
+  const handleMindmapClose = useCallback(() => setMindmapCollapsed(true), [])
 
   // ── 使用抽取的 Chat Hook ──
   const agent = useMindmapAgent()
@@ -191,7 +195,7 @@ export default function ChatPage() {
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
               <div className="flex-1 h-full hidden md:block min-w-[300px]">
-                <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+                <MemoMindMapPanel onClose={handleMindmapClose} />
               </div>
             </>
           )}
@@ -214,7 +218,7 @@ export default function ChatPage() {
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
               <div className="flex-1 h-full hidden md:block min-w-[300px]">
-                <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+                <MemoMindMapPanel onClose={handleMindmapClose} />
               </div>
             </>
           )}
@@ -246,7 +250,7 @@ export default function ChatPage() {
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
             <div className="flex-1 h-full hidden md:block min-w-[300px]">
-              <MindMapPanel onClose={() => setMindmapCollapsed(true)} />
+              <MemoMindMapPanel onClose={handleMindmapClose} />
             </div>
           </>
         )}

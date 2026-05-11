@@ -1,13 +1,17 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { sanitizeHtml } from '@/lib/html-sanitizer'
 import type { FlowNodeData } from './index'
 
 function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeData }) {
-  const hasMarkdown = data.contentType === 'markdown' && data.content
+  const hasHtml = data.contentType === 'html' && data.content
   const depth = data.depth ?? 0
   const depthClass = depth >= 4 ? 'depth-4' : `depth-${depth}`
+
+  const safeHtml = useMemo(
+    () => (hasHtml ? { __html: sanitizeHtml(data.content!) } : undefined),
+    [data.content, hasHtml],
+  )
 
   return (
     <div className={`flow-node${selected ? ' selected' : ''}`}>
@@ -50,10 +54,8 @@ function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeD
         </span>
       </div>
 
-      {hasMarkdown ? (
-        <div className="flow-node-content">
-          <Markdown remarkPlugins={[remarkGfm]}>{data.content!}</Markdown>
-        </div>
+      {hasHtml ? (
+        <div className="flow-node-content nowheel" dangerouslySetInnerHTML={safeHtml} />
       ) : data.summary ? (
         <div className="flow-node-summary">{data.summary}</div>
       ) : null}
