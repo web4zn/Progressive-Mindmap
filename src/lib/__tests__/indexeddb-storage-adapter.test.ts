@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createIndexedDBStorage } from '../indexeddb-storage-adapter'
+import { createIndexedDBStorage, flushPendingWrites } from '../indexeddb-storage-adapter'
 
 vi.mock('idb', () => {
   const store = new Map<string, { name: string; value: string }>()
@@ -27,6 +27,7 @@ describe('createIndexedDBStorage', () => {
   it('stores and retrieves a value', async () => {
     const storage = createIndexedDBStorage()
     await storage.setItem('test-key', 'test-value')
+    await flushPendingWrites()
     const result = await storage.getItem('test-key')
     expect(result).toBe('test-value')
   })
@@ -49,6 +50,7 @@ describe('createIndexedDBStorage', () => {
     const storage = createIndexedDBStorage()
     const json = JSON.stringify({ state: { mindmaps: [{ id: '1', name: 'test' }] } })
     await storage.setItem('mindmap-store', json)
+    await flushPendingWrites()
     const result = await storage.getItem('mindmap-store')
     expect(result).toBe(json)
     expect(JSON.parse(result!)).toEqual({ state: { mindmaps: [{ id: '1', name: 'test' }] } })

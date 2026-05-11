@@ -52,7 +52,9 @@ export const agentToolHandlers: Record<
         nodeId?: string
         label?: string
         summary?: string
-        patch?: { label?: string; summary?: string }
+        content?: string
+        contentType?: string
+        patch?: { label?: string; summary?: string; content?: string; contentType?: string }
       }>
     }
 
@@ -105,33 +107,17 @@ export function applyOperations(
   tree: MindMapNode[],
   operations: import('@/lib/agent/types').MindmapOperation[],
 ): MindMapNode[] {
-  let result = structuredClone(tree)
+  let result = [...tree]
 
   for (const op of operations) {
     try {
       result = applyOne(result, op)
-      // 顶层验证：add_child 操作后检查父节点是否存在
-      if (op.type === 'add_child' && op.parentId && !hasNode(result, op.parentId)) {
-        console.warn(LOG, `add_child: 未找到父节点 "${op.parentId}"`)
-      }
     } catch (err) {
       console.warn(LOG, `跳过操作 ${op.type}: ${String(err)}`)
     }
   }
 
   return result
-}
-
-/**
- * 检查树中是否包含指定 ID 的节点。
- * 用于在 add_child 操作后验证目标父节点是否存在。
- */
-function hasNode(nodes: MindMapNode[], nodeId: string): boolean {
-  for (const n of nodes) {
-    if (n.id === nodeId) return true
-    if (n.children.length > 0 && hasNode(n.children, nodeId)) return true
-  }
-  return false
 }
 
 function addChildToNode(
@@ -190,6 +176,8 @@ function applyOne(
             ...node,
             label: op.patch.label ?? node.label,
             summary: op.patch.summary ?? node.summary,
+            content: op.patch.content ?? node.content,
+            contentType: op.patch.contentType ?? (op as { contentType?: 'text' | 'html' }).contentType ?? node.contentType,
           }
         }
         if (node.children.length > 0) {
@@ -239,6 +227,8 @@ function newNodeFromOp(
     id: op.id || deriveNodeId(op.label, []),
     label: op.label,
     summary: op.summary ?? '',
+    content: op.content,
+    contentType: op.contentType,
     children: [],
     editedByUser: false,
   }

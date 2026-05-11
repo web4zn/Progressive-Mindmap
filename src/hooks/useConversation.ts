@@ -102,14 +102,14 @@ export function useConversation(options?: UseConversationOptions) {
           ...history,
         ]
 
-        // 流式响应
+        // 流式响应（streamChat 已按 ~50 字一批 yield，直接更新 store）
         let fullContent = ''
-        for await (const token of streamChat(client, {
+        for await (const batch of streamChat(client, {
           model: conv.modelId,
           messages,
           signal: controller.signal,
         })) {
-          fullContent += token
+          fullContent += batch
           store.updateMessageInConversation(conversationId, assistantMsg.id, {
             content: fullContent,
           })

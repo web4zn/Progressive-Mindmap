@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect } from 'react'
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { Loader2, AlertCircle, RefreshCw, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
@@ -103,7 +103,10 @@ export default function MindMapTree({
     return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.pattern ?? 'auto'
   })
 
-  const { nodes, edges } = treeToFlowShell(tree, collapsedIds, toggleCollapse, pattern)
+  const { nodes, edges } = useMemo(
+    () => treeToFlowShell(tree, collapsedIds, toggleCollapse, pattern),
+    [tree, collapsedIds, toggleCollapse, pattern],
+  )
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -154,7 +157,7 @@ export default function MindMapTree({
       label: string,
       summary: string,
       content?: string,
-      contentType?: 'text' | 'markdown',
+      contentType?: 'text' | 'html',
     ) => {
       if (mindmapId) updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       setEditNode(null)

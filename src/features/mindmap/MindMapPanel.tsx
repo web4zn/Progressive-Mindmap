@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
+import { useChatStore } from '@/stores/chatStore'
 import { exportMindmapAsMarkdown, downloadMarkdown } from '@/lib/export'
 import { exportMindmapAsPng, exportMindmapAsSvg } from '@/lib/export-mindmap'
 import {
@@ -35,14 +36,22 @@ interface MindMapPanelProps {
 
 export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   const { mindmaps, activeMindmapId, setActiveMindmapId } = useMindmapStore()
-  const { conversations } = useConversationStore()
+  // Only re-render on conversation add/remove, NOT on message updates
+  const conversationCount = useConversationStore((s) => s.conversations.length)
+  const conversations = useConversationStore.getState().conversations
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [linkedOpen, setLinkedOpen] = useState(true)
 
   const activeMindmap = mindmaps.find((m) => m.id === activeMindmapId) ?? null
+  const agentStatus = useChatStore((s) => s.agentStatus)
+  const isAgentActive = agentStatus !== 'idle'
 
-  const linkedConversations = conversations.filter((c) =>
-    activeMindmap?.monitoredConversationIds?.includes(c.id),
+  const linkedConversations = useMemo(
+    () =>
+      conversations.filter((c) =>
+        activeMindmap?.monitoredConversationIds?.includes(c.id),
+      ),
+    [conversationCount, conversations, activeMindmap?.monitoredConversationIds],
   )
 
   const activeConvId = useConversationStore((s) => s.activeConversationId)
@@ -226,8 +235,8 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
       <MindMapTree
         tree={activeMindmap?.tree ?? []}
         mindmapId={activeMindmapId ?? undefined}
-        isGenerating={false}
-        isStreaming={false}
+        isGenerating={isAgentActive}
+        isStreaming={isAgentActive && (activeMindmap?.tree.length ?? 0) > 0}
         error={null}
       />
     </div>

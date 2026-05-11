@@ -56,6 +56,81 @@ describe('MindmapOperationSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  // ── HTML content support ──
+
+  it('accepts add_child with HTML content', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'add_child',
+      parentId: 'n1',
+      label: 'Topic',
+      summary: '摘要',
+      content: '<h3>标题</h3><p>段落</p>',
+      contentType: 'html',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts add_root with content and contentType', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'add_root',
+      label: 'Root',
+      content: '<p>root content</p>',
+      contentType: 'html',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts update with content patch', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'update',
+      nodeId: 'n1',
+      patch: {
+        content: '<h3>Updated</h3>',
+        contentType: 'html',
+      },
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts add_child with text contentType', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'add_child',
+      parentId: 'n1',
+      label: 'Plain',
+      content: 'plain text',
+      contentType: 'text',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid contentType value', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'add_child',
+      parentId: 'n1',
+      label: 'Topic',
+      contentType: 'markdown',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects invalid contentType in patch', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'update',
+      nodeId: 'n1',
+      patch: { contentType: 'xml' },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts operations without content fields (backward compat)', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'add_child',
+      parentId: 'n1',
+      label: 'No Content',
+    })
+    expect(result.success).toBe(true)
+  })
 })
 
 describe('OperationsArraySchema', () => {

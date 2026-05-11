@@ -13,10 +13,14 @@ export const MindmapOperationSchema = z.object({
   id: z.string().optional(),
   label: z.string().optional(),
   summary: z.string().optional(),
+  content: z.string().optional(),
+  contentType: z.enum(['text', 'html']).optional(),
   patch: z
     .object({
       label: z.string().optional(),
       summary: z.string().optional(),
+      content: z.string().optional(),
+      contentType: z.enum(['text', 'html']).optional(),
     })
     .optional(),
 })

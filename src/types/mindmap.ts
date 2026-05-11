@@ -3,7 +3,7 @@ export interface MindMapNode {
   label: string
   summary: string
   content?: string
-  contentType?: 'text' | 'markdown'
+  contentType?: 'text' | 'html'
   children: MindMapNode[]
   editedByUser: boolean
 }

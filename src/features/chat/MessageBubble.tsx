@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Copy, RefreshCw } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,7 +11,7 @@ interface MessageBubbleProps {
   onRegenerate?: () => void
 }
 
-export default function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
+function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isStreaming = message.status === 'streaming'
   const isError = message.status === 'error'
@@ -82,3 +83,16 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
     </div>
   )
 }
+
+/**
+ * 仅当消息的内容、状态或 ID 变化时才重渲染。
+ * 流式回复时，只有当前正在 streaming 的那条消息会重渲染。
+ */
+export default memo(MessageBubble, (prev, next) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content &&
+    prev.message.status === next.message.status &&
+    prev.message.role === next.message.role
+  )
+})

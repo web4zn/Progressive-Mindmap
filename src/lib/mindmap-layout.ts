@@ -4,7 +4,7 @@ import type { MindMapFlowNode, MindMapFlowEdge, MindMapNodeData } from '../featu
 
 const nodeWidth = 200
 const nodeHeight = 80
-const richNodeHeight = 220
+const richNodeHeight = 380
 
 export function treeToFlow(
   nodes: MindMapNode[],
@@ -62,7 +62,7 @@ export function applyLayout(
   g.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 180, edgesep: 30, marginx: 80, marginy: 80 })
 
   for (const n of nodes) {
-    const hasRichContent = n.data?.contentType === 'markdown' && n.data?.content
+    const hasRichContent = n.data?.contentType === 'html' && n.data?.content
     g.setNode(n.id, {
       width: nodeWidth,
       height: hasRichContent ? richNodeHeight : nodeHeight,
@@ -77,9 +77,11 @@ export function applyLayout(
   const layoutedNodes = nodes.map((n) => {
     const pos = g.node(n.id)
     if (!pos) return n
+    const hasRich = n.data?.contentType === 'html' && n.data?.content
+    const h = hasRich ? richNodeHeight : nodeHeight
     return {
       ...n,
-      position: { x: pos.x - nodeWidth / 2, y: pos.y - nodeHeight / 2 },
+      position: { x: pos.x - nodeWidth / 2, y: pos.y - h / 2 },
     }
   })
 

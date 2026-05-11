@@ -55,12 +55,20 @@ export async function* streamChat(
     { signal: params.signal },
   )
 
+  // 流式 chunk 频繁（中文每个 chunk 1-2 字），攒够一批再 yield，减少外部迭代次数
+  const BATCH_SIZE = 50
+  let buffer = ''
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content
-    if (delta) {
-      yield delta
+    if (!delta) continue
+    buffer += delta
+    if (buffer.length >= BATCH_SIZE) {
+      yield buffer
+      buffer = ''
     }
   }
+  // 最终刷新剩余内容
+  if (buffer) yield buffer
 }
 
 export async function chat(
