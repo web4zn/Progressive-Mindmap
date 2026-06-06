@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+out/
+release/
+dist-electron/
 
 # TypeScript
 tsconfig.tsbuildinfo
