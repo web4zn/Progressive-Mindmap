@@ -5,7 +5,15 @@ import refreshPlugin from 'eslint-plugin-react-refresh'
 import prettierConfig from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '.vite'] },
+  {
+    // `dist` is the Vite web build output (pre-existing).
+    // `out` is the electron-vite three-segment build output (main,
+    //   preload, renderer) — new in Phase 0.
+    // `release` is the electron-builder installer output — new in
+    //   Phase 0. Without these, `npm run build && npm run lint`
+    //   reports ~2000 false errors from the bundled output.
+    ignores: ['dist', 'out', 'release', 'dist-electron', 'node_modules', '.vite'],
+  },
 
   js.configs.recommended,
 
