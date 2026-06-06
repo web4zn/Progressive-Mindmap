@@ -36,7 +36,8 @@
     "typecheck": "npx tsc --noEmit && npx tsc --noEmit -p electron/tsconfig.json",
     "test": "vitest run --config vitest.config.ts",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "smoke:electron": "node scripts/smoke-electron.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

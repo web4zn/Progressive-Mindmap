@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint'
 import hooksPlugin from 'eslint-plugin-react-hooks'
 import refreshPlugin from 'eslint-plugin-react-refresh'
 import prettierConfig from 'eslint-config-prettier'
+import globals from 'globals'
 
 export default tseslint.config(
   {
@@ -18,6 +19,19 @@ export default tseslint.config(
   js.configs.recommended,
 
   ...tseslint.configs.recommended,
+
+  {
+    // Node.js helper scripts (smoke tests, codegen, etc.) live in
+    // `scripts/` and run under plain Node, not Vite. Expose the Node
+    // + ESM globals so ESLint stops flagging `process`, `console`,
+    // `setTimeout`, etc. as undefined.
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.es2024 },
+    },
+  },
 
   {
     files: ['**/*.{ts,tsx}'],
