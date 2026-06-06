@@ -5,8 +5,10 @@ import {
   Controls,
   MiniMap,
   Panel,
+  ReactFlowProvider,
   applyNodeChanges,
   applyEdgeChanges,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeChange,
@@ -14,6 +16,7 @@ import {
   type ReactFlowInstance,
   type NodeMouseHandler,
   type OnNodeDrag,
+  type OnSelectionChangeParams,
   type BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -21,31 +24,10 @@ import dagre from '@dagrejs/dagre'
 import './flow-shell.css'
 import FlowNodeComponent from './FlowNode'
 import type { FlowNodeData } from './index'
+import { computeNodeSize, type NodeSize } from '@/lib/mindmap-flow'
 
-const NODE_WIDTH = 200
-const NODE_HEIGHT = 100
-const RICH_NODE_HEIGHT = 380
-
-const _nodeTypes = { flow: FlowNodeComponent }
-
-export interface FlowShellProps {
-  nodes: Node<FlowNodeData, 'flow'>[]
-  edges: Edge[]
-  theme?: 'dark' | 'light'
-  layout?: 'dagre-lr' | 'dagre-tb'
-  fitView?: boolean
-  fitViewPadding?: number
-  minZoom?: number
-  maxZoom?: number
-  nodesDraggable?: boolean
-  nodesConnectable?: boolean
-  elementsSelectable?: boolean
-  deleteKeyCode?: string
-  onInit?: (instance: ReactFlowInstance) => void
-  onNodeDoubleClick?: NodeMouseHandler<Node>
-  onNodeContextMenu?: NodeMouseHandler<Node>
-  onNodeDragStop?: OnNodeDrag<Node>
-}
+const DEFAULT_TEXT_SIZE: NodeSize = { width: 200, height: 100 }
+const EXPANDED_HTML_HEIGHT = 380
 
 function applyLayout(
   flowNodes: Node<FlowNodeData>[],
@@ -62,12 +44,27 @@ function applyLayout(
     marginy: 60,
   })
 
+  const sizes = new Map<string, NodeSize>()
   for (const n of flowNodes) {
-    const hasRichContent = n.data?.contentType === 'html' && n.data?.content
-    g.setNode(n.id, {
-      width: NODE_WIDTH,
-      height: hasRichContent ? RICH_NODE_HEIGHT : NODE_HEIGHT,
+    const hasRichContent = n.data?.contentType === 'html' && !!n.data?.content
+    const isExpanded = n.data?.expanded === true
+    const computed = computeNodeSize({
+      label: n.data?.label ?? '',
+      summary: n.data?.summary ?? '',
+      contentLength: n.data?.content?.length,
+      hasHtml: hasRichContent,
+      hasChildren: !!n.data?.hasChildren,
     })
+    const size: NodeSize = hasRichContent
+      ? {
+          width: computed.width,
+          height: isExpanded
+            ? EXPANDED_HTML_HEIGHT
+            : Math.min(EXPANDED_HTML_HEIGHT, Math.max(computed.height, 140)),
+        }
+      : computed
+    sizes.set(n.id, size)
+    g.setNode(n.id, { width: size.width, height: size.height })
   }
   for (const e of flowEdges) {
     g.setEdge(e.source, e.target)
@@ -78,22 +75,62 @@ function applyLayout(
   const layoutedNodes = flowNodes.map((n) => {
     const pos = g.node(n.id)
     if (!pos) return n
-    const hasRich = n.data?.contentType === 'html' && n.data?.content
-    const nodeH = hasRich ? RICH_NODE_HEIGHT : NODE_HEIGHT
+    const size = sizes.get(n.id) ?? DEFAULT_TEXT_SIZE
     return {
       ...n,
-      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - nodeH / 2 },
+      position: { x: pos.x - size.width / 2, y: pos.y - size.height / 2 },
+      width: size.width,
+      height: size.height,
     }
   })
 
   return { nodes: layoutedNodes, edges: flowEdges }
 }
 
-export default function FlowShell(props: FlowShellProps) {
+export interface FlowShellProps {
+  nodes: Node<FlowNodeData, 'flow'>[]
+  edges: Edge[]
+  theme?: 'dark' | 'light'
+  layout?: 'dagre-lr' | 'dagre-tb'
+  fitView?: boolean
+  fitViewPadding?: number
+  minZoom?: number
+  maxZoom?: number
+  nodesDraggable?: boolean
+  nodesConnectable?: boolean
+  elementsSelectable?: boolean
+  deleteKeyCode?: string
+  selectedNodeId?: string | null
+  onSelectionChange?: (nodeId: string | null) => void
+  onPaneDoubleClick?: () => void
+  onInit?: (instance: ReactFlowInstance) => void
+  onNodeDoubleClick?: NodeMouseHandler<Node>
+  onNodeContextMenu?: NodeMouseHandler<Node>
+  onNodeDragStop?: OnNodeDrag<Node>
+}
+
+const _nodeTypes = { flow: FlowNodeComponent }
+
+const nodeColorFn = (node: Node) => {
+  const data = node.data as FlowNodeData | undefined
+  const pattern = data?.pattern ?? 'auto'
+  const colors: Record<string, string> = {
+    auto: '#3b82f6',
+    '5w1h': '#22c55e',
+    tech: '#8b5cf6',
+    'pros-cons': '#f59e0b',
+  }
+  return colors[pattern] ?? colors.auto!
+}
+
+/**
+ * Inner shell — must live inside a ReactFlowProvider so `useReactFlow()` is
+ * available. Wraps the visible canvas + panel toolbar (focus / arrange).
+ */
+function FlowShellInner(props: FlowShellProps) {
   const {
     nodes: rawNodes,
     edges: rawEdges,
-    theme = 'light',
     layout = 'dagre-lr',
     fitView = true,
     fitViewPadding = 0.3,
@@ -103,13 +140,15 @@ export default function FlowShell(props: FlowShellProps) {
     nodesConnectable = false,
     elementsSelectable = true,
     deleteKeyCode = 'Delete',
+    selectedNodeId,
+    onSelectionChange,
+    onPaneDoubleClick,
     onInit,
     onNodeDoubleClick,
     onNodeContextMenu,
     onNodeDragStop,
   } = props
 
-  // Stable key: changes when node IDs, edge connections, or content data differ
   const structureKey = useMemo(
     () =>
       JSON.stringify({
@@ -117,13 +156,13 @@ export default function FlowShell(props: FlowShellProps) {
           id: n.id,
           ct: n.data?.contentType,
           hasContent: !!n.data?.content,
+          exp: n.data?.expanded === true,
         })),
         e: rawEdges.map((e) => `${e.source}→${e.target}`),
       }),
     [rawNodes, rawEdges],
   )
 
-  // Layout: dagre runs when structure, content type, or direction changes
   const layoutResult = useMemo(
     () => applyLayout(rawNodes, rawEdges, layout),
     [rawNodes, rawEdges, layout],
@@ -134,7 +173,6 @@ export default function FlowShell(props: FlowShellProps) {
   const [nodes, setNodes] = useState<Node[]>(layoutResult.nodes as Node[])
   const [edges, setEdges] = useState<Edge[]>(layoutResult.edges as Edge[])
 
-  // Tree structure changed → save new layout + reset
   useEffect(() => {
     initialPositionsRef.current = layoutResult.nodes as Node[]
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -145,14 +183,24 @@ export default function FlowShell(props: FlowShellProps) {
   }, [structureKey])
 
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
+  const { fitView: rfFitView } = useReactFlow()
 
-  // ↻ button: restore saved positions + re-center viewport
   const handleAutoArrange = useCallback(() => {
     setNodes([...initialPositionsRef.current])
     setTimeout(() => {
       rfInstanceRef.current?.fitView({ padding: fitViewPadding, duration: 200 })
     }, 50)
   }, [fitViewPadding])
+
+  const handleFocus = useCallback(() => {
+    if (!selectedNodeId) return
+    rfFitView({
+      nodes: [{ id: selectedNodeId }],
+      padding: 0.3,
+      duration: 200,
+      maxZoom: 1.5,
+    })
+  }, [selectedNodeId, rfFitView])
 
   const handleInit = useCallback(
     (instance: ReactFlowInstance) => {
@@ -161,6 +209,27 @@ export default function FlowShell(props: FlowShellProps) {
     },
     [onInit],
   )
+
+  const handleSelectionChange = useCallback(
+    (params: OnSelectionChangeParams) => {
+      const node = params.nodes[0]
+      onSelectionChange?.(node ? node.id : null)
+    },
+    [onSelectionChange],
+  )
+
+  // Pane double-click: only fire when the target is the React Flow pane (not
+  // a node). The default dblclick bubbles from any descendant, so we
+  // manually filter via event.target.
+  const handlePaneDblClick = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target && target.closest('.react-flow__node')) return
+      onPaneDoubleClick?.()
+    },
+    [onPaneDoubleClick],
+  )
+
   const onNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds) as Node[]),
     [],
@@ -170,56 +239,90 @@ export default function FlowShell(props: FlowShellProps) {
     [],
   )
 
-  const nodeColorFn = useCallback((node: Node) => {
-    const data = node.data as FlowNodeData | undefined
-    const pattern = data?.pattern ?? 'auto'
-    const colors: Record<string, string> = {
-      auto: '#3b82f6',
-      '5w1h': '#22c55e',
-      tech: '#8b5cf6',
-      'pros-cons': '#f59e0b',
-    }
-    return colors[pattern] ?? colors.auto!
-  }, [])
-
   return (
-    <div className="flow-shell" data-theme={theme} data-pattern="auto" style={{ width: '100%', height: '100%' }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDoubleClick={onNodeDoubleClick}
-        onNodeContextMenu={onNodeContextMenu}
-        onNodeDragStop={onNodeDragStop}
-        onInit={handleInit}
-        nodeTypes={_nodeTypes}
-        defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: 'var(--flow-pattern)', strokeWidth: 1.5 } }}
-        fitView={fitView}
-        fitViewOptions={{ padding: fitViewPadding }}
-        minZoom={minZoom}
-        maxZoom={maxZoom}
-        nodesDraggable={nodesDraggable}
-        nodesConnectable={nodesConnectable}
-        elementsSelectable={elementsSelectable}
-        deleteKeyCode={deleteKeyCode}
-        noWheelClassName="nowheel"
-      >
-        <Background variant={'dots' as BackgroundVariant} gap={16} size={1} />
-        <Controls className="flow-controls" showInteractive />
-        <Panel position="top-left">
-          <button className="flow-shell-arrange-btn" onClick={handleAutoArrange} title="自动整理">
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onSelectionChange={handleSelectionChange}
+      onNodeDoubleClick={onNodeDoubleClick}
+      onNodeContextMenu={onNodeContextMenu}
+      onNodeDragStop={onNodeDragStop}
+      onInit={handleInit}
+      onDoubleClick={handlePaneDblClick}
+      nodeTypes={_nodeTypes}
+      defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: 'var(--flow-pattern)', strokeWidth: 1.5 } }}
+      fitView={fitView}
+      fitViewOptions={{ padding: fitViewPadding }}
+      minZoom={minZoom}
+      maxZoom={maxZoom}
+      nodesDraggable={nodesDraggable}
+      nodesConnectable={nodesConnectable}
+      elementsSelectable={elementsSelectable}
+      deleteKeyCode={deleteKeyCode}
+      noWheelClassName="nowheel"
+    >
+      <Background variant={'dots' as BackgroundVariant} gap={16} size={1} />
+      <Controls className="flow-controls" showInteractive />
+      <Panel position="top-left">
+        <div className="flow-shell-toolbar">
+          <button
+            className="flow-shell-arrange-btn"
+            onClick={handleAutoArrange}
+            title="自动整理"
+            aria-label="自动整理"
+          >
             ↻
           </button>
-        </Panel>
-        <MiniMap
-          className="flow-minimap"
-          nodeColor={nodeColorFn}
-          nodeStrokeWidth={2}
-          pannable
-          zoomable
-        />
-      </ReactFlow>
+          {selectedNodeId && (
+            <button
+              className="flow-shell-focus-btn"
+              onClick={handleFocus}
+              title="聚焦到选中节点"
+              aria-label="聚焦到选中节点"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+                <path d="M11 8v6" />
+                <path d="M8 11h6" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </Panel>
+      <MiniMap
+        className="flow-minimap"
+        nodeColor={nodeColorFn}
+        nodeStrokeWidth={2}
+        pannable
+        zoomable
+      />
+    </ReactFlow>
+  )
+}
+
+export default function FlowShell(props: FlowShellProps) {
+  return (
+    <div
+      className="flow-shell"
+      data-theme={props.theme ?? 'light'}
+      data-pattern="auto"
+      style={{ width: '100%', height: '100%' }}
+    >
+      <ReactFlowProvider>
+        <FlowShellInner {...props} />
+      </ReactFlowProvider>
     </div>
   )
 }

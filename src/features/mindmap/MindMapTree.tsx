@@ -4,63 +4,12 @@ import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
+import { treeToFlowShell } from '@/lib/mindmap-flow'
 import { FlowShell } from '@/components/flow-shell'
-import type { FlowNodeData } from '@/components/flow-shell'
-import type { Node, Edge } from '@xyflow/react'
+import type { Node as FlowNode } from '@xyflow/react'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
 import type { MindMapNode } from '@/types/mindmap'
-
-function treeToFlowShell(
-  tree: MindMapNode[],
-  collapsedIds: Set<string>,
-  toggleCollapse: (id: string) => void,
-  pattern: string,
-  depth = 0,
-): { nodes: Node<FlowNodeData, 'flow'>[]; edges: Edge[] } {
-  const flowNodes: Node<FlowNodeData, 'flow'>[] = []
-  const flowEdges: Edge[] = []
-
-  function walk(list: MindMapNode[], parentId: string | null, d: number) {
-    for (const n of list) {
-      const hasChildren = n.children.length > 0
-      const isCollapsed = collapsedIds.has(n.id)
-
-      flowNodes.push({
-        id: n.id,
-        type: 'flow',
-        position: { x: 0, y: 0 },
-        data: {
-          label: n.label,
-          summary: n.summary,
-          content: n.content,
-          contentType: n.contentType,
-          depth: d,
-          pattern,
-          editedByUser: n.editedByUser,
-          hasChildren,
-          collapsed: isCollapsed,
-          onToggle: toggleCollapse,
-        },
-      })
-
-      if (parentId) {
-        flowEdges.push({
-          id: `${parentId}-${n.id}`,
-          source: parentId,
-          target: n.id,
-        })
-      }
-
-      if (!isCollapsed) {
-        walk(n.children, n.id, d + 1)
-      }
-    }
-  }
-
-  walk(tree, null, depth)
-  return { nodes: flowNodes, edges: flowEdges }
-}
 
 interface MindMapTreeProps {
   tree: MindMapNode[]
@@ -92,6 +41,11 @@ export default function MindMapTree({
   } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Stage A1: in-place expand state lives at the tree level (not in store).
+  // Refresh = lost. Ctrl/Cmd+double-click still opens the legacy modal.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+
   const treeRef = useRef(tree)
 
   useEffect(() => {
@@ -103,10 +57,35 @@ export default function MindMapTree({
     return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.pattern ?? 'auto'
   })
 
-  const { nodes, edges } = useMemo(
-    () => treeToFlowShell(tree, collapsedIds, toggleCollapse, pattern),
-    [tree, collapsedIds, toggleCollapse, pattern],
-  )
+  const toggleExpand = useCallback((nodeId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) {
+        next.delete(nodeId)
+      } else {
+        next.add(nodeId)
+      }
+      return next
+    })
+  }, [])
+
+  const { nodes, edges } = useMemo(() => {
+    const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
+      tree,
+      collapsedIds,
+      toggleCollapse,
+      pattern,
+    )
+    // Apply in-place expand flag without rebuilding the tree.
+    if (expandedIds.size > 0) {
+      for (const n of rawNodes) {
+        if (expandedIds.has(n.id)) {
+          n.data.expanded = true
+        }
+      }
+    }
+    return { nodes: rawNodes, edges: rawEdges }
+  }, [tree, collapsedIds, toggleCollapse, pattern, expandedIds])
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -129,15 +108,21 @@ export default function MindMapTree({
   }
 
   const handleNodeDoubleClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      const found = findNodeInTree(treeRef.current, node.id)
-      if (found) setEditNode(found)
+    (event: React.MouseEvent, node: FlowNode) => {
+      // Ctrl/Cmd + double-click preserves the legacy modal path.
+      if (event.ctrlKey || event.metaKey) {
+        const found = findNodeInTree(treeRef.current, node.id)
+        if (found) setEditNode(found)
+        return
+      }
+      // Plain double-click toggles in-place expand state.
+      toggleExpand(node.id)
     },
-    [],
+    [toggleExpand],
   )
 
   const handleNodeContextMenu = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (event: React.MouseEvent, node: FlowNode) => {
       event.preventDefault()
       setContextMenu({
         x: (event as unknown as MouseEvent).clientX,
@@ -195,7 +180,7 @@ export default function MindMapTree({
   }, [mindmapId, contextMenu, deleteNode])
 
   const handleNodeDragStop = useCallback(
-    (_: React.MouseEvent, draggedNode: Node) => {
+    (_: React.MouseEvent, draggedNode: FlowNode) => {
       if (!mindmapId) return
 
       const currentTree = treeRef.current
@@ -293,6 +278,12 @@ export default function MindMapTree({
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeDragStop={handleNodeDragStop}
+        onSelectionChange={setSelectedNodeId}
+        selectedNodeId={selectedNodeId}
+        onPaneDoubleClick={() => {
+          // Empty-area double-click = close any in-place expansion.
+          if (expandedIds.size > 0) setExpandedIds(new Set())
+        }}
       />
 
       {editNode && (
