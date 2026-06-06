@@ -40,3 +40,4 @@ npm-debug.log*
 .agents/
 skills-lock.json
 .sisyphus/
+/.opencode/
