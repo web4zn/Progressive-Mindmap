@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   ReactFlow,
   Background,
@@ -102,11 +110,30 @@ export interface FlowShellProps {
   deleteKeyCode?: string
   selectedNodeId?: string | null
   onSelectionChange?: (nodeId: string | null) => void
+  /**
+   * Invoked when the user double-clicks on an empty area of the pane
+   * (i.e. NOT on a node). The parent is expected to also call
+   * `flowShellRef.current?.fitView()` from this handler — `FlowShell`
+   * intentionally does not call fitView itself so the parent can layer
+   * side-effects (e.g. close any in-place expansion) on top.
+   */
   onPaneDoubleClick?: () => void
   onInit?: (instance: ReactFlowInstance) => void
   onNodeDoubleClick?: NodeMouseHandler<Node>
   onNodeContextMenu?: NodeMouseHandler<Node>
   onNodeDragStop?: OnNodeDrag<Node>
+}
+
+export interface FlowShellHandle {
+  /** Fit the entire flow in view (used by the toolbar ↻ button and by the
+   *  parent's pane-double-click handler). */
+  fitView: (options?: { padding?: number; duration?: number; maxZoom?: number }) => void
+  /** Fit a single node in view (used by the toolbar focus button and
+   *  potentially by the parent for "center on node" actions). */
+  focusNode: (
+    nodeId: string,
+    options?: { padding?: number; duration?: number; maxZoom?: number },
+  ) => void
 }
 
 const _nodeTypes = { flow: FlowNodeComponent }
@@ -126,8 +153,13 @@ const nodeColorFn = (node: Node) => {
 /**
  * Inner shell — must live inside a ReactFlowProvider so `useReactFlow()` is
  * available. Wraps the visible canvas + panel toolbar (focus / arrange).
+ * Exposes `FlowShellHandle` via `forwardRef` so the parent can drive
+ * `fitView` / `focusNode` from outside the provider context.
  */
-function FlowShellInner(props: FlowShellProps) {
+const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function FlowShellInner(
+  props,
+  ref,
+) {
   const {
     nodes: rawNodes,
     edges: rawEdges,
@@ -175,15 +207,38 @@ function FlowShellInner(props: FlowShellProps) {
 
   useEffect(() => {
     initialPositionsRef.current = layoutResult.nodes as Node[]
-    /* eslint-disable react-hooks/set-state-in-effect */
     setNodes(layoutResult.nodes as Node[])
     setEdges(layoutResult.edges as Edge[])
-    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureKey])
 
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
   const { fitView: rfFitView } = useReactFlow()
+
+  // Expose imperative handle for the parent. `useReactFlow` is the documented
+  // way to call fitView from outside the provider context, so the parent
+  // can drive the camera without us re-creating the wrapper here.
+  useImperativeHandle(
+    ref,
+    () => ({
+      fitView: (options) => {
+        rfInstanceRef.current?.fitView({
+          padding: options?.padding ?? 0.3,
+          duration: options?.duration ?? 200,
+          maxZoom: options?.maxZoom,
+        })
+      },
+      focusNode: (nodeId, options) => {
+        rfFitView({
+          nodes: [{ id: nodeId }],
+          padding: options?.padding ?? 0.3,
+          duration: options?.duration ?? 200,
+          maxZoom: options?.maxZoom ?? 1.5,
+        })
+      },
+    }),
+    [rfFitView],
+  )
 
   const handleAutoArrange = useCallback(() => {
     setNodes([...initialPositionsRef.current])
@@ -220,7 +275,10 @@ function FlowShellInner(props: FlowShellProps) {
 
   // Pane double-click: only fire when the target is the React Flow pane (not
   // a node). The default dblclick bubbles from any descendant, so we
-  // manually filter via event.target.
+  // manually filter via event.target. We intentionally do NOT call
+  // `rfFitView()` here — the parent is in charge of "what does pane-dblclick
+  // mean" so it can layer side-effects (close any in-place expansion, etc.)
+  // before/after fitting the view.
   const handlePaneDblClick = useCallback(
     (event: React.MouseEvent) => {
       const target = event.target as HTMLElement | null
@@ -310,9 +368,9 @@ function FlowShellInner(props: FlowShellProps) {
       />
     </ReactFlow>
   )
-}
+})
 
-export default function FlowShell(props: FlowShellProps) {
+export default forwardRef<FlowShellHandle, FlowShellProps>(function FlowShell(props, ref) {
   return (
     <div
       className="flow-shell"
@@ -321,8 +379,8 @@ export default function FlowShell(props: FlowShellProps) {
       style={{ width: '100%', height: '100%' }}
     >
       <ReactFlowProvider>
-        <FlowShellInner {...props} />
+        <FlowShellInner {...props} ref={ref} />
       </ReactFlowProvider>
     </div>
   )
-}
+})

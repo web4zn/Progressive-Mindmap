@@ -5,7 +5,7 @@ import { useMindmapStore } from '@/stores/mindmapStore'
 import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
-import { FlowShell } from '@/components/flow-shell'
+import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
 import type { Node as FlowNode } from '@xyflow/react'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
@@ -45,6 +45,11 @@ export default function MindMapTree({
   // Refresh = lost. Ctrl/Cmd+double-click still opens the legacy modal.
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+
+  // Imperative handle on FlowShell so we can drive `fitView()` from here
+  // (e.g. pane double-click). `useReactFlow()` cannot be called from
+  // MindMapTree because the ReactFlowProvider only lives inside FlowShell.
+  const flowShellRef = useRef<FlowShellHandle | null>(null)
 
   const treeRef = useRef(tree)
 
@@ -270,6 +275,7 @@ export default function MindMapTree({
         </div>
       )}
       <FlowShell
+        ref={flowShellRef}
         nodes={nodes}
         edges={edges}
         theme="light"
@@ -281,7 +287,12 @@ export default function MindMapTree({
         onSelectionChange={setSelectedNodeId}
         selectedNodeId={selectedNodeId}
         onPaneDoubleClick={() => {
-          // Empty-area double-click = close any in-place expansion.
+          // Pane double-click spec: reset the viewport to fit the whole
+          // graph (Stage A1 §10). We also clear any in-place expansion so
+          // the reset feels complete — opening a node in-place is meant
+          // to be ephemeral and the user has just signalled "back to
+          // overview".
+          flowShellRef.current?.fitView({ padding: 0.3, duration: 200 })
           if (expandedIds.size > 0) setExpandedIds(new Set())
         }}
       />

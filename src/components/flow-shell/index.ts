@@ -15,6 +15,6 @@ export interface FlowNodeData extends Record<string, unknown> {
   onToggle?: (nodeId: string) => void
 }
 
-export type { FlowShellProps } from './FlowShell'
+export type { FlowShellProps, FlowShellHandle } from './FlowShell'
 export { default as FlowShell } from './FlowShell'
 export { default as FlowNode } from './FlowNode'
