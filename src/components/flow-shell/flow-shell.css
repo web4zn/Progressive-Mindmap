@@ -540,3 +540,70 @@
     animation: none;
   }
 }
+
+/* ── Stage A2: hover path highlight ─────────────────────────────────────── */
+
+.flow-node.dimmed {
+  opacity: 0.3;
+  transition: opacity 0.18s ease;
+}
+
+/* React Flow edge classes (default 'react-flow__edge-*') */
+.react-flow__edge.dimmed .react-flow__edge-path,
+.react-flow__edge.dimmed path {
+  opacity: 0.15;
+  transition: opacity 0.18s ease;
+}
+
+.react-flow__edge.dimmed {
+  opacity: 0.15;
+  transition: opacity 0.18s ease;
+}
+
+/* ── Stage A2: streaming shimmer (A1 #21) ───────────────────────────────── */
+
+/* The shimmer is a diagonal sweep of light across the node. Implemented as
+   a ::before pseudo element on `.flow-node.streaming`. We deliberately keep
+   it light and short so a whole forest of depth-0/1/2 nodes can pulse
+   without distracting. The animation is suppressed under
+   prefers-reduced-motion (see the media query at the end of the file). */
+.flow-node.streaming {
+  position: relative;
+  isolation: isolate;
+}
+
+.flow-node.streaming::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--flow-pattern) 32%, transparent) 48%,
+    color-mix(in srgb, var(--flow-pattern) 6%, transparent) 52%,
+    transparent 70%
+  );
+  background-size: 220% 220%;
+  background-position: 120% 0;
+  animation: flow-shimmer 2s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes flow-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node.streaming::before {
+    animation: none;
+    background-position: 50% 0;
+  }
+}

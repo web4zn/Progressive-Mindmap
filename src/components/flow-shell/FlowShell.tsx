@@ -122,6 +122,24 @@ export interface FlowShellProps {
   onNodeDoubleClick?: NodeMouseHandler<Node>
   onNodeContextMenu?: NodeMouseHandler<Node>
   onNodeDragStop?: OnNodeDrag<Node>
+  /**
+   * Stage A2 — hover callback for path highlight. Parent tracks
+   * `hoveredNodeId` and computes the ancestor chain to decide which
+   * nodes/edges to dim. We pass this through instead of doing the
+   * highlight in-shell so the chain logic lives next to the tree
+   * (where `findAncestorChain` already is).
+   */
+  onNodeMouseEnter?: NodeMouseHandler<Node>
+  onNodeMouseLeave?: NodeMouseHandler<Node>
+  /** Stage A2 — applied as `.flow-node.dimmed` on every node in the set. */
+  dimmedNodeIds?: ReadonlySet<string>
+  /** Stage A2 — applied as `.react-flow__edge.dimmed` on every edge whose
+   *  source AND target are in the dim set, so the user sees the path
+   *  between highlighted nodes as 100% opaque. */
+  dimmedEdgeIds?: ReadonlySet<string>
+  /** Stage A2 — when true, every node with `depth < 3` gets the
+   *  `.flow-node.streaming` class so the shimmer animation runs. */
+  isStreaming?: boolean
 }
 
 export interface FlowShellHandle {
@@ -134,6 +152,18 @@ export interface FlowShellHandle {
     nodeId: string,
     options?: { padding?: number; duration?: number; maxZoom?: number },
   ) => void
+  /**
+   * Stage A2 — returns the nodes that currently intersect the dragged
+   * node's bounding box. The drag-reparent logic in MindMapTree uses
+   * this in `onNodeDragStop` instead of hand-rolled `getBoundingClientRect`
+   * arithmetic. Exposed via the imperative handle because the React Flow
+   * instance (and therefore `useReactFlow().getIntersectingNodes`) only
+   * exists inside this provider.
+   */
+  getIntersectingNodes: (nodeId: string) => Node[]
+  /** Stage A2 — programmatic zoom in / out (used by `+` / `-` hotkeys). */
+  zoomIn: () => void
+  zoomOut: () => void
 }
 
 const _nodeTypes = { flow: FlowNodeComponent }
@@ -179,6 +209,11 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     onNodeDoubleClick,
     onNodeContextMenu,
     onNodeDragStop,
+    onNodeMouseEnter,
+    onNodeMouseLeave,
+    dimmedNodeIds,
+    dimmedEdgeIds,
+    isStreaming,
   } = props
 
   const structureKey = useMemo(
@@ -200,6 +235,36 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     [rawNodes, rawEdges, layout],
   )
 
+  // Stage A2: apply dimmed + streaming flags through `data` so FlowNode
+  // composes its own class list (the `.flow-node` div is rendered by
+  // FlowNode, not the React Flow wrapper). For edges we own the
+  // `className` directly because BaseEdge forwards it to the path.
+  const decoratedNodes = useMemo(() => {
+    return layoutResult.nodes.map((n) => {
+      const isDimmed = !!dimmedNodeIds && dimmedNodeIds.has(n.id)
+      const depth = (n.data?.depth ?? 0) as number
+      const showStreaming = !!isStreaming && depth < 3
+      const data = n.data as FlowNodeData | undefined
+      if (data?.isDimmed === isDimmed && data?.isStreaming === showStreaming) {
+        return n
+      }
+      return {
+        ...n,
+        data: { ...(data ?? ({} as FlowNodeData)), isDimmed, isStreaming: showStreaming },
+      }
+    })
+  }, [layoutResult.nodes, dimmedNodeIds, isStreaming])
+
+  const decoratedEdges = useMemo(() => {
+    if (!dimmedEdgeIds || dimmedEdgeIds.size === 0) return layoutResult.edges
+    return layoutResult.edges.map((e) => {
+      if (dimmedEdgeIds.has(e.id)) {
+        return { ...e, className: `${e.className ?? ''} dimmed`.trim() }
+      }
+      return e
+    })
+  }, [layoutResult.edges, dimmedEdgeIds])
+
   const initialPositionsRef = useRef(layoutResult.nodes as Node[])
 
   const [nodes, setNodes] = useState<Node[]>(layoutResult.nodes as Node[])
@@ -212,8 +277,18 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureKey])
 
+  // Stage A2: sync dim/stream classes whenever the parent toggles them.
+  // The structural layout above is keyed by `structureKey`; this effect
+  // is intentionally cheap (just className strings) and runs on every
+  // hover / streaming change.
+  useEffect(() => {
+    setNodes(decoratedNodes as Node[])
+    setEdges(decoratedEdges as Edge[])
+  }, [decoratedNodes, decoratedEdges])
+
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
-  const { fitView: rfFitView } = useReactFlow()
+  const { fitView: rfFitView, getIntersectingNodes: rfGetIntersectingNodes, zoomIn: rfZoomIn, zoomOut: rfZoomOut } =
+    useReactFlow()
 
   // Expose imperative handle for the parent. `useReactFlow` is the documented
   // way to call fitView from outside the provider context, so the parent
@@ -236,8 +311,21 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
           maxZoom: options?.maxZoom ?? 1.5,
         })
       },
+      getIntersectingNodes: (nodeId) => {
+        try {
+          return rfGetIntersectingNodes({ id: nodeId }) as Node[]
+        } catch {
+          return []
+        }
+      },
+      zoomIn: () => {
+        rfZoomIn({ duration: 200 })
+      },
+      zoomOut: () => {
+        rfZoomOut({ duration: 200 })
+      },
     }),
-    [rfFitView],
+    [rfFitView, rfGetIntersectingNodes, rfZoomIn, rfZoomOut],
   )
 
   const handleAutoArrange = useCallback(() => {
@@ -306,6 +394,8 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
       onSelectionChange={handleSelectionChange}
       onNodeDoubleClick={onNodeDoubleClick}
       onNodeContextMenu={onNodeContextMenu}
+      onNodeMouseEnter={onNodeMouseEnter}
+      onNodeMouseLeave={onNodeMouseLeave}
       onNodeDragStop={onNodeDragStop}
       onInit={handleInit}
       onDoubleClick={handlePaneDblClick}

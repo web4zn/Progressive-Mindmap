@@ -114,6 +114,8 @@ function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeD
     selected ? 'selected' : '',
     isExpanded ? 'expanded' : '',
     data.editedByUser ? 'has-user-edit' : '',
+    data.isDimmed ? 'dimmed' : '',
+    data.isStreaming ? 'streaming' : '',
   ]
     .filter(Boolean)
     .join(' ')

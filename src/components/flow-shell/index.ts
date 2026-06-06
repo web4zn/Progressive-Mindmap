@@ -12,6 +12,13 @@ export interface FlowNodeData extends Record<string, unknown> {
   expanded?: boolean
   /** Stage A1: optional override for runtime width/height hint from the layout. */
   size?: { width: number; height: number }
+  /** Stage A2: hover-path highlight. When true the node is rendered with
+   *  reduced opacity (`.flow-node.dimmed`). */
+  isDimmed?: boolean
+  /** Stage A2: streaming shimmer. When true the node gets
+   *  `.flow-node.streaming` which triggers the diagonal sweep animation
+   *  (suppressed under prefers-reduced-motion). */
+  isStreaming?: boolean
   onToggle?: (nodeId: string) => void
 }
 
