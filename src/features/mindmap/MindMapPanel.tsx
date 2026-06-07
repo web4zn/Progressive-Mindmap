@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -14,9 +14,20 @@ import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import { matchNodes } from '@/lib/mindmap-search'
 import type { MindMap } from '@/types/mindmap'
 import type { MindMapNode } from '@/types/mindmap'
-import { Undo2, Redo2, ListTree, Grid2x2, Grid3x3, Square, Plus } from 'lucide-react'
+import {
+  Undo2,
+  Redo2,
+  ListTree,
+  Grid2x2,
+  Grid3x3,
+  Square,
+  Plus,
+  Sun,
+  Moon,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/hooks/useTheme'
 
 interface MindMapPanelProps {
   onClose: () => void
@@ -63,6 +74,12 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   })
   const [background, setBackground] = useState<BackgroundVariant>('dots')
 
+  // Stage D — global theme (light / dark / system). The hook is
+  // mounted here (not in App.tsx) because the toggle button lives
+  // in the panel's toolbar; any other component can still read the
+  // current theme from `document.documentElement.dataset.theme`.
+  const { theme, toggle: toggleTheme } = useTheme()
+
   // Lifted history. The hook is keyed to the active mindmap id, so
   // the timeline resets whenever the user switches mindmaps.
   const history = useMindmapHistory({ capacity: 50 })
@@ -89,6 +106,17 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     if (!searchQuery.trim() || !activeMindmap) return 0
     return matchNodes(activeMindmap.tree, searchQuery).size
   }, [activeMindmap, searchQuery])
+
+  // Stage D — mirror the active mindmap's pattern onto the html
+  // element so any component outside the React tree (CSS rules,
+  // portals, etc.) can read it via `attr()`. The FlowShell wrapper
+  // uses its own `data-pattern` attribute set by the React prop, so
+  // this dataset write is purely a global CSS hook.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const pattern = activeMindmap?.pattern ?? 'auto'
+    document.documentElement.dataset['pattern'] = pattern
+  }, [activeMindmap?.pattern])
 
   const handleSelect = useCallback(
     (id: string) => setActiveMindmapId(id),
@@ -151,11 +179,18 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   }, [activeMindmapId, history, updateMindmapTree])
 
   const handleFocusFirstMatch = useCallback(() => {
-    const fn = (window as unknown as Record<string, unknown>).__mindmapFocusFirstMatch
+    const fn = windowMindmapFocus()
     if (typeof fn === 'function') {
-      ;(fn as () => void)()
+      fn()
     }
   }, [])
+
+  // Stage D — narrowed helper. The bridge from MindMapTree
+  // publishes `window.__mindmapFocusFirstMatch` as a 0-arg
+  // function; we type the lookup once here so the cast doesn't
+  // leak into the rest of the file. Declared at module scope (not
+  // inside the component) so the `react-hooks/immutability` lint
+  // rule doesn't trip on "use before declare" inside a hook.
 
   const handleOutlineFocus = useCallback((_nodeId: string) => {
     // The outline already calls `flowShellRef.focusNode` indirectly
@@ -249,6 +284,27 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         <div className="w-px h-4 bg-border mx-0.5" />
 
         <BackgroundSwitcher value={background} onChange={setBackground} />
+
+        {/* Stage D — theme toggle (light ↔ dark). The button shows
+            the icon for the *current* theme so a user on light sees
+            🌙 (click to go dark) and on dark sees ☀ (click to go
+            light). The toggle persists in localStorage via
+            `useTheme`. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          aria-label={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          aria-pressed={theme === 'dark'}
+          data-testid="mindmap-theme-toggle"
+        >
+          {theme === 'dark' ? (
+            <Sun className="w-3.5 h-3.5" />
+          ) : (
+            <Moon className="w-3.5 h-3.5" />
+          )}
+        </Button>
       </div>
 
       <MindMapTree
@@ -336,6 +392,19 @@ function countNodes(nodes: MindMapNode[]): number {
     count += countNodes(node.children)
   }
   return count
+}
+
+/**
+ * Stage D — typed lookup of the global "focus first search match"
+ * bridge. `MindMapTree` publishes `window.__mindmapFocusFirstMatch`
+ * as a 0-arg function; we keep the cast localised here so the rest
+ * of `MindMapPanel` doesn't see a `Record<string, unknown>` shape.
+ */
+function windowMindmapFocus(): (() => void) | undefined {
+  const w = window as unknown as { __mindmapFocusFirstMatch?: unknown }
+  return typeof w.__mindmapFocusFirstMatch === 'function'
+    ? (w.__mindmapFocusFirstMatch as () => void)
+    : undefined
 }
 
 // `Plus` is exported for any future toolbar extension (e.g. "add root")

@@ -5,9 +5,15 @@ import type { FlowNodeData } from '../components/flow-shell'
 /**
  * Output types for treeToFlowShell — narrowed React Flow shapes.
  * The `flow` type literal matches the nodeType registered in FlowShell.
+ *
+ * Stage D — `Readonly` views are exported for callers that need to
+ * pass these into a React Flow provider without losing type info.
+ * The mutable variants are kept for internal accumulator use.
  */
 export type FlowShellNodes = Node<FlowNodeData, 'flow'>[]
 export type FlowShellEdges = Edge[]
+export type ReadonlyFlowShellNodes = ReadonlyArray<Node<FlowNodeData, 'flow'>>
+export type ReadonlyFlowShellEdges = ReadonlyArray<Edge>
 
 /**
  * Flatten a MindMapNode tree into a React Flow (nodes, edges) pair, honoring
@@ -16,10 +22,17 @@ export type FlowShellEdges = Edge[]
  * Pure function — no React, no side effects. Mirrors the implementation that
  * previously lived inside MindMapTree.tsx so it can be unit-tested in
  * isolation.
+ *
+ * Stage D — type-tightened: inputs accept `ReadonlyArray` /
+ * `ReadonlySet` (callers don't need to construct mutable copies just
+ * to call us), and the *internal* walk uses `ReadonlyArray<...>`
+ * recursively. The *output* is still mutable so the existing
+ * `MindMapTree` call site (which mutates `rawNodes[i].data.expanded`)
+ * keeps working.
  */
 export function treeToFlowShell(
-  tree: MindMapNode[],
-  collapsedIds: Set<string>,
+  tree: ReadonlyArray<MindMapNode>,
+  collapsedIds: ReadonlySet<string>,
   toggleCollapse: (id: string) => void,
   pattern: string,
   depth = 0,
@@ -27,7 +40,7 @@ export function treeToFlowShell(
   const flowNodes: FlowShellNodes = []
   const flowEdges: FlowShellEdges = []
 
-  function walk(list: MindMapNode[], parentId: string | null, d: number): void {
+  function walk(list: ReadonlyArray<MindMapNode>, parentId: string | null, d: number): void {
     for (const n of list) {
       const hasChildren = n.children.length > 0
       const isCollapsed = collapsedIds.has(n.id)

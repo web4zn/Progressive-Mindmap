@@ -63,6 +63,48 @@ CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx e
 
 - **Solo project.** Author = reviewer. The `code-reviewer` rein still runs its hard-reject checklist (`as any`, raw `localStorage`, hard-coded keys, etc.) as a self-check, but no second pair of eyes is required. If you later add collaborators, re-tighten that gate.
 
+## Mindmap frontend capability overview
+
+The mindmap UI ships in four engineering waves. Each is locked by
+a `feat(mindmap-ui): stage <letter>` commit and has a corresponding
+`openspec/specs/mindmap-ui-stage-<letter>/spec.md`.
+
+| Stage | Commit   | Scope                                                                 |
+| ----- | -------- | --------------------------------------------------------------------- |
+| A1    | bda78e1  | React Flow canvas + dagre LR + collapse / expand + node affordance   |
+| A2    | b5ee851  | Hover path highlight + streaming shimmer + search-match outline      |
+| B     | ec4f5f7  | 3-section header + combobox + drawer + resizable markdown modal       |
+| C     | 0cda8a1  | Path / edge highlight + undo top-bar + outline + search + filter + background switcher + keyboard nav + touch long-press + MiniMap viewport |
+| D     | (this)   | Dark theme + CSS variables + animation tokens + `data-pattern` prop + style split + boundary tests + type tightening |
+
+### Theme (Stage D)
+
+The app has a single global theme (`light` / `dark` / system) managed
+by `useTheme()` (`src/hooks/useTheme.ts`). It toggles
+`html.dark` and `html[data-theme]` together so the same hook
+serves both shadcn/Tailwind (`html.dark`) and FlowShell
+(`[data-theme]`). Persistence is `localStorage` under the key
+`progressive-mindmap:theme`. The toggle button lives in the
+mindmap panel toolbar (data-testid `mindmap-theme-toggle`).
+
+### CSS variables (Stage D)
+
+All animation durations resolve to `var(--duration-fast | --duration-base | --duration-slow)`
+and the easing is `var(--ease-out)`. `prefers-reduced-motion: reduce`
+zeroes the duration tokens. Pattern accent colours live in
+`src/index.css` as `--flow-pattern-{auto|5w1h|tech|pros-cons}` and
+are consumed by `[data-pattern=...]` rules in
+`src/components/flow-shell/css/theme.css`.
+
+### FlowShell CSS split (Stage D)
+
+`src/components/flow-shell/flow-shell.css` is a 5-line
+`@import` aggregator; the real rules live in
+`src/components/flow-shell/css/{theme,node,edge,canvas,animations}.css`.
+Adding a new rule? Put it in the partial that matches its concern.
+
+
+
 ## Adding agent rules
 
 - Project conventions belong in this file (root) — short, agent-agnostic.

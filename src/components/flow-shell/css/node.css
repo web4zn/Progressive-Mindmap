@@ -1,0 +1,504 @@
+/* Stage D — FlowNode card.
+ *
+ * Every `.flow-node*` rule lives here. The card uses
+ * `var(--flow-card-bg)` / `var(--flow-card-border)` for theming
+ * and `var(--flow-pattern)` for the accent / selected / affordance
+ * states. The pattern colour is set by `css/theme.css` based on
+ * the `[data-pattern=...]` attribute on the shell wrapper.
+ *
+ * All transition durations reference the global motion tokens in
+ * `src/index.css` (`--duration-fast` / `--duration-base` /
+ * `--duration-slow`).
+ */
+
+.flow-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.5rem;
+  border: 1px solid var(--flow-card-border);
+  background: var(--flow-card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 0.5rem 0.625rem 0.625rem 0.75rem;
+  min-width: 120px;
+  max-width: 280px;
+  box-shadow: var(--flow-shadow-soft);
+  overflow: hidden;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.flow-node:hover {
+  border-color: var(--flow-card-border-strong);
+  box-shadow: var(--flow-shadow-hover);
+}
+
+.flow-node.selected {
+  border-color: var(--flow-pattern);
+  box-shadow: var(--flow-shadow-selected);
+  /* subtle inner ring without using transform/scale */
+  outline: 2px solid var(--flow-pattern);
+  outline-offset: -2px;
+  letter-spacing: 0.01em;
+}
+
+.flow-node.expanded {
+  /* expanded nodes render their full content — drop the line clamp */
+  border-color: var(--flow-pattern);
+}
+
+/* Root-node emphasis */
+.flow-node.depth-0 {
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.75rem 0.75rem 0.875rem;
+}
+
+.flow-node.depth-0 .flow-node-label {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.005em;
+}
+
+.flow-node.depth-0 .flow-node-accent {
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+
+/* Per-depth label sizing (root already handled above) */
+.flow-node.depth-1 .flow-node-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.flow-node.depth-2 .flow-node-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.flow-node.depth-3 .flow-node-label,
+.flow-node.depth-4 .flow-node-label {
+  font-size: 0.78125rem;
+  font-weight: 600;
+}
+
+/* Gradient accent bar (left side, depth-based opacity) */
+.flow-node-accent {
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: var(--flow-pattern);
+}
+
+.flow-node-accent.depth-0 {
+  opacity: 1;
+}
+.flow-node-accent.depth-1 {
+  opacity: 0.8;
+}
+.flow-node-accent.depth-2 {
+  opacity: 0.6;
+}
+.flow-node-accent.depth-3 {
+  opacity: 0.4;
+}
+.flow-node-accent.depth-4 {
+  opacity: 0.2;
+}
+
+/* Node header row */
+.flow-node-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 1.25rem;
+}
+
+.flow-node-collapse {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--flow-card-border);
+  background: transparent;
+  color: var(--flow-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.625rem;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+  line-height: 1;
+}
+
+.flow-node-collapse:hover {
+  background: var(--flow-card-bg-hover);
+  color: var(--flow-text);
+}
+
+.flow-node-collapse:active {
+  transform: scale(0.85);
+}
+
+.flow-node-collapse-spacer {
+  flex-shrink: 0;
+  width: 1.25rem;
+  display: inline-block;
+}
+
+.flow-node-icon {
+  flex-shrink: 0;
+  color: var(--flow-pattern);
+  align-self: center;
+  margin-top: 1px;
+}
+
+.flow-node-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--flow-text);
+  line-height: 1.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.flow-node-meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+/* User-edit indicator — small dot by default, label badge when selected */
+.flow-node-edit-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Phase 1 fix (Bug 2): the ⤢ affordance. A small, low-key icon in the
+   node header (next to the edit dot) that visually hints at the
+   "double-click to expand / ⌘+double-click to edit" interaction.
+   The icon is hidden by default and fades in on hover so it does not
+   add visual noise at rest. Clicking the icon intentionally does
+   nothing — it is a `<span>` so the React Flow double-click handler
+   still receives the event. */
+.flow-node-affordance {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  color: var(--flow-text-muted);
+  opacity: 0;
+  transform: translateY(-0.5px);
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+  cursor: help;
+  pointer-events: auto;
+}
+
+.flow-node:hover .flow-node-affordance,
+.flow-node.selected .flow-node-affordance {
+  opacity: 0.7;
+}
+
+.flow-node-affordance:hover {
+  opacity: 1 !important;
+  color: var(--flow-pattern);
+  background: color-mix(in srgb, var(--flow-pattern) 8%, transparent);
+}
+
+/* Custom CSS tooltip — appears below the icon on hover. We render the
+   text in a hidden span and reveal it via CSS so we get a styled
+   bubble without a JS popper. `pointer-events: none` keeps the
+   tooltip from intercepting clicks. */
+.flow-node-affordance-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--flow-text);
+  background: var(--flow-card-bg);
+  border: 1px solid var(--flow-card-border-strong);
+  box-shadow: var(--flow-shadow-hover);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+  z-index: 50;
+}
+
+.flow-node-affordance:hover .flow-node-affordance-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — keep the icon visible (it's a hint, not animation)
+   but skip the transition. */
+.flow-node-edit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--flow-pattern);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--flow-pattern) 18%, transparent);
+  display: inline-block;
+}
+
+.flow-node.selected .flow-node-edit-mark {
+  background: color-mix(in srgb, var(--flow-pattern) 12%, transparent);
+  padding: 1px 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.flow-node-edit-badge {
+  font-size: 0.5rem;
+  color: var(--flow-pattern);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  line-height: 1;
+}
+
+.flow-node-summary {
+  margin-top: 0.25rem;
+  font-size: 0.78125rem;
+  color: var(--flow-text-muted);
+  line-height: 1.6;
+  /* Phase 1 fix (Bug 1): relax the line clamp from 2 → 4 so longer
+     summaries stay readable. Nodes with very long summaries still
+     truncate to keep the layout stable, but the 2-line ceiling was
+     hiding the actual content from users. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.flow-node-content {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--flow-text);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Phase 1 fix (Bug 1): the previous `.flow-node-content-clamp` rule
+     truncated HTML content to ~6 lines via `-webkit-line-clamp`, which
+     hid the full body from users who didn't realise they could
+     double-click to expand. We now always render the full HTML body and
+     let the node height (from `computeNodeSize`) determine how much
+     scrolls inside the box. The class is kept as a no-op hook in case
+     a future test references it. */
+  word-break: break-word;
+}
+
+/* Phase 1 fix (Bug 1): the .flow-node-content-clamp class is now a
+   no-op — content is always rendered in full. Kept as a hook (with no
+   truncation) so existing tests / older references don't break. */
+.flow-node-content.flow-node-content-clamp {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.flow-node.expanded .flow-node-content {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  overflow: auto;
+}
+
+.flow-node-content > *:first-child {
+  margin-top: 0;
+}
+
+.flow-node-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.flow-node-expand-hint {
+  margin-top: 0.5rem;
+  padding-top: 0.375rem;
+  border-top: 1px dashed var(--flow-card-border);
+  font-size: 0.6875rem;
+  color: var(--flow-text-muted);
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* ── HTML content typography (headings, lists, tables, code, etc.) ── */
+
+.flow-node-content h2,
+.flow-node-content h3,
+.flow-node-content h4 {
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 0.7em;
+  margin-bottom: 0.3em;
+}
+
+.flow-node-content h3 {
+  font-size: 0.875rem;
+}
+
+.flow-node-content h4 {
+  font-size: 0.8125rem;
+}
+
+.flow-node-content p {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+
+.flow-node-content ul,
+.flow-node-content ol {
+  padding-left: 1.25em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+
+.flow-node-content ul {
+  list-style-type: disc;
+}
+
+.flow-node-content ol {
+  list-style-type: decimal;
+}
+
+.flow-node-content li {
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+}
+
+.flow-node-content strong {
+  font-weight: 600;
+}
+
+.flow-node-content em {
+  font-style: italic;
+}
+
+.flow-node-content code {
+  font-size: 0.8125rem;
+  background: var(--flow-card-bg-hover);
+  padding: 0.125em 0.25em;
+  border-radius: 0.25rem;
+}
+
+.flow-node-content pre {
+  background: var(--flow-card-bg-hover);
+  padding: 0.5em 0.75em;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  white-space: pre-wrap;
+}
+
+.flow-node-content pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.flow-node-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.flow-node-content th,
+.flow-node-content td {
+  border: 1px solid var(--flow-card-border);
+  padding: 0.25em 0.5em;
+  text-align: left;
+}
+
+.flow-node-content th {
+  font-weight: 600;
+  background: var(--flow-card-bg-hover);
+}
+
+.flow-node-content blockquote {
+  border-left: 3px solid var(--flow-pattern);
+  padding-left: 0.75em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  opacity: 0.85;
+}
+
+.flow-node-content hr {
+  border: none;
+  border-top: 1px solid var(--flow-card-border);
+  margin: 0.75em 0;
+}
+
+.flow-node-content a {
+  color: var(--flow-pattern);
+  text-decoration: underline;
+}
+
+.flow-node-content a:hover {
+  opacity: 0.8;
+}
+
+/* ── Stage A2: hover path highlight ─────────────────────────────────────── */
+
+.flow-node.dimmed {
+  opacity: 0.3;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* ── Stage C: search-match highlight ──────────────────────────────────── */
+
+.flow-node.search-match {
+  outline: 2px solid var(--flow-pattern, currentColor);
+  outline-offset: 4px;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--flow-pattern) 18%, transparent);
+}
+
+/* ── Stage D: scrollbar — kept in node.css because the scrollbar is
+   attached to a `.flow-node-content` element. */
+
+.flow-node-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.flow-node-content::-webkit-scrollbar-thumb {
+  background: var(--flow-card-border);
+  border-radius: 2px;
+}

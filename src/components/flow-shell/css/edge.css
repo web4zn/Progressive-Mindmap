@@ -1,0 +1,69 @@
+/* Stage D — edges, handles, MiniMap.
+ *
+ * All three visual primitives share a single colour
+ * (`var(--flow-pattern)`) so the pattern change in the header
+ * re-paints them all without a per-component class flip.
+ */
+
+.flow-edge-path {
+  stroke: var(--flow-pattern);
+  stroke-width: 1.5px;
+  fill: none;
+  transition: stroke var(--duration-base) var(--ease-out);
+}
+
+/* Handle dots */
+.flow-handle {
+  width: 6px !important;
+  height: 6px !important;
+  background: var(--flow-pattern) !important;
+  border: 2px solid var(--flow-card-bg) !important;
+  border-radius: 50% !important;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.flow-handle:hover {
+  transform: scale(1.5);
+}
+
+/* ── Stage A2: edge dimming (path highlight) ─────────────────────────── */
+
+/* React Flow edge classes (default 'react-flow__edge-*') */
+.react-flow__edge.dimmed .react-flow__edge-path,
+.react-flow__edge.dimmed path {
+  opacity: 0.15;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.react-flow__edge.dimmed {
+  opacity: 0.15;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* ── Stage C: MiniMap wrap + viewport rectangle ──────────────────────── */
+
+.flow-minimap {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--flow-card-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.flow-minimap-wrap {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--flow-card-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--flow-pattern);
+}
+
+.flow-minimap-wrap .flow-minimap {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+.flow-minimap-viewport {
+  display: block;
+}

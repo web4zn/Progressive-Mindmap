@@ -44,3 +44,4 @@ npm-debug.log*
 skills-lock.json
 .sisyphus/
 .opencode/
+.mavis/

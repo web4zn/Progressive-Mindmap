@@ -252,3 +252,199 @@ describe('computeNodeSize', () => {
     expect(b.width).toBeLessThanOrEqual(280)
   })
 })
+
+// ────────────────────────────────────────────────────────────────────
+// Stage D — boundary tests for `treeToFlowShell` + `computeNodeSize`.
+// Covers the spec's edge-case list:
+//  - orphan in collapsedIds
+//  - 200-level deep tree
+//  - special characters in id
+//  - extremely long label / content
+//  - multiple roots with deeply nested children
+//  - null content for html-typed node
+//  - unknown pattern string
+//  - collapsedIds containing IDs that don't exist
+//  - toggleCollapse forwarding (vi.fn reference equality)
+//  - depth defaults / negative / explicit
+//  - children: [] vs omitted
+// ────────────────────────────────────────────────────────────────────
+
+describe('treeToFlowShell — Stage D boundary cases', () => {
+  it('orphan in collapsedIds (id not in tree) is silently ignored', () => {
+    const tree = [makeNode({ id: 'root', children: [makeNode({ id: 'c1' })] })]
+    // 'ghost' is not in the tree — the walker must not crash.
+    const { nodes, edges } = treeToFlowShell(tree, new Set(['ghost']), noop, 'auto')
+    expect(nodes.map((n) => n.id).sort()).toEqual(['c1', 'root'])
+    expect(edges).toHaveLength(1)
+    // No node should be marked collapsed because 'ghost' has no match.
+    expect(nodes.every((n) => n.data.collapsed === false)).toBe(true)
+  })
+
+  it('200-level deep tree propagates depth without stack overflow', () => {
+    // Build a linear chain: 0 → 1 → 2 → ... → 200
+    let deepest: MindMapNode = makeNode({ id: 'n200' })
+    for (let i = 199; i >= 0; i -= 1) {
+      deepest = makeNode({ id: `n${i}`, children: [deepest] })
+    }
+    const tree: MindMapNode[] = [deepest]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes).toHaveLength(201)
+    const root = nodes.find((n) => n.id === 'n0')!
+    const tip = nodes.find((n) => n.id === 'n200')!
+    expect(root.data.depth).toBe(0)
+    expect(tip.data.depth).toBe(200)
+  })
+
+  it('special characters in node id are preserved verbatim and edges match', () => {
+    const special = "a/b:c d-é_中文<>?'"
+    const tree = [
+      makeNode({
+        id: 'root',
+        children: [makeNode({ id: special })],
+      }),
+    ]
+    const { nodes, edges } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes).toHaveLength(2)
+    const child = nodes.find((n) => n.id === special)
+    expect(child).toBeDefined()
+    expect(edges).toHaveLength(1)
+    expect(edges[0]?.source).toBe('root')
+    expect(edges[0]?.target).toBe(special)
+    // Edge id is `${parent}-${child}` — accept the literal
+    expect(edges[0]?.id).toBe(`root-${special}`)
+  })
+
+  it('extremely long label (10_000 chars) does not crash and is forwarded', () => {
+    const longLabel = 'X'.repeat(10_000)
+    const tree = [makeNode({ id: 'root', label: longLabel })]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]?.data.label).toBe(longLabel)
+  })
+
+  it('extremely long content (1 MB) does not crash; size cap holds', () => {
+    const longContent = '<p>' + 'a'.repeat(1_000_000) + '</p>'
+    const tree = [
+      makeNode({ id: 'root', content: longContent, contentType: 'html' }),
+    ]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]?.data.content).toBe(longContent)
+    // Width / height caps are enforced by `computeNodeSize`, not by
+    // the tree walker; spot-check that the walker doesn't refuse
+    // the long content.
+    const size = computeNodeSize({
+      label: nodes[0]!.data.label,
+      summary: nodes[0]!.data.summary,
+      contentLength: longContent.length,
+      hasHtml: true,
+      hasChildren: false,
+    })
+    expect(size.width).toBeLessThanOrEqual(360)
+    expect(size.height).toBeLessThanOrEqual(380)
+  })
+
+  it('multiple roots with deeply nested children: every root has no parent edge', () => {
+    const tree: MindMapNode[] = [
+      makeNode({
+        id: 'r1',
+        children: [
+          makeNode({
+            id: 'r1c1',
+            children: [makeNode({ id: 'r1c1c1' })],
+          }),
+        ],
+      }),
+      makeNode({
+        id: 'r2',
+        children: [makeNode({ id: 'r2c1' })],
+      }),
+    ]
+    const { nodes, edges } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes).toHaveLength(5)
+    // 1 + 1 root edges excluded; 3 child edges (r1→r1c1, r1c1→r1c1c1, r2→r2c1).
+    expect(edges).toHaveLength(3)
+    expect(edges.filter((e) => e.target === 'r1')).toHaveLength(0)
+    expect(edges.filter((e) => e.target === 'r2')).toHaveLength(0)
+    // Every non-root has exactly one parent.
+    const childIds = ['r1c1', 'r1c1c1', 'r2c1']
+    for (const id of childIds) {
+      const parents = edges.filter((e) => e.target === id)
+      expect(parents).toHaveLength(1)
+    }
+  })
+
+  it('content: undefined for an html-typed node leaves hasHtml-flavour size neutral', () => {
+    // `content: undefined` is the same as not setting content.
+    // `computeNodeSize` is the consumer, but the walker should
+    // forward undefined verbatim.
+    const tree = [makeNode({ id: 'root', contentType: 'html' })]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes[0]?.data.content).toBeUndefined()
+    expect(nodes[0]?.data.contentType).toBe('html')
+  })
+
+  it('unknown pattern string is passed through unchanged in data.pattern', () => {
+    const tree = [makeNode({ id: 'root' })]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'foo-bar-baz')
+    expect(nodes[0]?.data.pattern).toBe('foo-bar-baz')
+  })
+
+  it('collapsedIds containing IDs that do not exist in the tree is a no-op', () => {
+    const tree = [makeNode({ id: 'root', children: [makeNode({ id: 'c1' })] })]
+    const { nodes } = treeToFlowShell(
+      tree,
+      new Set(['zzz', 'yyy', 'xxx']),
+      noop,
+      'auto',
+    )
+    // Same shape as a fully expanded tree.
+    expect(nodes.map((n) => n.id).sort()).toEqual(['c1', 'root'])
+    expect(nodes.every((n) => n.data.collapsed === false)).toBe(true)
+  })
+
+  it('toggleCollapse is forwarded to every node data (reference equality)', () => {
+    const tree = [
+      makeNode({ id: 'r1', children: [makeNode({ id: 'c1' })] }),
+      makeNode({ id: 'r2' }),
+    ]
+    const toggle = vi.fn()
+    const { nodes } = treeToFlowShell(tree, new Set(), toggle, 'auto')
+    for (const n of nodes) {
+      expect(n.data.onToggle).toBe(toggle)
+    }
+  })
+
+  it('depth argument defaults to 0, accepts negative values, accepts explicit value', () => {
+    const tree = [
+      makeNode({
+        id: 'root',
+        children: [makeNode({ id: 'c1', children: [makeNode({ id: 'c2' })] })],
+      }),
+    ]
+    // default depth = 0
+    const a = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(a.nodes.find((n) => n.id === 'root')!.data.depth).toBe(0)
+    expect(a.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(2)
+    // explicit depth = -1
+    const b = treeToFlowShell(tree, new Set(), noop, 'auto', -1)
+    expect(b.nodes.find((n) => n.id === 'root')!.data.depth).toBe(-1)
+    expect(b.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(1)
+    // explicit depth = 5
+    const c = treeToFlowShell(tree, new Set(), noop, 'auto', 5)
+    expect(c.nodes.find((n) => n.id === 'root')!.data.depth).toBe(5)
+    expect(c.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(7)
+  })
+
+  it('children: [] vs omitted — same output shape and hasChildren: false', () => {
+    const a = makeNode({ id: 'a', children: [] })
+    const b = makeNode({ id: 'b' }) // children omitted → defaults to []
+    const { nodes: na } = treeToFlowShell([a], new Set(), noop, 'auto')
+    const { nodes: nb } = treeToFlowShell([b], new Set(), noop, 'auto')
+    expect(na[0]?.data.hasChildren).toBe(false)
+    expect(nb[0]?.data.hasChildren).toBe(false)
+    // No edges in either case.
+    expect(na).toHaveLength(1)
+    expect(nb).toHaveLength(1)
+  })
+})

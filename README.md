@@ -204,14 +204,30 @@ full contract.
 - [x] Corpus curation & source tracking
 - [x] React Flow canvas with dagre layout
 - [x] IndexedDB persistence
-- [ ] Real-time streaming mindmap preview during generation
-- [ ] PNG / SVG / Markdown export
-- [ ] Keyboard shortcuts
-- [ ] Undo / Redo
-- [ ] Rich content in nodes (images, links, notes)
-- [ ] Plugin architecture
+- [x] Real-time streaming mindmap preview during generation
+- [x] PNG / SVG / Markdown export
+- [x] Keyboard shortcuts
+- [x] Undo / Redo
+- [x] Rich content in nodes (markdown, html)
+- [x] Theme system (light / dark / system)
 - [ ] Multiple layout types (org chart, fishbone, timeline)
-- [ ] Theme system
+- [ ] Plugin architecture
+
+## 🎨 Theme
+
+The app supports three theme modes:
+
+- **light** — default; classic neutral palette
+- **dark** — uses the shadcn `oklch` dark palette + a darker FlowShell
+  surface (see `[data-theme='dark']` in
+  `src/components/flow-shell/css/theme.css`)
+- **system** — follows `prefers-color-scheme` on first load; once
+  the user toggles manually, their choice wins
+
+The active mode persists in `localStorage` under
+`progressive-mindmap:theme`. Toggle the theme from the brain-panel
+toolbar (the ☀ / 🌙 button next to the background switcher; data-testid
+`mindmap-theme-toggle`).
 
 ## 🤝 Contributing
 

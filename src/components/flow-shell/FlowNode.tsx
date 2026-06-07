@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { sanitizeHtml } from '@/lib/html-sanitizer'
 import type { FlowNodeData } from './index'
-import { selectNodeIcon } from '@/lib/node-icon'
+import { selectNodeIcon, type NodeIconName } from '@/lib/node-icon'
 
 /**
  * Phase 1 fix (Bug 2): the ⤢ glyph is a passive affordance that tells
@@ -46,7 +46,7 @@ function ExpandAffordance() {
 // Tiny inline icon components — avoids a hard lucide-react import in the
 // data layer (which is unit-testable without React) and keeps the bundle
 // leaner than dragging in the full lucide tree.
-function PatternIcon({ name }: { name: ReturnType<typeof selectNodeIcon> }) {
+function PatternIcon({ name }: { name: NodeIconName }) {
   if (!name) return null
   const common = {
     width: 12,

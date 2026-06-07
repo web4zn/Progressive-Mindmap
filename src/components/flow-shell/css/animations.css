@@ -1,0 +1,129 @@
+/* Stage D — keyframes + their reduced-motion gates.
+ *
+ * Every `@keyframes` block in the FlowShell lives here. The
+ * class-level `animation:` declarations are co-located with the
+ * class in their own file (e.g. `node.css` for `.flow-node`'s
+ * enter animation) but the keyframe *definition* is centralised
+ * so a future "make all animations 2× slower" tweak is one file.
+ *
+ * All durations reference the global motion tokens from
+ * `src/index.css` so a user with `prefers-reduced-motion: reduce`
+ * gets them zeroed automatically.
+ */
+
+/* Animate in (very subtle — drop the scale to keep selection consistent) */
+@keyframes flow-node-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.flow-node {
+  animation: flow-node-enter var(--duration-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node {
+    animation: none;
+  }
+}
+
+/* ── Stage A2: streaming shimmer (A1 #21) ───────────────────────────────── */
+
+/* The shimmer is a diagonal sweep of light across the node. Implemented as
+   a ::before pseudo element on `.flow-node.streaming`. We deliberately keep
+   it light and short so a whole forest of depth-0/1/2 nodes can pulse
+   without distracting. The animation is suppressed under
+   prefers-reduced-motion (see the media query at the end of the file). */
+.flow-node.streaming {
+  position: relative;
+  isolation: isolate;
+}
+
+.flow-node.streaming::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--flow-pattern) 32%, transparent) 48%,
+    color-mix(in srgb, var(--flow-pattern) 6%, transparent) 52%,
+    transparent 70%
+  );
+  background-size: 220% 220%;
+  background-position: 120% 0;
+  animation: flow-shimmer 2s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes flow-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node.streaming::before {
+    animation: none;
+    background-position: 50% 0;
+  }
+}
+
+/* ── Stage C: collapse animation ──────────────────────────────────────── */
+
+/* When the user clicks the `−` button on a parent node, React Flow
+   removes the child subtrees via `applyNodeChanges` and the collapse
+   feels instant. We use a CSS keyframe to fade + scale the descendants
+   out: 200ms, opacity 1 → 0, scale 1 → 0.95. The same animation is run
+   on insert (`.flow-node.fade-in`) but reversed. */
+@keyframes flow-node-collapse-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes flow-node-collapse-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.flow-node.collapsing-out {
+  animation: flow-node-collapse-out var(--duration-base) ease-in forwards;
+  pointer-events: none;
+}
+
+.flow-node.fade-in {
+  animation: flow-node-collapse-in var(--duration-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node.collapsing-out,
+  .flow-node.fade-in {
+    animation: none;
+  }
+  .flow-node-affordance,
+  .flow-node-affordance-tooltip {
+    transition: none;
+  }
+}

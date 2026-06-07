@@ -33,5 +33,6 @@ export interface FlowNodeData extends Record<string, unknown> {
 }
 
 export type { FlowShellProps, FlowShellHandle } from './FlowShell'
+export type { FlowShellPattern } from './FlowShell'
 export { default as FlowShell } from './FlowShell'
 export { default as FlowNode } from './FlowNode'

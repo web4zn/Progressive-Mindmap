@@ -26,6 +26,7 @@ import {
   type OnSelectionChangeParams,
   type EdgeMouseHandler,
   type BackgroundVariant,
+  type OnInit,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
@@ -35,14 +36,27 @@ import type { FlowNodeData } from './index'
 import { computeNodeSize, type NodeSize } from '@/lib/mindmap-flow'
 import FlowMiniMap from './MiniMap'
 
+/** Stage D — the four mindmap patterns the user can pick from
+ *  the header dropdown. Mirrors the `MindMapPattern` type in
+ *  `MindMapHeader.tsx` (kept narrow on purpose — unknown strings
+ *  fall back to `'auto'`). */
+export type FlowShellPattern = 'auto' | '5w1h' | 'tech' | 'pros-cons'
+
+const PATTERN_COLORS: Record<FlowShellPattern, string> = {
+  auto: '#3b82f6',
+  '5w1h': '#22c55e',
+  tech: '#8b5cf6',
+  'pros-cons': '#f59e0b',
+}
+
 const DEFAULT_TEXT_SIZE: NodeSize = { width: 200, height: 100 }
 const EXPANDED_HTML_HEIGHT = 380
 
 function applyLayout(
-  flowNodes: Node<FlowNodeData>[],
+  flowNodes: Node<FlowNodeData, 'flow'>[],
   flowEdges: Edge[],
   direction: string,
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
+): { nodes: Node<FlowNodeData, 'flow'>[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
   g.setGraph({
     rankdir: direction === 'dagre-tb' ? 'TB' : 'LR',
@@ -99,6 +113,18 @@ function applyLayout(
 export interface FlowShellProps {
   nodes: Node<FlowNodeData, 'flow'>[]
   edges: Edge[]
+  /**
+   * Stage D — pattern prop. Drives the wrapper's `data-pattern`
+   * attribute, which `css/theme.css` reads to set `--flow-pattern`
+   * for edges / handles / accents. Defaults to `'auto'`.
+   */
+  pattern?: FlowShellPattern
+  /**
+   * Theme override. When omitted, the shell follows
+   * `document.documentElement.dataset.theme` (set by the
+   * `useTheme` hook in `MindMapPanel`) so a global theme toggle
+   * cascades without prop-drilling.
+   */
   theme?: 'dark' | 'light'
   layout?: 'dagre-lr' | 'dagre-tb'
   fitView?: boolean
@@ -119,7 +145,7 @@ export interface FlowShellProps {
    * side-effects (e.g. close any in-place expansion) on top.
    */
   onPaneDoubleClick?: () => void
-  onInit?: (instance: ReactFlowInstance) => void
+  onInit?: OnInit<Node<FlowNodeData, 'flow'>, Edge>
   onNodeDoubleClick?: NodeMouseHandler<Node>
   onNodeContextMenu?: NodeMouseHandler<Node>
   onNodeDragStop?: OnNodeDrag<Node>
@@ -172,7 +198,7 @@ export interface FlowShellHandle {
    * instance (and therefore `useReactFlow().getIntersectingNodes`) only
    * exists inside this provider.
    */
-  getIntersectingNodes: (nodeId: string) => Node[]
+  getIntersectingNodes: (nodeId: string) => Node<FlowNodeData, 'flow'>[]
   /** Stage A2 — programmatic zoom in / out (used by `+` / `-` hotkeys). */
   zoomIn: () => void
   zoomOut: () => void
@@ -180,16 +206,14 @@ export interface FlowShellHandle {
 
 const _nodeTypes = { flow: FlowNodeComponent }
 
-const nodeColorFn = (node: Node) => {
+/**
+ * Stage D — narrowing helper. Used by the MiniMap `nodeColor` prop
+ * so the function body doesn't have to hand-roll an `as` cast.
+ */
+function getNodePatternColor(node: Node<FlowNodeData, 'flow'> | Node): string {
   const data = node.data as FlowNodeData | undefined
-  const pattern = data?.pattern ?? 'auto'
-  const colors: Record<string, string> = {
-    auto: '#3b82f6',
-    '5w1h': '#22c55e',
-    tech: '#8b5cf6',
-    'pros-cons': '#f59e0b',
-  }
-  return colors[pattern] ?? colors.auto!
+  const pattern = (data?.pattern ?? 'auto') as FlowShellPattern
+  return PATTERN_COLORS[pattern] ?? PATTERN_COLORS.auto
 }
 
 /**
@@ -259,13 +283,13 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
   // Stage C: also propagate the search-match highlight via data so
   // FlowNode can render the outline without React Flow needing to know
   // about it.
-  const decoratedNodes = useMemo(() => {
+  const decoratedNodes = useMemo<Node<FlowNodeData, 'flow'>[]>(() => {
     return layoutResult.nodes.map((n) => {
       const isDimmed = !!dimmedNodeIds && dimmedNodeIds.has(n.id)
       const isSearchMatch = !!searchMatchNodeIds && searchMatchNodeIds.has(n.id)
-      const depth = (n.data?.depth ?? 0) as number
+      const depth = n.data?.depth ?? 0
       const showStreaming = !!isStreaming && depth < 3
-      const data = n.data as FlowNodeData | undefined
+      const data = n.data
       if (
         data?.isDimmed === isDimmed &&
         data?.isStreaming === showStreaming &&
@@ -285,7 +309,7 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     })
   }, [layoutResult.nodes, dimmedNodeIds, isStreaming, searchMatchNodeIds])
 
-  const decoratedEdges = useMemo(() => {
+  const decoratedEdges = useMemo<Edge[]>(() => {
     if (!dimmedEdgeIds || dimmedEdgeIds.size === 0) return layoutResult.edges
     return layoutResult.edges.map((e) => {
       if (dimmedEdgeIds.has(e.id)) {
@@ -295,15 +319,15 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     })
   }, [layoutResult.edges, dimmedEdgeIds])
 
-  const initialPositionsRef = useRef(layoutResult.nodes as Node[])
+  const initialPositionsRef = useRef<Node<FlowNodeData, 'flow'>[]>(layoutResult.nodes)
 
-  const [nodes, setNodes] = useState<Node[]>(layoutResult.nodes as Node[])
-  const [edges, setEdges] = useState<Edge[]>(layoutResult.edges as Edge[])
+  const [nodes, setNodes] = useState<Node<FlowNodeData, 'flow'>[]>(layoutResult.nodes)
+  const [edges, setEdges] = useState<Edge[]>(layoutResult.edges)
 
   useEffect(() => {
-    initialPositionsRef.current = layoutResult.nodes as Node[]
-    setNodes(layoutResult.nodes as Node[])
-    setEdges(layoutResult.edges as Edge[])
+    initialPositionsRef.current = layoutResult.nodes
+    setNodes(layoutResult.nodes)
+    setEdges(layoutResult.edges)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureKey])
 
@@ -312,13 +336,13 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
   // is intentionally cheap (just className strings) and runs on every
   // hover / streaming change.
   useEffect(() => {
-    setNodes(decoratedNodes as Node[])
-    setEdges(decoratedEdges as Edge[])
+    setNodes(decoratedNodes)
+    setEdges(decoratedEdges)
   }, [decoratedNodes, decoratedEdges])
 
-  const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
+  const rfInstanceRef = useRef<ReactFlowInstance<Node<FlowNodeData, 'flow'>, Edge> | null>(null)
   const { fitView: rfFitView, getIntersectingNodes: rfGetIntersectingNodes, zoomIn: rfZoomIn, zoomOut: rfZoomOut } =
-    useReactFlow()
+    useReactFlow<Node<FlowNodeData, 'flow'>, Edge>()
 
   // Expose imperative handle for the parent. `useReactFlow` is the documented
   // way to call fitView from outside the provider context, so the parent
@@ -343,7 +367,12 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
       },
       getIntersectingNodes: (nodeId) => {
         try {
-          return rfGetIntersectingNodes({ id: nodeId }) as Node[]
+          // `useReactFlow().getIntersectingNodes` returns the generic
+          // `Node[]`. The `FlowShellHandle` contract is the narrower
+          // `Node<FlowNodeData, 'flow'>[]`; the cast is safe because
+          // `rfInstanceRef.current` was constructed from the same
+          // narrowed `nodes` we passed to `<ReactFlow>`.
+          return rfGetIntersectingNodes({ id: nodeId }) as Node<FlowNodeData, 'flow'>[]
         } catch {
           return []
         }
@@ -375,8 +404,8 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     })
   }, [selectedNodeId, rfFitView])
 
-  const handleInit = useCallback(
-    (instance: ReactFlowInstance) => {
+  const handleInit = useCallback<OnInit<Node<FlowNodeData, 'flow'>, Edge>>(
+    (instance) => {
       rfInstanceRef.current = instance
       onInit?.(instance)
     },
@@ -407,14 +436,18 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
   )
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds) as Node[]),
+    (changes: NodeChange<Node<FlowNodeData, 'flow'>>[]) =>
+      setNodes((nds) => applyNodeChanges(changes, nds)),
     [],
   )
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<Edge>[]) => setEdges((eds) => applyEdgeChanges(changes, eds) as Edge[]),
+    (changes: EdgeChange<Edge>[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
     [],
   )
 
+  // Stage D — narrow the literal to a BackgroundVariant. The xyflow
+  // type is an enum (not a string union), so the cast is unavoidable.
+  // We keep the local variable so the cast sits in one place.
   const backgroundVariant: BackgroundVariant =
     background === 'grid' ? ('lines' as BackgroundVariant) : ('dots' as BackgroundVariant)
 
@@ -492,7 +525,7 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
       </Panel>
       {!disableMiniMap && (
         <FlowMiniMap
-          nodeColor={nodeColorFn}
+          nodeColor={getNodePatternColor}
           nodeStrokeWidth={2}
         />
       )}
@@ -500,12 +533,27 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
   )
 })
 
+/**
+ * Stage D — read the current global theme from
+ * `document.documentElement.dataset.theme`. Falls back to `'light'`
+ * if the dataset hasn't been set yet (e.g. in tests).
+ */
+function readDocumentTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light'
+  const raw = document.documentElement.dataset['theme']
+  return raw === 'dark' ? 'dark' : 'light'
+}
+
 export default forwardRef<FlowShellHandle, FlowShellProps>(function FlowShell(props, ref) {
+  // The `data-theme` attribute is set from the prop when provided,
+  // otherwise it follows the global `useTheme` state via the
+  // `dataset.theme` attribute (kept in sync by `applyTheme`).
+  const themeAttr = props.theme ?? readDocumentTheme()
   return (
     <div
       className="flow-shell"
-      data-theme={props.theme ?? 'light'}
-      data-pattern="auto"
+      data-theme={themeAttr}
+      data-pattern={props.pattern ?? 'auto'}
       style={{ width: '100%', height: '100%' }}
     >
       <ReactFlowProvider>
