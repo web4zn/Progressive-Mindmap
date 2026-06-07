@@ -213,6 +213,86 @@
   gap: 0.25rem;
 }
 
+/* Phase 1 fix (Bug 2): the ⤢ affordance. A small, low-key icon in the
+   node header (next to the edit dot) that visually hints at the
+   "double-click to expand / ⌘+double-click to edit" interaction.
+   The icon is hidden by default and fades in on hover so it does not
+   add visual noise at rest. Clicking the icon intentionally does
+   nothing — it is a `<span>` so the React Flow double-click handler
+   still receives the event. */
+.flow-node-affordance {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  color: var(--flow-text-muted);
+  opacity: 0;
+  transform: translateY(-0.5px);
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+  cursor: help;
+  pointer-events: auto;
+}
+
+.flow-node:hover .flow-node-affordance,
+.flow-node.selected .flow-node-affordance {
+  opacity: 0.7;
+}
+
+.flow-node-affordance:hover {
+  opacity: 1 !important;
+  color: var(--flow-pattern);
+  background: color-mix(in srgb, var(--flow-pattern) 8%, transparent);
+}
+
+/* Custom CSS tooltip — appears below the icon on hover. We render the
+   text in a hidden span and reveal it via CSS so we get a styled
+   bubble without a JS popper. `pointer-events: none` keeps the
+   tooltip from intercepting clicks. */
+.flow-node-affordance-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--flow-text);
+  background: var(--flow-card-bg);
+  border: 1px solid var(--flow-card-border-strong);
+  box-shadow: var(--flow-shadow-hover);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  z-index: 50;
+}
+
+.flow-node-affordance:hover .flow-node-affordance-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — keep the icon visible (it's a hint, not animation)
+   but skip the transition. */
+@media (prefers-reduced-motion: reduce) {
+  .flow-node-affordance,
+  .flow-node-affordance-tooltip {
+    transition: none;
+  }
+}
+
 .flow-node-edit-dot {
   width: 6px;
   height: 6px;
@@ -245,10 +325,15 @@
   font-size: 0.78125rem;
   color: var(--flow-text-muted);
   line-height: 1.6;
+  /* Phase 1 fix (Bug 1): relax the line clamp from 2 → 4 so longer
+     summaries stay readable. Nodes with very long summaries still
+     truncate to keep the layout stable, but the 2-line ceiling was
+     hiding the actual content from users. */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
 }
 
 .flow-node-content {
@@ -259,14 +344,25 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Phase 1 fix (Bug 1): the previous `.flow-node-content-clamp` rule
+     truncated HTML content to ~6 lines via `-webkit-line-clamp`, which
+     hid the full body from users who didn't realise they could
+     double-click to expand. We now always render the full HTML body and
+     let the node height (from `computeNodeSize`) determine how much
+     scrolls inside the box. The class is kept as a no-op hook in case
+     a future test references it. */
+  word-break: break-word;
 }
 
+/* Phase 1 fix (Bug 1): the .flow-node-content-clamp class is now a
+   no-op — content is always rendered in full. Kept as a hook (with no
+   truncation) so existing tests / older references don't break. */
 .flow-node-content.flow-node-content-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 6;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .flow-node.expanded .flow-node-content {

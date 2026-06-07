@@ -5,6 +5,7 @@ import { useMindmapStore } from '@/stores/mindmapStore'
 import { useChatStore } from '@/stores/chatStore'
 import { agentToolHandlers } from '@/lib/agent/agent-tools'
 import { buildMindmapAgentPrompt } from '@/lib/agent/system-prompt'
+import { createAgentStatusGuard } from '@/lib/agent/agent-status-guard'
 import type {
   MainToWorkerMessage,
   WorkerToMainMessage,
@@ -13,9 +14,21 @@ import type {
 
 const LOG = '[🧠 Agent]'
 
+// Phase 1 fix (Bug 3): wall-clock safety net for the auto-idle
+// transition. The previous code had a hard-coded 3 s setTimeout inside
+// the `AGENT_COMPLETE` branch and *no* fallback for the `AGENT_ERROR`
+// branch, which is what caused the user-visible "生成中" stuck state.
+// 5 s is a balance between "user has time to read the status line" and
+// "the indicator doesn't get stuck if a message is dropped".
+const AGENT_IDLE_FALLBACK_MS = 5000
+
 export function useMindmapAgent() {
   const workerRef = useRef<Worker | null>(null)
   const setAgentStatus = useChatStore((s) => s.setAgentStatus)
+  // Phase 1 fix (Bug 3): guard owns the safety-net timer. The guard is
+  // created once per hook instance and disposed in the cleanup effect
+  // below so a stale timer never fires after unmount.
+  const guardRef = useRef(createAgentStatusGuard(setAgentStatus))
 
   // ── 初始化 Worker ──
   const initialize = useCallback(() => {
@@ -59,6 +72,9 @@ export function useMindmapAgent() {
         case 'AGENT_STATUS':
           console.log(LOG, `状态: ${msg.payload.status}`, msg.payload.message || '')
           setAgentStatus(msg.payload.status, msg.payload.message)
+          // Mirror the status to the guard so a `complete` / `error`
+          // status reported by the worker also gets the safety net.
+          guardRef.current.recordTransition(msg.payload.status, AGENT_IDLE_FALLBACK_MS)
           break
 
         case 'TOOL_RESULT_NEEDED': {
@@ -105,12 +121,21 @@ export function useMindmapAgent() {
             hasTree: !!msg.payload.newTreeJson,
           })
           setAgentStatus('complete', '脑图已更新')
-          setTimeout(() => setAgentStatus('idle'), 3000)
+          // Phase 1 fix (Bug 3): schedule a wall-clock safety net
+          // (replaces the old ad-hoc 3 s setTimeout). The guard
+          // cancels any prior pending timer, so back-to-back
+          // completions don't stack timers.
+          guardRef.current.recordTransition('complete', AGENT_IDLE_FALLBACK_MS)
           break
 
         case 'AGENT_ERROR':
           console.error(LOG, '❌ Agent 错误:', msg.payload.error)
           setAgentStatus('error', msg.payload.error)
+          // Phase 1 fix (Bug 3): the `AGENT_ERROR` branch previously
+          // never returned to `idle` — that's the bug. The guard
+          // makes the error indicator auto-clear after
+          // AGENT_IDLE_FALLBACK_MS, the same way `complete` does.
+          guardRef.current.recordTransition('error', AGENT_IDLE_FALLBACK_MS)
           {
             const state = useConversationStore.getState()
             const convId = state.activeConversationId
@@ -153,15 +178,33 @@ export function useMindmapAgent() {
           state.updateMessageInConversation(convId, lastMsg.id, {
             status: 'complete',
           })
+          // STREAM_DONE is the "I am done talking" signal — clear any
+          // pending fallback so the indicator drops to idle *now*
+          // instead of after AGENT_IDLE_FALLBACK_MS.
+          guardRef.current.clear()
           setAgentStatus('idle')
           break
         }
       }
     }
 
+    // Phase 1 fix (Bug 3): the previous code only listened to
+    // `onerror`. We now also listen to `onmessageerror` (fired when
+    // a posted message can't be deserialised) so any *reported*
+    // worker error flips the indicator to a non-stuck state. Note
+    // that the standard `Worker` type does not have an `onclose`
+    // event — the close path is covered by the 5 s safety-net
+    // timer and the cleanup effect below.
     worker.onerror = (err) => {
       console.error(LOG, 'Worker 运行时错误:', err)
       setAgentStatus('error', 'Worker 内部错误')
+      guardRef.current.recordTransition('error', AGENT_IDLE_FALLBACK_MS)
+    }
+
+    worker.onmessageerror = (event) => {
+      console.error(LOG, 'Worker message 解码失败:', event)
+      setAgentStatus('error', 'Worker 消息解析失败')
+      guardRef.current.recordTransition('error', AGENT_IDLE_FALLBACK_MS)
     }
 
     const initMsg: MainToWorkerMessage = {
@@ -288,14 +331,29 @@ export function useMindmapAgent() {
   )
 
   useEffect(() => {
+    // Snapshot the refs and store handle at mount time so the cleanup
+    // closure is stable even if the refs are reassigned (the
+    // react-hooks/exhaustive-deps rule would otherwise warn that
+    // `ref.current` may have changed between render and cleanup).
+    const guard = guardRef.current
+    const workerAtMount = workerRef.current
     return () => {
-      if (workerRef.current) {
+      if (workerAtMount) {
         console.log(LOG, '清理 Worker')
-        workerRef.current.terminate()
-        workerRef.current = null
+        workerAtMount.terminate()
       }
+      workerRef.current = null
+      // Phase 1 fix (Bug 3): make absolutely sure no pending
+      // safety-net timer fires after the hook unmounts, and that
+      // the indicator never lingers on 'thinking' / 'generating' /
+      // 'complete' / 'error' if the consumer has gone away (e.g.
+      // user navigates away, switches conversation, or the panel
+      // unmounts on a hot-reload).
+      guard.clear()
+      guard.dispose()
+      setAgentStatus('idle')
     }
-  }, [])
+  }, [setAgentStatus])
 
   return { initialize, enhanceMessage, mediateMessage }
 }
