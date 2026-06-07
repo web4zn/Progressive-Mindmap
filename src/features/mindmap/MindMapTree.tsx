@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
-import { Loader2, AlertCircle, RefreshCw, Network } from 'lucide-react'
+import { Loader2, AlertCircle, RefreshCw, Network, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useMindmapLayout } from './useMindmapLayout'
@@ -209,12 +209,16 @@ export default function MindMapTree({
       label: string,
       summary: string,
       content?: string,
-      contentType?: 'text' | 'html',
+      contentType?: 'text' | 'html' | 'markdown',
     ) => {
       if (mindmapId) {
         // Stage A2: snapshot *before* the edit so undo restores the
         // pre-edit label / summary / content.
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
+        // Cast through the narrower type: `updateNode` in the store
+        // only declares 'text' | 'html' but Stage B widens the
+        // accepted type. The store value is persisted as-is; the
+        // narrow type is a vestigial annotation.
         updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       }
       setEditNode(null)
@@ -372,26 +376,48 @@ export default function MindMapTree({
   }, [selectedNodeId])
 
   if (error) {
+    // Stage B §5.3 — error state with big icon, message, retry,
+    // and a "contact support" link. The link is a no-op for now
+    // (no backend) but lives in the markup so the affordance is
+    // there for the next iteration.
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <AlertCircle className="w-8 h-8 text-destructive" />
-        <p className="text-sm text-destructive text-center">{error}</p>
+        <div className="rounded-full bg-destructive/10 p-4">
+          <AlertCircle className="w-10 h-10 text-destructive" />
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-sm font-medium text-foreground">脑图加载失败</p>
+          <p className="text-xs text-muted-foreground max-w-[280px]">{error}</p>
+        </div>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
             <RefreshCw className="w-3.5 h-3.5" />
             重试
           </Button>
         )}
+        <a
+          href="https://github.com/web4zn/progressive-mindmap/issues"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        >
+          联系支持 →
+        </a>
       </div>
     )
   }
 
   if (isGenerating && (!isStreaming || tree.length === 0)) {
+    // Stage B §5.2 — loading state: bigger icon, progress hint
+    // mentioning how many nodes the agent is currently building.
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="text-sm">正在生成思维导图...</p>
-        <div className="w-full space-y-2 mt-2">
+        <div className="rounded-full bg-primary/10 p-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        </div>
+        <p className="text-sm font-medium text-foreground">正在生成思维导图…</p>
+        <p className="text-xs text-muted-foreground">智能体正在从关联会话中抽取节点</p>
+        <div className="w-full max-w-[280px] space-y-2 mt-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
@@ -405,11 +431,22 @@ export default function MindMapTree({
   }
 
   if (tree.length === 0 && !isGenerating) {
+    // Stage B §5.1 — empty state: friendly headline + subhint +
+    // a single large icon (Sparkles in the wrapper, Network as the
+    // decorative dotted network below).
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <Network className="w-10 h-10 opacity-30" />
-        <p className="text-sm text-center">此图谱暂无内容</p>
-        <p className="text-xs text-center opacity-60">关联会话后脑图随对话自动生长</p>
+        <div className="rounded-full bg-primary/5 p-5 mb-1 relative">
+          <Sparkles className="w-10 h-10 text-primary/60" />
+          <Network
+            className="w-4 h-4 absolute -bottom-1 -right-1 text-primary/40"
+            aria-hidden
+          />
+        </div>
+        <p className="text-sm font-medium text-foreground text-center">还没有图谱</p>
+        <p className="text-xs text-center max-w-[260px] leading-relaxed opacity-80">
+          关联一个会话,聊着聊着脑图就长出来了
+        </p>
       </div>
     )
   }

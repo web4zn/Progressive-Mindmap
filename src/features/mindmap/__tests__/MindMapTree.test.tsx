@@ -43,12 +43,12 @@ describe('MindMapTree', () => {
 
   it('renders empty state', () => {
     render(<MindMapTree tree={[]} />)
-    expect(screen.getByText('此图谱暂无内容')).toBeDefined()
+    expect(screen.getByText('还没有图谱')).toBeDefined()
   })
 
   it('renders loading state', () => {
     render(<MindMapTree tree={[]} isGenerating={true} />)
-    expect(screen.getByText('正在生成思维导图...')).toBeDefined()
+    expect(screen.getByText('正在生成思维导图…')).toBeDefined()
   })
 
   it('renders error state with retry', () => {

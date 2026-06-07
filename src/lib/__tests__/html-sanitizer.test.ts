@@ -33,9 +33,13 @@ describe('sanitizeHtml', () => {
       expect(result).not.toContain('evil.com')
     })
 
-    it('strips img tags', () => {
-      const result = sanitizeHtml('<img src="x" alt="pic">')
-      expect(result).not.toContain('<img')
+    it('strips dangerous img tags (onerror handler)', () => {
+      // Stage B: <img> is now allowed (the Image toolbar button
+      // inserts one), but the on* attribute must still be stripped
+      // — the dangerous half of the original test survives.
+      const result = sanitizeHtml('<img src="x" onerror="alert(1)" alt="pic">')
+      expect(result).not.toContain('onerror')
+      expect(result).not.toContain('alert')
     })
 
     it('strips style tags', () => {
@@ -58,11 +62,23 @@ describe('sanitizeHtml', () => {
   })
 
   describe('allowed tags', () => {
-    it('preserves h2-h4 headings', () => {
-      const result = sanitizeHtml('<h2>A</h2><h3>B</h3><h4>C</h4>')
+    it('preserves h1-h4 headings', () => {
+      // Stage B added h1 alongside the existing h2-h4 allowlist
+      // (the H1 toolbar button needs it).
+      const result = sanitizeHtml('<h1>A</h1><h2>B</h2><h3>C</h3><h4>D</h4>')
+      expect(result).toContain('<h1>')
       expect(result).toContain('<h2>')
       expect(result).toContain('<h3>')
       expect(result).toContain('<h4>')
+    })
+
+    it('preserves img with safe src/alt', () => {
+      // Stage B: <img> survives the sanitizer now (Image toolbar
+      // button). DOMPurify still strips javascript: URLs and
+      // event handlers.
+      const result = sanitizeHtml('<img src="https://example.com/x.png" alt="pic">')
+      expect(result).toContain('<img')
+      expect(result).toContain('alt')
     })
 
     it('preserves paragraph and line break', () => {

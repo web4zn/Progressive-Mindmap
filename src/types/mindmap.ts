@@ -3,7 +3,12 @@ export interface MindMapNode {
   label: string
   summary: string
   content?: string
-  contentType?: 'text' | 'html'
+  /**
+   * Stage B adds 'markdown' as a third content type. The store /
+   * sanitizer / FlowNode HTML preview all key off this field, and
+   * nodes that pre-date Stage B still have only 'text' | 'html'.
+   */
+  contentType?: 'text' | 'html' | 'markdown'
   children: MindMapNode[]
   editedByUser: boolean
 }

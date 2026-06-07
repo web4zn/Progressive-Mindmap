@@ -11,6 +11,18 @@ interface MindMapState {
   removeMindmap: (id: string) => void
   updateMindmapTree: (id: string, tree: MindMapNode[]) => void
   updateMindmapTitle: (id: string, title: string) => void
+  /**
+   * Stage B: generic partial update on a mindmap's top-level scalar
+   * fields (title, pattern, …). Title-only updates are still routed
+   * through `updateMindmapTitle` for the existing call sites; this
+   * setter exists for the inline-rename flow in `MindMapCombobox` and
+   * for any future field that needs the same "set one field, bump
+   * updatedAt" semantics.
+   */
+  updateMindmap: (
+    id: string,
+    partial: Partial<Pick<MindMap, 'title' | 'pattern'>>,
+  ) => void
   setActiveMindmapId: (id: string | null) => void
   getActiveMindmap: () => MindMap | null
   updateNode: (
@@ -131,6 +143,14 @@ export const useMindmapStore = create<MindMapState>()(
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
             m.id === id ? { ...m, title, updatedAt: Date.now() } : m,
+          ),
+        }))
+      },
+
+      updateMindmap: (id, partial) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) =>
+            m.id === id ? { ...m, ...partial, updatedAt: Date.now() } : m,
           ),
         }))
       },
