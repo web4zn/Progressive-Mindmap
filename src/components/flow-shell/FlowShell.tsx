@@ -11,7 +11,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   Panel,
   ReactFlowProvider,
   applyNodeChanges,
@@ -25,6 +24,7 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnSelectionChangeParams,
+  type EdgeMouseHandler,
   type BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -33,6 +33,7 @@ import './flow-shell.css'
 import FlowNodeComponent from './FlowNode'
 import type { FlowNodeData } from './index'
 import { computeNodeSize, type NodeSize } from '@/lib/mindmap-flow'
+import FlowMiniMap from './MiniMap'
 
 const DEFAULT_TEXT_SIZE: NodeSize = { width: 200, height: 100 }
 const EXPANDED_HTML_HEIGHT = 380
@@ -131,6 +132,10 @@ export interface FlowShellProps {
    */
   onNodeMouseEnter?: NodeMouseHandler<Node>
   onNodeMouseLeave?: NodeMouseHandler<Node>
+  /** Stage C — edge hover callback for path highlight. Fires when the
+   *  user moves the pointer over a React Flow edge path. */
+  onEdgeMouseEnter?: EdgeMouseHandler<Edge>
+  onEdgeMouseLeave?: EdgeMouseHandler<Edge>
   /** Stage A2 — applied as `.flow-node.dimmed` on every node in the set. */
   dimmedNodeIds?: ReadonlySet<string>
   /** Stage A2 — applied as `.react-flow__edge.dimmed` on every edge whose
@@ -140,6 +145,13 @@ export interface FlowShellProps {
   /** Stage A2 — when true, every node with `depth < 3` gets the
    *  `.flow-node.streaming` class so the shimmer animation runs. */
   isStreaming?: boolean
+  /** Stage C — variant of the canvas background. Defaults to 'dots'. */
+  background?: 'dots' | 'grid' | 'none'
+  /** Stage C — disable the custom MiniMap (used by Storybook / tests). */
+  disableMiniMap?: boolean
+  /** Stage C — node ids that should receive the `.flow-node.search-match`
+   *  highlight (search box drives this). */
+  searchMatchNodeIds?: ReadonlySet<string>
 }
 
 export interface FlowShellHandle {
@@ -211,9 +223,14 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     onNodeDragStop,
     onNodeMouseEnter,
     onNodeMouseLeave,
+    onEdgeMouseEnter,
+    onEdgeMouseLeave,
     dimmedNodeIds,
     dimmedEdgeIds,
     isStreaming,
+    background = 'dots',
+    disableMiniMap = false,
+    searchMatchNodeIds,
   } = props
 
   const structureKey = useMemo(
@@ -239,21 +256,34 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
   // composes its own class list (the `.flow-node` div is rendered by
   // FlowNode, not the React Flow wrapper). For edges we own the
   // `className` directly because BaseEdge forwards it to the path.
+  // Stage C: also propagate the search-match highlight via data so
+  // FlowNode can render the outline without React Flow needing to know
+  // about it.
   const decoratedNodes = useMemo(() => {
     return layoutResult.nodes.map((n) => {
       const isDimmed = !!dimmedNodeIds && dimmedNodeIds.has(n.id)
+      const isSearchMatch = !!searchMatchNodeIds && searchMatchNodeIds.has(n.id)
       const depth = (n.data?.depth ?? 0) as number
       const showStreaming = !!isStreaming && depth < 3
       const data = n.data as FlowNodeData | undefined
-      if (data?.isDimmed === isDimmed && data?.isStreaming === showStreaming) {
+      if (
+        data?.isDimmed === isDimmed &&
+        data?.isStreaming === showStreaming &&
+        data?.isSearchMatch === isSearchMatch
+      ) {
         return n
       }
       return {
         ...n,
-        data: { ...(data ?? ({} as FlowNodeData)), isDimmed, isStreaming: showStreaming },
+        data: {
+          ...(data ?? ({} as FlowNodeData)),
+          isDimmed,
+          isStreaming: showStreaming,
+          isSearchMatch,
+        },
       }
     })
-  }, [layoutResult.nodes, dimmedNodeIds, isStreaming])
+  }, [layoutResult.nodes, dimmedNodeIds, isStreaming, searchMatchNodeIds])
 
   const decoratedEdges = useMemo(() => {
     if (!dimmedEdgeIds || dimmedEdgeIds.size === 0) return layoutResult.edges
@@ -385,6 +415,9 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
     [],
   )
 
+  const backgroundVariant: BackgroundVariant =
+    background === 'grid' ? ('lines' as BackgroundVariant) : ('dots' as BackgroundVariant)
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -396,6 +429,8 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
       onNodeContextMenu={onNodeContextMenu}
       onNodeMouseEnter={onNodeMouseEnter}
       onNodeMouseLeave={onNodeMouseLeave}
+      onEdgeMouseEnter={onEdgeMouseEnter}
+      onEdgeMouseLeave={onEdgeMouseLeave}
       onNodeDragStop={onNodeDragStop}
       onInit={handleInit}
       onDoubleClick={handlePaneDblClick}
@@ -411,7 +446,13 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
       deleteKeyCode={deleteKeyCode}
       noWheelClassName="nowheel"
     >
-      <Background variant={'dots' as BackgroundVariant} gap={16} size={1} />
+      {background !== 'none' && (
+        <Background
+          variant={backgroundVariant}
+          gap={background === 'grid' ? 20 : 16}
+          size={background === 'grid' ? 1 : 1}
+        />
+      )}
       <Controls className="flow-controls" showInteractive />
       <Panel position="top-left">
         <div className="flow-shell-toolbar">
@@ -449,13 +490,12 @@ const FlowShellInner = forwardRef<FlowShellHandle, FlowShellProps>(function Flow
           )}
         </div>
       </Panel>
-      <MiniMap
-        className="flow-minimap"
-        nodeColor={nodeColorFn}
-        nodeStrokeWidth={2}
-        pannable
-        zoomable
-      />
+      {!disableMiniMap && (
+        <FlowMiniMap
+          nodeColor={nodeColorFn}
+          nodeStrokeWidth={2}
+        />
+      )}
     </ReactFlow>
   )
 })

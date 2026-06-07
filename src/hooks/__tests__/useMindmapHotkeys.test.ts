@@ -12,6 +12,9 @@ function buildHandlers(over: Partial<MindmapHotkeyHandlers> = {}): {
   const onZoomOut = vi.fn()
   const onDeleteSelected = vi.fn()
   const onAddChild = vi.fn()
+  const onOpenContextMenu = vi.fn()
+  const onArrowNavigate = vi.fn()
+  const onTabJump = vi.fn()
   const onCancel = vi.fn()
   const onUndo = vi.fn()
   const onRedo = vi.fn()
@@ -22,6 +25,9 @@ function buildHandlers(over: Partial<MindmapHotkeyHandlers> = {}): {
     onZoomOut,
     onDeleteSelected,
     onAddChild,
+    onOpenContextMenu,
+    onArrowNavigate,
+    onTabJump,
     onCancel,
     onUndo,
     onRedo,
@@ -34,6 +40,9 @@ function buildHandlers(over: Partial<MindmapHotkeyHandlers> = {}): {
     onZoomOut,
     onDeleteSelected,
     onAddChild,
+    onOpenContextMenu,
+    onArrowNavigate,
+    onTabJump,
     onCancel,
     onUndo,
     onRedo,
@@ -56,9 +65,6 @@ function dispatchKey(opts: {
     bubbles: true,
     cancelable: true,
   })
-  // happy-dom does not auto-attach target to KeyboardEvent; if the caller
-  // provides one, dispatch on it. Otherwise the default target is the
-  // document body.
   if (opts.target) {
     opts.target.dispatchEvent(event)
   } else {
@@ -128,13 +134,20 @@ describe('useMindmapHotkeys', () => {
     expect(spies.onDeleteSelected).not.toHaveBeenCalled()
   })
 
-  it('Tab fires onAddChild when a node is selected', () => {
+  it('Tab fires onTabJump without shift (not onAddChild)', () => {
     const { handlers, spies } = buildHandlers()
     renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
     const ev = dispatchKey({ key: 'Tab' })
-    expect(spies.onAddChild).toHaveBeenCalledWith('n1')
-    // We also need to prevent default so React Flow doesn't move focus
-    // elsewhere — assert that.
+    expect(spies.onTabJump).toHaveBeenCalledWith('n1', false)
+    expect(spies.onAddChild).not.toHaveBeenCalled()
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  it('Shift+Tab fires onTabJump with shift=true', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
+    const ev = dispatchKey({ key: 'Tab', shiftKey: true })
+    expect(spies.onTabJump).toHaveBeenCalledWith('n1', true)
     expect(ev.defaultPrevented).toBe(true)
   })
 
@@ -175,7 +188,7 @@ describe('useMindmapHotkeys', () => {
     dispatchKey({ key: 'Tab', target: input })
     expect(spies.onAutoArrange).not.toHaveBeenCalled()
     expect(spies.onFocusSelected).not.toHaveBeenCalled()
-    expect(spies.onAddChild).not.toHaveBeenCalled()
+    expect(spies.onTabJump).not.toHaveBeenCalled()
   })
 
   it('hotkeys are skipped when a contentEditable element is focused', () => {
@@ -198,5 +211,57 @@ describe('useMindmapHotkeys', () => {
     unmount()
     dispatchKey({ key: 'r' })
     expect(spies.onAutoArrange).not.toHaveBeenCalled()
+  })
+
+  // ── Stage C additions ──────────────────────────────────────────────
+
+  it('Shift+F10 fires onOpenContextMenu when a node is selected', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
+    const ev = dispatchKey({ key: 'F10', shiftKey: true })
+    expect(spies.onOpenContextMenu).toHaveBeenCalledWith('n1')
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  it('Shift+F10 is a no-op when no node is selected', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: null }))
+    dispatchKey({ key: 'F10', shiftKey: true })
+    expect(spies.onOpenContextMenu).not.toHaveBeenCalled()
+  })
+
+  it('ContextMenu key fires onOpenContextMenu when a node is selected', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
+    dispatchKey({ key: 'ContextMenu' })
+    expect(spies.onOpenContextMenu).toHaveBeenCalledWith('n1')
+  })
+
+  it('arrow keys fire onArrowNavigate with the correct direction', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
+    dispatchKey({ key: 'ArrowUp' })
+    dispatchKey({ key: 'ArrowDown' })
+    dispatchKey({ key: 'ArrowLeft' })
+    dispatchKey({ key: 'ArrowRight' })
+    expect(spies.onArrowNavigate).toHaveBeenCalledTimes(4)
+    expect(spies.onArrowNavigate).toHaveBeenNthCalledWith(1, 'n1', 'up')
+    expect(spies.onArrowNavigate).toHaveBeenNthCalledWith(2, 'n1', 'down')
+    expect(spies.onArrowNavigate).toHaveBeenNthCalledWith(3, 'n1', 'left')
+    expect(spies.onArrowNavigate).toHaveBeenNthCalledWith(4, 'n1', 'right')
+  })
+
+  it('arrow keys are a no-op when no node is selected', () => {
+    const { handlers, spies } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: null }))
+    dispatchKey({ key: 'ArrowUp' })
+    expect(spies.onArrowNavigate).not.toHaveBeenCalled()
+  })
+
+  it('arrow keys preventDefault to stop the browser from scrolling', () => {
+    const { handlers } = buildHandlers()
+    renderHook(() => useMindmapHotkeys({ handlers, selectedNodeId: 'n1' }))
+    const ev = dispatchKey({ key: 'ArrowUp' })
+    expect(ev.defaultPrevented).toBe(true)
   })
 })

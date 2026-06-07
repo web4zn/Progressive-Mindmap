@@ -4,13 +4,15 @@ import { sanitizeHtml } from '@/lib/html-sanitizer'
 import type { FlowNodeData } from './index'
 import { selectNodeIcon } from '@/lib/node-icon'
 
-// Phase 1 fix (Bug 2): the ⤢ glyph is a passive affordance that tells
-// the user "this node is interactive — double-click to expand, ⌘/Ctrl +
-// double-click to edit". It deliberately renders as a `<span>` (not a
-// `<button>`) so clicks pass through to the underlying node handler
-// instead of triggering a separate action. The native `title` provides
-// the OS-level tooltip; the CSS-only `.flow-node-affordance-tooltip`
-// below shows a richer bubble on hover within the canvas.
+/**
+ * Phase 1 fix (Bug 2): the ⤢ glyph is a passive affordance that tells
+ * the user "this node is interactive — double-click to expand, ⌘/Ctrl +
+ * double-click to edit". It deliberately renders as a `<span>` (not a
+ * `<button>`) so clicks pass through to the underlying node handler
+ * instead of triggering a separate action. The native `title` provides
+ * the OS-level tooltip; the CSS-only `.flow-node-affordance-tooltip`
+ * below shows a richer bubble on hover within the canvas.
+ */
 function ExpandAffordance() {
   return (
     <span
@@ -129,16 +131,18 @@ function PatternIcon({ name }: { name: ReturnType<typeof selectNodeIcon> }) {
   }
 }
 
+/**
+ * The 800ms touch long-press fires from the *parent* node wrapper
+ * (React Flow wires the gesture to a single DOM element). The hook
+ * lives in `useLongPress.ts` and is re-exported here as a thin
+ * convenience — keep Fast Refresh happy by NOT exporting new symbols
+ * in the same file as a React component.
+ */
 function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeData }) {
   const hasHtml = data.contentType === 'html' && !!data.content
   const depth = data.depth ?? 0
   const depthClass = depth >= 4 ? 'depth-4' : `depth-${depth}`
   const isExpanded = data.expanded === true
-  // Phase 1 fix (Bug 1): HTML content is now always rendered in full.
-  // The `.flow-node-content-clamp` class is kept as a no-op for
-  // backwards-compat with existing tests, but the `-webkit-line-clamp`
-  // is gone from the CSS so the user sees the whole body, scrolling
-   // inside the node if the body is longer than the computed height.
   const iconName = useMemo(
     () => selectNodeIcon({ pattern: data.pattern, label: data.label }),
     [data.pattern, data.label],
@@ -157,12 +161,14 @@ function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeD
     data.editedByUser ? 'has-user-edit' : '',
     data.isDimmed ? 'dimmed' : '',
     data.isStreaming ? 'streaming' : '',
+    data.isSearchMatch ? 'search-match' : '',
+    data.collapsed ? 'collapsed' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
-    <div className={classes}>
+    <div className={classes} data-node-id={id} data-testid={`flow-node-${id}`}>
       <Handle type="target" position={Position.Left} className="flow-handle" />
       <Handle type="source" position={Position.Right} className="flow-handle" />
 
@@ -193,8 +199,8 @@ function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeD
           {/* Phase 1 fix (Bug 2): the ⤢ affordance always renders so the
               user can discover the double-click interaction. The icon is
               purely visual — it is a `<span>`, not a `<button>`, so the
-              click passes through to the React Flow node double-click
-              handler. CSS hides it on hover for an unobtrusive feel. */}
+              click passes through to the React Flow double-click handler.
+              CSS hides it on hover for an unobtrusive feel. */}
           <ExpandAffordance />
           {data.editedByUser && (
             <span

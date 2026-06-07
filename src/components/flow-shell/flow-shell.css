@@ -703,3 +703,93 @@
     background-position: 50% 0;
   }
 }
+
+/* ── Stage C: collapse animation ──────────────────────────────────────── */
+
+/* When the user clicks the `−` button on a parent node, React Flow
+   removes the child subtrees via `applyNodeChanges` and the collapse
+   feels instant. We use a CSS keyframe to fade + scale the descendants
+   out: 200ms, opacity 1 → 0, scale 1 → 0.95. The same animation is run
+   on insert (`.flow-node.fade-in`) but reversed. This is the only
+   place where we can animate `height` without `auto` → px math because
+   React Flow owns the layout — we animate the *visible* child via
+   opacity + transform, and let dagre relayout on the next tick. */
+@keyframes flow-node-collapse-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes flow-node-collapse-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.flow-node.collapsing-out {
+  animation: flow-node-collapse-out 200ms ease-in forwards;
+  pointer-events: none;
+}
+
+.flow-node.fade-in {
+  animation: flow-node-collapse-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node.collapsing-out,
+  .flow-node.fade-in {
+    animation: none;
+  }
+}
+
+/* The collapse button itself also gets a quick rotation so the
+   user has feedback when they click it. */
+.flow-node-collapse {
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.2s ease;
+}
+.flow-node-collapse:active {
+  transform: scale(0.85);
+}
+
+/* ── Stage C: search-match highlight ──────────────────────────────────── */
+
+.flow-node.search-match {
+  outline: 2px solid var(--flow-pattern, currentColor);
+  outline-offset: 4px;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--flow-pattern) 18%, transparent);
+}
+
+/* ── Stage C: MiniMap viewport rectangle ──────────────────────────────── */
+
+.flow-minimap-wrap {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--flow-card-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--flow-pattern);
+}
+
+.flow-minimap-wrap .flow-minimap {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+.flow-minimap-viewport {
+  display: block;
+}

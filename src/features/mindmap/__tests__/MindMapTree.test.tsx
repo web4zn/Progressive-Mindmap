@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
+import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import MindMapTree from '../MindMapTree'
 
 vi.mock('@/components/flow-shell', () => ({
@@ -35,6 +37,16 @@ function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
   }
 }
 
+/**
+ * Wrapper that owns a single useMindmapHistory() and forwards the
+ * result to MindMapTree. Mirrors the production code path where
+ * MindMapPanel owns the history and MindMapTree receives it as a prop.
+ */
+function TreeHost(props: Omit<React.ComponentProps<typeof MindMapTree>, 'history'>) {
+  const history = useMindmapHistory()
+  return <MindMapTree {...props} history={history} />
+}
+
 describe('MindMapTree', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -42,28 +54,28 @@ describe('MindMapTree', () => {
   })
 
   it('renders empty state', () => {
-    render(<MindMapTree tree={[]} />)
+    render(<TreeHost tree={[]} />)
     expect(screen.getByText('还没有图谱')).toBeDefined()
   })
 
   it('renders loading state', () => {
-    render(<MindMapTree tree={[]} isGenerating={true} />)
+    render(<TreeHost tree={[]} isGenerating={true} />)
     expect(screen.getByText('正在生成思维导图…')).toBeDefined()
   })
 
   it('renders error state with retry', () => {
-    render(<MindMapTree tree={[]} error="生成失败" onRetry={() => {}} />)
+    render(<TreeHost tree={[]} error="生成失败" onRetry={() => {}} />)
     expect(screen.getByText('生成失败')).toBeDefined()
     expect(screen.getByText('重试')).toBeDefined()
   })
 
   it('renders FlowShell when tree has nodes', () => {
-    render(<MindMapTree tree={[makeNode({ id: 'root', label: 'Root' })]} />)
+    render(<TreeHost tree={[makeNode({ id: 'root', label: 'Root' })]} />)
     expect(screen.getByTestId('flow-shell')).toBeDefined()
   })
 
   it('shows streaming indicator', () => {
-    render(<MindMapTree tree={[makeNode({ id: 'root' })]} isStreaming={true} />)
+    render(<TreeHost tree={[makeNode({ id: 'root' })]} isStreaming={true} />)
     expect(screen.getByText('生成中…')).toBeDefined()
   })
 })

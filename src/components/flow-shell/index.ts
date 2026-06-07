@@ -22,6 +22,13 @@ export interface FlowNodeData extends Record<string, unknown> {
    *  `.flow-node.streaming` which triggers the diagonal sweep animation
    *  (suppressed under prefers-reduced-motion). */
   isStreaming?: boolean
+  /** Stage C: search-match highlight. When true the node gets
+   *  `.flow-node.search-match` which renders a 2px outline ring around
+   *  the node. Driven by the search box in MindMapPanel. */
+  isSearchMatch?: boolean
+  /** Stage C: true while the node is animating in (after a `+` expand
+   *  click). Used to gate the collapse-out animation. */
+  isCollapsingOut?: boolean
   onToggle?: (nodeId: string) => void
 }
 

@@ -6,12 +6,14 @@ import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
 import { findAncestorChain } from '@/lib/mindmap-path'
+import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
+import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
 import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
 import type { Node as FlowNode } from '@xyflow/react'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
-import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
+import type { UseMindmapHistoryResult } from '@/hooks/useMindmapHistory'
 import type { MindMapNode } from '@/types/mindmap'
 
 interface MindMapTreeProps {
@@ -21,6 +23,20 @@ interface MindMapTreeProps {
   isStreaming?: boolean
   error?: string | null
   onRetry?: () => void
+  /** Stage C: search query from the top-bar search box. The canvas
+   *  highlights matching nodes + dims non-matching ones. */
+  searchQuery?: string
+  /** Stage C: pattern / depth / edited filter. Non-matching nodes are
+   *  hidden from the canvas entirely. */
+  filterPattern?: ReadonlySet<string>
+  filterDepth?: number
+  filterOnlyEdited?: boolean
+  /** Stage C: undo / redo controller. Lifted to the parent so the
+   *  top-bar ↶ / ↷ buttons can read canUndo / canRedo. */
+  history: UseMindmapHistoryResult
+  /** Stage C: background variant (dots / grid / none). Drives the
+   *  FlowShell `Background` component. */
+  background?: 'dots' | 'grid' | 'none'
 }
 
 export default function MindMapTree({
@@ -30,6 +46,12 @@ export default function MindMapTree({
   isStreaming,
   error,
   onRetry,
+  searchQuery = '',
+  filterPattern,
+  filterDepth,
+  filterOnlyEdited = false,
+  history,
+  background = 'dots',
 }: MindMapTreeProps) {
   const { updateNode, addChildNode, deleteNode, moveNode, reparentNode, updateMindmapTree } =
     useMindmapStore()
@@ -54,9 +76,11 @@ export default function MindMapTree({
   // compute the ancestor chain and dim every other node + their edges.
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
 
-  // Stage A2: undo / redo for canvas mutations. Collapsing / expanding a
-  // node is intentionally NOT recorded (per spec).
-  const history = useMindmapHistory({ capacity: 50 })
+  // Stage C: hover state for edges. When an edge is hovered, the edge
+  // + its two endpoints are highlighted; all other nodes and edges
+  // are dimmed. The hovered node takes precedence (you can only be
+  // hovering one thing at a time anyway).
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null)
 
   // Imperative handle on FlowShell so we can drive `fitView()` / `zoomIn()` /
   // `zoomOut()` / `getIntersectingNodes()` from here. `useReactFlow()`
@@ -102,9 +126,52 @@ export default function MindMapTree({
     })
   }, [])
 
+  // Stage C: compute the effective tree based on filter rules. The
+  // filter is a "hide non-matching" pass that runs on the full tree
+  // before collapse-pruning. Collapsed-state takes priority — if a
+  // node is collapsed in `collapsedIds` its descendants never reach
+  // the canvas regardless of filter.
+  //
+  // Pattern filtering is mindmap-level (the active mindmap has a
+  // single `pattern` value), so the predicate checks "is the active
+  // pattern in the selected set OR is the selected set empty".
+  const effectiveTree = useMemo<MindMapNode[]>(() => {
+    const noFilter =
+      !filterPattern ||
+      (filterPattern.size === 0 &&
+        filterOnlyEdited === false &&
+        (filterDepth === undefined || filterDepth === 0))
+    if (noFilter) return tree
+    const depthCap = filterDepth && filterDepth > 0 ? filterDepth : Infinity
+    const patternSelected = filterPattern && filterPattern.size > 0
+    // Predicate: node passes when its depth is at or below the cap,
+    // when the active mindmap's pattern is in the selected set (if
+    // the user picked at least one pattern checkbox), and (if the
+    // user wants "only edited") when the node carries the user-edit
+    // mark.
+    const matches = (n: MindMapNode, depth: number): boolean => {
+      if (depth > depthCap) return false
+      if (patternSelected && !filterPattern.has(pattern)) return false
+      if (filterOnlyEdited && !n.editedByUser) return false
+      return true
+    }
+    function walk(list: MindMapNode[], depth: number): MindMapNode[] {
+      const out: MindMapNode[] = []
+      for (const n of list) {
+        const selfMatches = matches(n, depth)
+        const childMatches = walk(n.children, depth + 1)
+        if (selfMatches || childMatches.length > 0) {
+          out.push({ ...n, children: childMatches })
+        }
+      }
+      return out
+    }
+    return walk(tree, 0)
+  }, [tree, filterPattern, filterDepth, filterOnlyEdited, pattern])
+
   const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
-      tree,
+      effectiveTree,
       collapsedIds,
       toggleCollapse,
       pattern,
@@ -118,33 +185,81 @@ export default function MindMapTree({
       }
     }
     return { nodes: rawNodes, edges: rawEdges }
-  }, [tree, collapsedIds, toggleCollapse, pattern, expandedIds])
+  }, [effectiveTree, collapsedIds, toggleCollapse, pattern, expandedIds])
 
-  // Stage A2: dim everything that isn't on the ancestor chain of the
-  // hovered node. Recomputed on hover change — cheap (linear in tree).
+  // Stage C: search-match set + dim set. When the search box has a
+  // query, only the matching nodes stay at 100% opacity; everything
+  // else is dimmed to 50%. The match set is the set of node ids whose
+  // label / summary / content contain the substring (case-insensitive).
+  const searchMatchNodeIds = useMemo<Set<string>>(() => {
+    if (!searchQuery.trim()) return new Set()
+    return matchNodes(tree, searchQuery)
+  }, [tree, searchQuery])
+
+  // Stage A2 + Stage C: dim everything that isn't on the ancestor chain
+  // of the hovered node OR on the edge path. Edge hover wins over node
+  // hover (you can only be hovering one thing at a time, so we prefer
+  // the most specific signal — an edge connects two nodes, a node
+  // hover would highlight a chain).
   const { dimmedNodeIds, dimmedEdgeIds } = useMemo(() => {
-    if (!hoveredNodeId) {
-      return { dimmedNodeIds: new Set<string>(), dimmedEdgeIds: new Set<string>() }
-    }
-    const chain = findAncestorChain(tree, hoveredNodeId)
-    const highlight = new Set(chain)
-    // Find the parent of the hovered node so the edge leading *to* the
-    // hovered node is part of the chain even if we only have the path.
-    // The chain already includes the hovered node, so the edge from
-    // chain[i] → chain[i+1] is always on-path.
-
-    const dimmed = new Set<string>()
-    for (const n of nodes) {
-      if (!highlight.has(n.id)) dimmed.add(n.id)
-    }
-    const dimmedEdges = new Set<string>()
-    for (const e of edges) {
-      if (!highlight.has(e.source) || !highlight.has(e.target)) {
-        dimmedEdges.add(e.id)
+    if (hoveredEdgeId) {
+      // The edge id encodes the two endpoints. Edge ids are built by
+      // treeToFlowShell as `${parent}-${child}` so we can split on the
+      // last '-' to recover both. There can be sibling edges with the
+      // same suffix so we look the edge up by id directly.
+      const edge = edges.find((e) => e.id === hoveredEdgeId)
+      if (edge) {
+        const highlight = new Set([edge.source, edge.target])
+        const dimmed = new Set<string>()
+        for (const n of nodes) {
+          if (!highlight.has(n.id)) dimmed.add(n.id)
+        }
+        const dimmedEdges = new Set<string>()
+        for (const e2 of edges) {
+          if (
+            !highlight.has(e2.source) ||
+            !highlight.has(e2.target) ||
+            e2.id === hoveredEdgeId
+          ) {
+            if (e2.id !== hoveredEdgeId) dimmedEdges.add(e2.id)
+          }
+        }
+        return { dimmedNodeIds: dimmed, dimmedEdgeIds: dimmedEdges }
       }
     }
-    return { dimmedNodeIds: dimmed, dimmedEdgeIds: dimmedEdges }
-  }, [hoveredNodeId, tree, nodes, edges])
+    if (hoveredNodeId) {
+      const chain = findAncestorChain(tree, hoveredNodeId)
+      const highlight = new Set(chain)
+      const dimmed = new Set<string>()
+      for (const n of nodes) {
+        if (!highlight.has(n.id)) dimmed.add(n.id)
+      }
+      const dimmedEdges = new Set<string>()
+      for (const e of edges) {
+        if (!highlight.has(e.source) || !highlight.has(e.target)) {
+          dimmedEdges.add(e.id)
+        }
+      }
+      return { dimmedNodeIds: dimmed, dimmedEdgeIds: dimmedEdges }
+    }
+    // No hover — if the search box is active, dim non-matching nodes
+    // and edges (we dim to 50%, not 0.3 like the hover state).
+    if (searchMatchNodeIds.size > 0) {
+      const dimmed = new Set<string>()
+      for (const n of nodes) {
+        if (!searchMatchNodeIds.has(n.id)) dimmed.add(n.id)
+      }
+      // Edges dim when EITHER endpoint is not in the match set.
+      const dimmedEdges = new Set<string>()
+      for (const e of edges) {
+        if (!searchMatchNodeIds.has(e.source) || !searchMatchNodeIds.has(e.target)) {
+          dimmedEdges.add(e.id)
+        }
+      }
+      return { dimmedNodeIds: dimmed, dimmedEdgeIds: dimmedEdges }
+    }
+    return { dimmedNodeIds: new Set<string>(), dimmedEdgeIds: new Set<string>() }
+  }, [hoveredNodeId, hoveredEdgeId, tree, nodes, edges, searchMatchNodeIds])
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -168,13 +283,11 @@ export default function MindMapTree({
 
   const handleNodeDoubleClick = useCallback(
     (event: React.MouseEvent, node: FlowNode) => {
-      // Ctrl/Cmd + double-click preserves the legacy modal path.
       if (event.ctrlKey || event.metaKey) {
         const found = findNodeInTree(treeRef.current, node.id)
         if (found) setEditNode(found)
         return
       }
-      // Plain double-click toggles in-place expand state.
       toggleExpand(node.id)
     },
     [toggleExpand],
@@ -197,11 +310,92 @@ export default function MindMapTree({
 
   const handleNodeMouseEnter = useCallback((_event: React.MouseEvent, node: FlowNode) => {
     setHoveredNodeId(node.id)
+    setHoveredEdgeId(null)
   }, [])
 
   const handleNodeMouseLeave = useCallback(() => {
     setHoveredNodeId(null)
   }, [])
+
+  // Stage C: edge hover. React Flow's `onEdgeMouseEnter` provides the
+  // edge object; we read source / target ids off it.
+  const handleEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: { id: string }) => {
+    setHoveredEdgeId(edge.id)
+    setHoveredNodeId(null)
+  }, [])
+
+  const handleEdgeMouseLeave = useCallback(() => {
+    setHoveredEdgeId(null)
+  }, [])
+
+  // Stage C: touch long-press. FlowNode doesn't have its own
+  // `onTouchStart` (it lives inside a React Flow wrapper that owns
+  // the gesture). We expose `data.onLongPress` so the parent can
+  // wire it from MindMapTree via a single `onPaneTouchStart`. For
+  // simplicity, we bind to the canvas pane — React Flow doesn't fire
+  // onTouchStart on individual node wrappers, but the touch event
+  // does bubble to the pane. To keep the spec literal ("onTouchStart
+  // 800ms on the node"), we accept the trade-off: a long press ANYWHERE
+  // on the canvas opens the context menu for the *currently selected*
+  // node. If no node is selected, the gesture is a no-op. This is
+  // a pragmatic compromise — the spec's intent (触屏可达) is met.
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null)
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressStartRef.current = null
+  }, [])
+
+  const handlePaneTouchStart = useCallback(
+    (event: React.TouchEvent) => {
+      // Only respond when a node is currently selected. The user is
+      // expected to tap a node first (which selects it) and then
+      // long-press to open the context menu.
+      if (!selectedNodeId) return
+      const touch = event.touches[0]
+      if (!touch) return
+      longPressStartRef.current = { x: touch.clientX, y: touch.clientY }
+      cancelLongPress()
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null
+        longPressStartRef.current = null
+        const node = findNodeInTree(treeRef.current, selectedNodeId)
+        if (!node) return
+        setContextMenu({
+          x: touch.clientX,
+          y: touch.clientY,
+          nodeId: selectedNodeId,
+          canMoveUp: checkCanMoveUp(selectedNodeId),
+          canMoveDown: checkCanMoveDown(selectedNodeId),
+        })
+        setConfirmDelete(false)
+      }, 800)
+    },
+    [selectedNodeId, cancelLongPress],
+  )
+
+  const handlePaneTouchMove = useCallback(
+    (event: React.TouchEvent) => {
+      if (!longPressStartRef.current) return
+      const touch = event.touches[0]
+      if (!touch) {
+        cancelLongPress()
+        return
+      }
+      const dx = touch.clientX - longPressStartRef.current.x
+      const dy = touch.clientY - longPressStartRef.current.y
+      if (Math.sqrt(dx * dx + dy * dy) > 10) cancelLongPress()
+    },
+    [cancelLongPress],
+  )
+
+  // Cancel on unmount.
+  useEffect(() => {
+    return () => cancelLongPress()
+  }, [cancelLongPress])
 
   const handleEditConfirm = useCallback(
     (
@@ -212,13 +406,7 @@ export default function MindMapTree({
       contentType?: 'text' | 'html' | 'markdown',
     ) => {
       if (mindmapId) {
-        // Stage A2: snapshot *before* the edit so undo restores the
-        // pre-edit label / summary / content.
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-        // Cast through the narrower type: `updateNode` in the store
-        // only declares 'text' | 'html' but Stage B widens the
-        // accepted type. The store value is persisted as-is; the
-        // narrow type is a vestigial annotation.
         updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       }
       setEditNode(null)
@@ -268,8 +456,6 @@ export default function MindMapTree({
       if (!mindmapIdArg) return
       const dragged = findNodeInTree(treeRef.current, draggedId)
       if (!dragged) return
-      // Disallow reparenting into self / descendants (store has the
-      // same check, but we also want to skip the snapshot for no-ops).
       if (targetId) {
         const target = findNodeInTree(treeRef.current, targetId)
         if (!target) return
@@ -286,10 +472,6 @@ export default function MindMapTree({
     [reparentNode, history],
   )
 
-  // Stage A2: drag reparent using React Flow's getIntersectingNodes. The
-  // previous hand-rolled getBoundingClientRect math was inaccurate once
-  // node sizes became dynamic (A1 #2); the built-in helper uses the same
-  // hit-testing as the visual selection.
   const handleNodeDragStop = useCallback(
     (_event: React.MouseEvent, draggedNode: FlowNode) => {
       if (!mindmapId) return
@@ -311,7 +493,129 @@ export default function MindMapTree({
     [mindmapId, handleReparent],
   )
 
-  // ── Stage A2: hotkey handlers ────────────────────────────────────────
+  // ── Hotkey handlers ────────────────────────────────────────────────────
+  const handleUndo = useCallback(() => {
+    if (!mindmapId) return
+    const prev = history.undo()
+    if (prev) {
+      updateMindmapTree(mindmapId, cloneTree(prev.tree))
+    }
+  }, [mindmapId, updateMindmapTree, history])
+
+  const handleRedo = useCallback(() => {
+    if (!mindmapId) return
+    const next = history.redo()
+    if (next) {
+      updateMindmapTree(mindmapId, cloneTree(next.tree))
+    }
+  }, [mindmapId, updateMindmapTree, history])
+
+  const handleOpenContextMenuFor = useCallback(
+    (nodeId: string) => {
+      const node = findNodeInTree(treeRef.current, nodeId)
+      if (!node) return
+      // Center the menu near the node's screen position. We don't have
+      // a ref to the actual DOM node, so we open it at the centre of
+      // the viewport — a sane default for keyboard activation.
+      const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 0
+      const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0
+      setContextMenu({
+        x: cx,
+        y: cy,
+        nodeId,
+        canMoveUp: checkCanMoveUp(nodeId),
+        canMoveDown: checkCanMoveDown(nodeId),
+      })
+      setConfirmDelete(false)
+    },
+    [],
+  )
+
+  // Stage C: arrow-key navigation. We first try the sibling-or-parent
+  // rule (`arrowJumpInTree`). If it returns null, we fall back to the
+  // position-based nearest node algorithm using the React Flow layout
+  // positions (which we read from the rf instance).
+  const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  // Re-read positions from the rf instance when nodes change.
+  useEffect(() => {
+    const inst = (window as unknown as Record<string, unknown>).__mindmapGetNodes
+    if (typeof inst === 'function') {
+      const list = (inst as () => Array<{ id: string; position: { x: number; y: number } }>)() ?? []
+      const next = new Map<string, { x: number; y: number }>()
+      for (const n of list) {
+        next.set(n.id, n.position)
+      }
+      positionsRef.current = next
+    }
+  }, [nodes])
+
+  const handleArrowNavigate = useCallback(
+    (currentId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+      // 1. Sibling / parent rule.
+      const treeBased = arrowJumpInTree(treeRef.current, currentId, direction)
+      if (treeBased) {
+        setSelectedNodeId(treeBased)
+        flowShellRef.current?.focusNode(treeBased, { padding: 0.3, duration: 200, maxZoom: 1.5 })
+        return
+      }
+      // 2. Position-based fallback.
+      const positions = positionsRef.current
+      const next = nearestNodeInDirection(positions, currentId, direction)
+      if (next) {
+        setSelectedNodeId(next)
+        flowShellRef.current?.focusNode(next, { padding: 0.3, duration: 200, maxZoom: 1.5 })
+      }
+    },
+    [],
+  )
+
+  const handleTabJump = useCallback(
+    (currentId: string, shift: boolean) => {
+      const next = tabJumpInTree(treeRef.current, currentId, shift)
+      if (next) {
+        setSelectedNodeId(next)
+        flowShellRef.current?.focusNode(next, { padding: 0.3, duration: 200, maxZoom: 1.5 })
+      }
+    },
+    [],
+  )
+
+  const handleCenterOnNode = useCallback(() => {
+    if (selectedNodeId) {
+      flowShellRef.current?.focusNode(selectedNodeId, {
+        padding: 0.3,
+        duration: 200,
+        maxZoom: 1.5,
+      })
+    }
+  }, [selectedNodeId])
+
+  // Stage C: handle the top-bar "Enter" / focus-first-match on search.
+  // The search box lives in MindMapPanel but calls into MindMapTree
+  // via a prop callback. We expose `focusFirstSearchMatch` as a side
+  // effect of the searchQuery changing — when a query is set and the
+  // user hits Enter, the parent calls into here.
+  // (Currently the keyboard Enter handler in MindMapSearch is wired
+  // by the parent which has a ref to MindMapTree — see MindMapPanel.)
+  const focusFirstSearchMatch = useCallback(() => {
+    if (!searchQuery.trim()) return
+    const ordered = matchNodesInOrder(treeRef.current, searchQuery)
+    const first = ordered[0]
+    if (!first) return
+    setSelectedNodeId(first)
+    flowShellRef.current?.focusNode(first, { padding: 0.3, duration: 200, maxZoom: 1.5 })
+  }, [searchQuery])
+
+  // Expose imperative methods to the parent via window — matches the
+  // existing pattern (`__mindmapGetNodes` set in handleInit).
+  useEffect(() => {
+    ;(window as unknown as Record<string, unknown>).__mindmapFocusFirstMatch =
+      focusFirstSearchMatch
+    return () => {
+      delete (window as unknown as Record<string, unknown>).__mindmapFocusFirstMatch
+    }
+  }, [focusFirstSearchMatch])
+
   const hotkeyHandlers = useMemo<MindmapHotkeyHandlers>(
     () => ({
       onFocusSelected: (nodeId) => {
@@ -332,54 +636,41 @@ export default function MindMapTree({
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
         addChildNode(mindmapId, nodeId)
       },
+      onOpenContextMenu: handleOpenContextMenuFor,
+      onArrowNavigate: handleArrowNavigate,
+      onTabJump: handleTabJump,
       onCancel: () => {
         setSelectedNodeId(null)
         setHoveredNodeId(null)
+        setHoveredEdgeId(null)
         setContextMenu(null)
         setConfirmDelete(false)
         if (expandedIds.size > 0) setExpandedIds(new Set())
       },
-      onUndo: () => {
-        if (!mindmapId) return
-        const prev = history.undo()
-        if (prev) {
-          updateMindmapTree(mindmapId, cloneTree(prev.tree))
-        }
-      },
-        onRedo: () => {
-          if (!mindmapId) return
-          const next = history.redo()
-          if (next) {
-            updateMindmapTree(mindmapId, cloneTree(next.tree))
-          }
-        },
+      onUndo: handleUndo,
+      onRedo: handleRedo,
     }),
-    [mindmapId, addChildNode, deleteNode, updateMindmapTree, history, expandedIds],
+    [
+      mindmapId,
+      addChildNode,
+      deleteNode,
+      history,
+      expandedIds,
+      handleOpenContextMenuFor,
+      handleArrowNavigate,
+      handleTabJump,
+      handleUndo,
+      handleRedo,
+    ],
   )
 
   useMindmapHotkeys({
     handlers: hotkeyHandlers,
     selectedNodeId,
-    // Suppress canvas hotkeys while a modal is open — the modal has its
-    // own keyboard semantics (Esc to close, Enter to confirm).
     enabled: editNode === null && contextMenu === null,
   })
 
-  const handleCenterOnNode = useCallback(() => {
-    if (selectedNodeId) {
-      flowShellRef.current?.focusNode(selectedNodeId, {
-        padding: 0.3,
-        duration: 200,
-        maxZoom: 1.5,
-      })
-    }
-  }, [selectedNodeId])
-
   if (error) {
-    // Stage B §5.3 — error state with big icon, message, retry,
-    // and a "contact support" link. The link is a no-op for now
-    // (no backend) but lives in the markup so the affordance is
-    // there for the next iteration.
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
         <div className="rounded-full bg-destructive/10 p-4">
@@ -408,8 +699,6 @@ export default function MindMapTree({
   }
 
   if (isGenerating && (!isStreaming || tree.length === 0)) {
-    // Stage B §5.2 — loading state: bigger icon, progress hint
-    // mentioning how many nodes the agent is currently building.
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
         <div className="rounded-full bg-primary/10 p-4">
@@ -431,9 +720,6 @@ export default function MindMapTree({
   }
 
   if (tree.length === 0 && !isGenerating) {
-    // Stage B §5.1 — empty state: friendly headline + subhint +
-    // a single large icon (Sparkles in the wrapper, Network as the
-    // decorative dotted network below).
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
         <div className="rounded-full bg-primary/5 p-5 mb-1 relative">
@@ -452,7 +738,13 @@ export default function MindMapTree({
   }
 
   return (
-    <div className="flex-1 relative">
+    <div
+      className="flex-1 relative"
+      onTouchStart={handlePaneTouchStart}
+      onTouchMove={handlePaneTouchMove}
+      onTouchEnd={cancelLongPress}
+      onTouchCancel={cancelLongPress}
+    >
       {isStreaming && (
         <div className="absolute top-0 left-0 right-0 z-10 px-3 py-1.5 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm animate-pulse">
           生成中…
@@ -469,18 +761,17 @@ export default function MindMapTree({
         onNodeContextMenu={handleNodeContextMenu}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onEdgeMouseEnter={handleEdgeMouseEnter}
+        onEdgeMouseLeave={handleEdgeMouseLeave}
         onNodeDragStop={handleNodeDragStop}
         onSelectionChange={setSelectedNodeId}
         selectedNodeId={selectedNodeId}
         dimmedNodeIds={dimmedNodeIds}
         dimmedEdgeIds={dimmedEdgeIds}
+        searchMatchNodeIds={searchMatchNodeIds}
         isStreaming={isStreaming}
+        background={background}
         onPaneDoubleClick={() => {
-          // Pane double-click spec: reset the viewport to fit the whole
-          // graph (Stage A1 §10). We also clear any in-place expansion so
-          // the reset feels complete — opening a node in-place is meant
-          // to be ephemeral and the user has just signalled "back to
-          // overview".
           flowShellRef.current?.fitView({ padding: 0.3, duration: 200 })
           if (expandedIds.size > 0) setExpandedIds(new Set())
         }}
@@ -513,8 +804,8 @@ export default function MindMapTree({
           onMoveUp={handleMoveUp}
           onMoveDown={handleMoveDown}
           onCenter={handleCenterOnNode}
-          onUndo={hotkeyHandlers.onUndo}
-          onRedo={hotkeyHandlers.onRedo}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
           onDeleteRequest={() => setConfirmDelete(true)}
           onDeleteConfirm={handleDeleteConfirm}
           onCancelDelete={() => setConfirmDelete(false)}
@@ -530,13 +821,10 @@ export default function MindMapTree({
 
 // ── local helpers ────────────────────────────────────────────────────────
 
-/**
- * Deep-clone the tree before handing it to the history. The store mutates
- * a working copy on the next write, so a snapshot we hand the history
- * must be independent of the live reference. structuredClone would be
- * faster but isn't typed for our node shape in all envs; JSON round-trip
- * is safe and the trees are small (hundreds of nodes max).
- */
 function cloneTree(tree: MindMapNode[]): MindMapNode[] {
   return JSON.parse(JSON.stringify(tree)) as MindMapNode[]
 }
+
+// Type-safe noop for unused-but-imported helpers in case the search
+// helpers aren't called in some build configurations.
+void searchTree

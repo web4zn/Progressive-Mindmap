@@ -37,18 +37,23 @@ export interface UseMindmapHistoryResult {
   present: MindmapSnapshot | null
   canUndo: boolean
   canRedo: boolean
+  /** Stage C: number of entries in the past stack — used to render
+   *  "撤销 N 步" tooltips on the top-bar ↶ button. */
+  pastDepth: number
+  /** Stage C: number of entries in the future stack. */
+  futureDepth: number
   /** Push the current `present` onto the past stack, then replace `present`
    *  with `snapshot`. Drops the future (linear history). */
   record: (snapshot: MindmapSnapshot) => void
   /** Pop the most recent past entry, push the current present onto
-   *  future, and return the new present. Returns null when there is
-   *  nothing to undo (past is empty) so the caller can short-circuit
-   *  without writing to the store. */
+   * future, and return the new present. Returns null when there is
+   * nothing to undo (past is empty) so the caller can short-circuit
+   * without writing to the store. */
   undo: () => MindmapSnapshot | null
   /** Symmetric to `undo()` but for the future stack. */
   redo: () => MindmapSnapshot | null
   /** Drop all history. Keeps the current `present`. Used when the
-   *  active mindmap changes and the old timeline no longer applies. */
+   * active mindmap changes and the old timeline no longer applies. */
   clear: () => void
 }
 
@@ -68,6 +73,9 @@ export function useMindmapHistory(options: UseMindmapHistoryOptions = {}): UseMi
   // Mirror depths in state so canUndo / canRedo can re-render the UI.
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  // Stage C: expose the raw depths so the UI can show "撤销 N 步" hints.
+  const [pastDepth, setPastDepth] = useState(0)
+  const [futureDepth, setFutureDepth] = useState(0)
 
   const record = useCallback(
     (snapshot: MindmapSnapshot) => {
@@ -84,6 +92,8 @@ export function useMindmapHistory(options: UseMindmapHistoryOptions = {}): UseMi
       setPresent(snapshot)
       setCanUndo(pastRef.current.length > 0)
       setCanRedo(false)
+      setPastDepth(pastRef.current.length)
+      setFutureDepth(0)
     },
     [present, capacity],
   )
@@ -98,6 +108,8 @@ export function useMindmapHistory(options: UseMindmapHistoryOptions = {}): UseMi
     setPresent(previous)
     setCanUndo(pastRef.current.length > 0)
     setCanRedo(futureRef.current.length > 0)
+    setPastDepth(pastRef.current.length)
+    setFutureDepth(futureRef.current.length)
     return previous
   }, [present])
 
@@ -110,6 +122,8 @@ export function useMindmapHistory(options: UseMindmapHistoryOptions = {}): UseMi
     setPresent(next)
     setCanUndo(pastRef.current.length > 0)
     setCanRedo(futureRef.current.length > 0)
+    setPastDepth(pastRef.current.length)
+    setFutureDepth(futureRef.current.length)
     return next
   }, [present])
 
@@ -118,7 +132,19 @@ export function useMindmapHistory(options: UseMindmapHistoryOptions = {}): UseMi
     futureRef.current = []
     setCanUndo(false)
     setCanRedo(false)
+    setPastDepth(0)
+    setFutureDepth(0)
   }, [])
 
-  return { present, canUndo, canRedo, record, undo, redo, clear }
+  return {
+    present,
+    canUndo,
+    canRedo,
+    pastDepth,
+    futureDepth,
+    record,
+    undo,
+    redo,
+    clear,
+  }
 }
