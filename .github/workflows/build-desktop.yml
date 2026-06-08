@@ -1,0 +1,115 @@
+name: Build Desktop
+
+on:
+  push:
+    branches: [opencode]
+  pull_request:
+    branches: [opencode]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-mac:
+    name: Build macOS (dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build desktop bundle
+        run: npm run build:mac
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: progressive-mindmap-mac
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  build-win:
+    name: Build Windows (nsis)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build desktop bundle
+        run: npm run build:win
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: progressive-mindmap-win
+          path: |
+            release/**/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  build-linux:
+    name: Build Linux (AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxss1 libasound2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build desktop bundle
+        run: npm run build:linux
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: progressive-mindmap-linux
+          path: |
+            release/**/*.AppImage
+            release/**/*.zip
+          if-no-files-found: error
+          retention-days: 14

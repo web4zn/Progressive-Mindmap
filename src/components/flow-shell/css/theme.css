@@ -1,0 +1,63 @@
+/* Stage D — FlowShell theme + pattern tokens.
+ *
+ * This file is the *only* place where `[data-theme=...]` and
+ * `[data-pattern=...]` rules live. The split keeps the theme /
+ * pattern decisions in one file so a future colour-palette change
+ * is a single-file diff.
+ *
+ * The `--flow-pattern` variable is the *resolved* pattern colour.
+ * Pattern-specific rules below set it; everything else in the
+ * FlowShell (edges, handles, accents) consumes `var(--flow-pattern)`.
+ *
+ * All durations come from the global tokens in `src/index.css`
+ * (`--duration-fast` / `--duration-base` / `--duration-slow`).
+ */
+
+[data-theme='light'] {
+  --flow-bg: #f8fafc;
+  --flow-card-bg: rgba(255, 255, 255, 0.92);
+  --flow-card-bg-hover: rgba(255, 255, 255, 1);
+  --flow-card-border: rgba(15, 23, 42, 0.08);
+  --flow-card-border-strong: rgba(15, 23, 42, 0.16);
+  --flow-text: #1e293b;
+  --flow-text-muted: #64748b;
+  --flow-accent: #3b82f6;
+  --flow-ring: rgba(59, 130, 246, 0.18);
+  --flow-shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.08), inset 0 0 0 0.5px rgba(15, 23, 42, 0.02);
+  --flow-shadow-hover: 0 6px 18px rgba(15, 23, 42, 0.12);
+  --flow-shadow-selected: 0 8px 24px rgba(15, 23, 42, 0.18), inset 0 0 0 0.5px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme='dark'] {
+  --flow-bg: #0f1117;
+  --flow-card-bg: rgba(255, 255, 255, 0.05);
+  --flow-card-bg-hover: rgba(255, 255, 255, 0.08);
+  --flow-card-border: rgba(255, 255, 255, 0.1);
+  --flow-card-border-strong: rgba(255, 255, 255, 0.18);
+  --flow-text: #e5e7eb;
+  --flow-text-muted: #9ca3af;
+  --flow-accent: #3b82f6;
+  --flow-ring: rgba(59, 130, 246, 0.3);
+  --flow-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --flow-shadow-hover: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --flow-shadow-selected: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+
+/* Pattern colors — on shell wrapper so edges can inherit.
+ *
+ * The pattern attribute is set from the React `pattern` prop
+ * (Stage D — was hardcoded to "auto" before). The colours mirror
+ * the `--flow-pattern-*` tokens in `index.css` so a future palette
+ * overhaul only has to update one place per layer. */
+.flow-shell[data-pattern='auto'] {
+  --flow-pattern: var(--flow-pattern-auto);
+}
+.flow-shell[data-pattern='5w1h'] {
+  --flow-pattern: var(--flow-pattern-5w1h);
+}
+.flow-shell[data-pattern='tech'] {
+  --flow-pattern: var(--flow-pattern-tech);
+}
+.flow-shell[data-pattern='pros-cons'] {
+  --flow-pattern: var(--flow-pattern-pros-cons);
+}

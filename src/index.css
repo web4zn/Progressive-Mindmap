@@ -52,6 +52,18 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* Stage D — animation / motion tokens. Referenced from
+     flow-shell.css and any future component. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Stage D — pattern accent palette (referenced by
+     [data-pattern='...'] rules in flow-shell/css/theme.css). */
+  --flow-pattern-auto: #3b82f6;
+  --flow-pattern-5w1h: #22c55e;
+  --flow-pattern-tech: #8b5cf6;
+  --flow-pattern-pros-cons: #f59e0b;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -202,6 +214,95 @@
     animation: none;
   }
   .streaming-indicator span {
+    animation: none;
+  }
+  /* Stage D — zero out all duration tokens so any animation that
+     references `var(--duration-*)` collapses to instant. */
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}
+
+/* Stage D — first-paint dark. Mirrors the `.dark` block above so
+   users on a dark-OS who haven't yet toggled anything get dark
+   mode without a flash. The `useTheme` hook reads / writes the
+   `.dark` class and the `[data-theme]` attribute from React; this
+   rule is purely a CSS fallback for the very first paint. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
+}
+
+/* ── Stage C: mindmap context menu animation ──────────────────────────── */
+
+@keyframes mindmap-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mindmap-context-menu {
+  animation: mindmap-menu-in 150ms ease-out;
+  transform-origin: top left;
+}
+
+@keyframes mindmap-menu-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mindmap-context-confirm {
+  background: color-mix(in srgb, var(--destructive) 5%, transparent);
+  animation: mindmap-menu-confirm-in 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mindmap-context-menu,
+  .mindmap-context-confirm {
     animation: none;
   }
 }

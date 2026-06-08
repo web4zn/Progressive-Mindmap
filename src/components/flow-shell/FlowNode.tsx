@@ -1,66 +1,30 @@
-import { memo, useMemo } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { sanitizeHtml } from '@/lib/html-sanitizer'
-import type { FlowNodeData } from './index'
+/**
+ * FlowNode — compatibility shim (mindmap-shell-v2, task 3).
+ *
+ * The v1 implementation was a single 230-line file. v2 splits it
+ * into:
+ *
+ *   - `BaseNode`        — shared header / handles / footer wrapper
+ *   - `RectCardNode`    — the default shape
+ *   - `RoundedChipNode` — short-label pill
+ *   - `IconCircleNode`  — circular badge
+ *   - `StadiumNode`     — leaf pill
+ *
+ * The renderer (`FlowShell`, task 4) reads from
+ * `@/components/flow-shell/nodes` to pick the right shape per
+ * node. For now we keep the named export `FlowNode` as an alias
+ * for `RectCardNode` so existing call sites keep compiling.
+ *
+ * Mark this file as deprecated — `@deprecated` is informational;
+ * the alias prevents breakage during the staged rollout.
+ *
+ * @deprecated import from `@/components/flow-shell/nodes` instead.
+ */
+import RectCardNode from './nodes/RectCardNode'
 
-function FlowNodeComponent({ id, data, selected }: NodeProps & { data: FlowNodeData }) {
-  const hasHtml = data.contentType === 'html' && data.content
-  const depth = data.depth ?? 0
-  const depthClass = depth >= 4 ? 'depth-4' : `depth-${depth}`
+/**
+ * @deprecated use `RectCardNode` from `@/components/flow-shell/nodes`.
+ */
+const FlowNode = RectCardNode
 
-  const safeHtml = useMemo(
-    () => (hasHtml ? { __html: sanitizeHtml(data.content!) } : undefined),
-    [data.content, hasHtml],
-  )
-
-  return (
-    <div className={`flow-node${selected ? ' selected' : ''}`}>
-      <Handle type="target" position={Position.Left} className="flow-handle" />
-      <Handle type="source" position={Position.Right} className="flow-handle" />
-
-      <div className={`flow-node-accent ${depthClass}`} />
-
-      <div className="flow-node-header">
-        {data.hasChildren && (
-          <button
-            className="flow-node-collapse nodrag"
-            onClick={(e) => {
-              e.stopPropagation()
-              data.onToggle?.(id)
-            }}
-            title={data.collapsed ? '展开' : '折叠'}
-          >
-            {data.collapsed ? '+' : '−'}
-          </button>
-        )}
-        {!data.hasChildren && <span style={{ width: '1.25rem', flexShrink: 0 }} />}
-
-        <span className="flow-node-label">{data.label}</span>
-
-        <span className="flow-node-meta">
-          {data.editedByUser && (
-            <svg
-              className="flow-node-edit-mark"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-            </svg>
-          )}
-        </span>
-      </div>
-
-      {hasHtml ? (
-        <div className="flow-node-content nowheel" dangerouslySetInnerHTML={safeHtml} />
-      ) : data.summary ? (
-        <div className="flow-node-summary">{data.summary}</div>
-      ) : null}
-    </div>
-  )
-}
-
-export default memo(FlowNodeComponent)
+export default FlowNode

@@ -3,6 +3,9 @@ import DOMPurify from 'dompurify'
 /** DOMPurify 配置：白名单标签和属性，与 system-prompt 中的允许列表一致 */
 const SANITIZE_CONFIG = {
   ALLOWED_TAGS: [
+    // Stage B added 'h1' so the new H1 toolbar button survives the
+    // sanitizer round-trip when the user toggles contentType.
+    'h1',
     'h2',
     'h3',
     'h4',
@@ -22,12 +25,13 @@ const SANITIZE_CONFIG = {
     'tr',
     'th',
     'td',
+    'img',
     'br',
     'hr',
     'span',
     'div',
   ],
-  ALLOWED_ATTR: ['href', 'title', 'class'],
+  ALLOWED_ATTR: ['href', 'title', 'class', 'src', 'alt'],
 }
 
 /**

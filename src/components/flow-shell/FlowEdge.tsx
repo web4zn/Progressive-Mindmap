@@ -1,19 +1,22 @@
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react'
-import { memo } from 'react'
+/**
+ * FlowEdge — compatibility shim (mindmap-shell-v2, task 3).
+ *
+ * v1 was a single 20-line file. v2 splits it into three strategy
+ * components (`SmoothstepEdge` / `BezierEdge` / `StraightEdge`)
+ * registered with the edge registry. The renderer (`FlowShell`,
+ * task 4) reads from `@/components/flow-shell/edges` to pick the
+ * right strategy per edge.
+ *
+ * This shim keeps the `FlowEdge` named export as an alias for
+ * `SmoothstepEdge` so existing call sites keep compiling.
+ *
+ * @deprecated import from `@/components/flow-shell/edges` instead.
+ */
+import SmoothstepEdge from './edges/SmoothstepEdge'
 
-function FlowEdgeComponent(props: EdgeProps & { data?: { color?: string } }) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  })
-  const color = data?.color ?? 'var(--flow-pattern)'
+/**
+ * @deprecated use `SmoothstepEdge` from `@/components/flow-shell/edges`.
+ */
+const FlowEdge = SmoothstepEdge
 
-  return <BaseEdge id={id} path={edgePath} style={{ stroke: color, strokeWidth: 1.5 }} />
-}
-
-export default memo(FlowEdgeComponent)
+export default FlowEdge

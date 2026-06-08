@@ -130,6 +130,72 @@ npx tsc --noEmit      # Type check
 npx vitest --watch    # Watch mode
 ```
 
+## 🖥️ Desktop Edition (Electron)
+
+> **Status:** Phase 0 — desktop shell only. The React UI is identical to the
+> web build; no desktop-only features are exposed yet. Phase 1 will add
+> native dialogs, system notifications, file persistence, auto-update, and
+> tray controls on top of the IPC surface wired in Phase 0.
+
+### Dev mode (windowed)
+
+```bash
+npm run dev           # electron-vite dev — starts main + renderer with HMR
+```
+
+The Electron window opens automatically with DevTools attached. The
+React renderer is served by Vite at `http://localhost:5173` and
+reloaded on save.
+
+### Production build
+
+```bash
+npm run build                # typecheck + electron-vite build → out/{main,preload,renderer}
+npm run preview              # run the production build locally
+```
+
+### Platform installers
+
+```bash
+npm run build:mac            # → release/${version}/*.dmg   (macOS only)
+npm run build:win            # → release/${version}/*.exe   (NSIS installer)
+npm run build:linux          # → release/${version}/*.AppImage
+```
+
+`electron-builder` reads its config from the `build` field in
+`package.json`. The `buildResources` directory (`build/`) holds the
+application icon and macOS entitlements.
+
+### Platform requirements
+
+- **macOS** — building a `.dmg` requires macOS 10.15+ with Xcode CLT
+  installed. Code signing and notarisation are **not yet configured**
+  (Phase 1). For local development the unsigned builds run fine after
+  the first-launch "right-click → Open" gatekeeper dance.
+- **Windows** — building the NSIS installer needs Windows 10+ with
+  PowerShell 5.x. Code signing is **not yet configured** (Phase 1).
+- **Linux** — the AppImage target runs on most modern distros. On
+  Ubuntu you may need `libnss3`, `libasound2`, and a few X libraries;
+  the `build-desktop.yml` CI installs them automatically.
+
+### Architecture overview
+
+```
+electron-vite  ──► out/main/index.js          (main process, ESM)
+              ──► out/preload/index.js         (preload, CJS, sandboxed)
+              ──► out/renderer/index.html      (React app, identical to web build)
+
+main  ── ipcMain.handle ──┐
+                          ├──► preload ──► contextBridge ──► window.api
+preload ── ipcRenderer ───┘
+```
+
+The renderer **never** has direct Node access (`nodeIntegration: false`,
+`contextIsolation: true`, `sandbox: true`, `webSecurity: true`). All
+privileged operations go through the typed `window.api` surface —
+see `electron/preload/index.ts` and `src/types/electron.d.ts` for the
+full contract.
+
 ## 🗺️ Roadmap
 
 - [x] LLM chat with multi-provider & streaming
@@ -138,14 +204,30 @@ npx vitest --watch    # Watch mode
 - [x] Corpus curation & source tracking
 - [x] React Flow canvas with dagre layout
 - [x] IndexedDB persistence
-- [ ] Real-time streaming mindmap preview during generation
-- [ ] PNG / SVG / Markdown export
-- [ ] Keyboard shortcuts
-- [ ] Undo / Redo
-- [ ] Rich content in nodes (images, links, notes)
-- [ ] Plugin architecture
+- [x] Real-time streaming mindmap preview during generation
+- [x] PNG / SVG / Markdown export
+- [x] Keyboard shortcuts
+- [x] Undo / Redo
+- [x] Rich content in nodes (markdown, html)
+- [x] Theme system (light / dark / system)
 - [ ] Multiple layout types (org chart, fishbone, timeline)
-- [ ] Theme system
+- [ ] Plugin architecture
+
+## 🎨 Theme
+
+The app supports three theme modes:
+
+- **light** — default; classic neutral palette
+- **dark** — uses the shadcn `oklch` dark palette + a darker FlowShell
+  surface (see `[data-theme='dark']` in
+  `src/components/flow-shell/css/theme.css`)
+- **system** — follows `prefers-color-scheme` on first load; once
+  the user toggles manually, their choice wins
+
+The active mode persists in `localStorage` under
+`progressive-mindmap:theme`. Toggle the theme from the brain-panel
+toolbar (the ☀ / 🌙 button next to the background switcher; data-testid
+`mindmap-theme-toggle`).
 
 ## 🤝 Contributing
 

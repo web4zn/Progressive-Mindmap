@@ -76,6 +76,43 @@ describe('mindmapStore', () => {
     expect(state.mindmaps[0]!.title).toBe('New Title')
   })
 
+  it('updates mindmap via partial setter (title)', () => {
+    const { addMindmap, updateMindmap } = useMindmapStore.getState()
+    const mm = addMindmap('Old')
+    updateMindmap(mm.id, { title: 'New' })
+    const state = useMindmapStore.getState()
+    expect(state.mindmaps[0]!.title).toBe('New')
+  })
+
+  it('updates mindmap via partial setter (pattern)', () => {
+    const { addMindmap, updateMindmap } = useMindmapStore.getState()
+    const mm = addMindmap('Test')
+    updateMindmap(mm.id, { pattern: 'tech' })
+    const state = useMindmapStore.getState()
+    expect(state.mindmaps[0]!.pattern).toBe('tech')
+  })
+
+  it('updateMindmap does nothing for unknown id', () => {
+    const { addMindmap, updateMindmap } = useMindmapStore.getState()
+    addMindmap('Test')
+    updateMindmap('not-real', { title: 'Whatever' })
+    const state = useMindmapStore.getState()
+    expect(state.mindmaps[0]!.title).toBe('Test')
+  })
+
+  it('updateMindmap bumps updatedAt', () => {
+    const { addMindmap, updateMindmap } = useMindmapStore.getState()
+    const mm = addMindmap('Test')
+    const before = mm.updatedAt
+    // ensure a different timestamp
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    return wait(2).then(() => {
+      updateMindmap(mm.id, { title: 'Renamed' })
+      const state = useMindmapStore.getState()
+      expect(state.mindmaps[0]!.updatedAt).toBeGreaterThanOrEqual(before)
+    })
+  })
+
   it('sets active mindmap id', () => {
     const { addMindmap, setActiveMindmapId } = useMindmapStore.getState()
     const mm = addMindmap('Test')
