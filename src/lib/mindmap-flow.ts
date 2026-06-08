@@ -1,18 +1,23 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { MindMapNode } from '../types/mindmap'
+import type { MindMapNode, NodeShapeName } from '../types/mindmap'
 import type { FlowNodeData } from '../components/flow-shell'
+import { resolveShapeName } from './shapes/types'
 
 /**
  * Output types for treeToFlowShell — narrowed React Flow shapes.
- * The `flow` type literal matches the nodeType registered in FlowShell.
  *
- * Stage D — `Readonly` views are exported for callers that need to
- * pass these into a React Flow provider without losing type info.
+ * `mindmap-shell-v2` (task 4): the per-node `type` literal is
+ * the node's `shape` name (e.g. `'rect'`, `'chip'`, `'circle'`,
+ * `'stadium'`), not the v1 hardcoded `'flow'`. React Flow looks
+ * the component up by this key in `FlowShell`'s `nodeTypes` map.
+ *
+ * `Readonly` views are exported for callers that need to pass
+ * these into a React Flow provider without losing type info.
  * The mutable variants are kept for internal accumulator use.
  */
-export type FlowShellNodes = Node<FlowNodeData, 'flow'>[]
+export type FlowShellNodes = Node<FlowNodeData, NodeShapeName>[]
 export type FlowShellEdges = Edge[]
-export type ReadonlyFlowShellNodes = ReadonlyArray<Node<FlowNodeData, 'flow'>>
+export type ReadonlyFlowShellNodes = ReadonlyArray<Node<FlowNodeData, NodeShapeName>>
 export type ReadonlyFlowShellEdges = ReadonlyArray<Edge>
 
 /**
@@ -23,12 +28,9 @@ export type ReadonlyFlowShellEdges = ReadonlyArray<Edge>
  * previously lived inside MindMapTree.tsx so it can be unit-tested in
  * isolation.
  *
- * Stage D — type-tightened: inputs accept `ReadonlyArray` /
- * `ReadonlySet` (callers don't need to construct mutable copies just
- * to call us), and the *internal* walk uses `ReadonlyArray<...>`
- * recursively. The *output* is still mutable so the existing
- * `MindMapTree` call site (which mutates `rawNodes[i].data.expanded`)
- * keeps working.
+ * `mindmap-shell-v2`: the `type` field on each emitted node is the
+ * resolved shape name (so React Flow can route to the right shape
+ * component). Unknown shape strings fall back to `'rect'`.
  */
 export function treeToFlowShell(
   tree: ReadonlyArray<MindMapNode>,
@@ -44,10 +46,11 @@ export function treeToFlowShell(
     for (const n of list) {
       const hasChildren = n.children.length > 0
       const isCollapsed = collapsedIds.has(n.id)
+      const shape = resolveShapeName(n.shape)
 
       flowNodes.push({
         id: n.id,
-        type: 'flow',
+        type: shape,
         position: { x: 0, y: 0 },
         data: {
           label: n.label,
@@ -59,7 +62,6 @@ export function treeToFlowShell(
           editedByUser: n.editedByUser,
           hasChildren,
           collapsed: isCollapsed,
-          expanded: false,
           onToggle: toggleCollapse,
         },
       })

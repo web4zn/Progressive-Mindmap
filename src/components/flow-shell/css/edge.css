@@ -67,3 +67,55 @@
 .flow-minimap-viewport {
   display: block;
 }
+
+/* ── mindmap-shell-v2 (task 3): per-strategy edge variants ────────
+ *
+ * The three strategies share `flow-edge-path` (the colour / width
+ * defaults). Each adds its own class so we can:
+ *   - give smoothstep slightly rounded joins
+ *   - keep bezier the "elegant" default
+ *   - give straight a thinner stroke (it reads as "terminal")
+ */
+
+.flow-edge-smoothstep {
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.flow-edge-bezier {
+  stroke-linecap: round;
+  /* Bezier edges sit at the same default width as smoothstep;
+     the curve is what differentiates them. */
+}
+
+.flow-edge-straight {
+  stroke-width: 1.25px;
+  stroke-linecap: round;
+}
+
+/* Flow animation — a moving dash pattern that runs along the
+ * edge while the parent is in `isStreaming` state. The renderer
+ * applies a `.streaming` class on the React Flow edge wrapper
+ * (we don't do that here in CSS; the wrapper class is set by
+ * `FlowShell`'s `decoratedEdges` step in task 4). Until then this
+ * rule is a no-op for live edges but the animation is defined
+ * and ready to be used.
+ */
+@keyframes flow-edge-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+.react-flow__edge.streaming .flow-edge-smoothstep,
+.react-flow__edge.streaming .flow-edge-bezier {
+  stroke-dasharray: 4 4;
+  animation: flow-edge-dash 0.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge.streaming .flow-edge-smoothstep,
+  .react-flow__edge.streaming .flow-edge-bezier {
+    animation: none;
+  }
+}

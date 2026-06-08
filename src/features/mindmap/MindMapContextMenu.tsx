@@ -1,6 +1,31 @@
+/**
+ * MindMapContextMenu — node right-click menu.
+ *
+ * Keyboard-navigable (Enter / ArrowUp / ArrowDown / Escape) and
+ * mouse-driven. Lists the actions available on a mindmap node:
+ * edit, add child, center in viewport, duplicate, reset position
+ * (only when the node has a pinned position), move up / down,
+ * undo / redo, and delete (with confirm).
+ *
+ * The menu is rendered into `document.body` via `createPortal` so it
+ * floats above the React Flow surface regardless of stacking
+ * contexts.
+ */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, Plus, ArrowUp, ArrowDown, Trash2, Crosshair, Undo2, Redo2 } from 'lucide-react'
+import {
+  FileText,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Crosshair,
+  Undo2,
+  Redo2,
+  Copy,
+  MapPin,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface ContextMenuProps {
   x: number
@@ -13,6 +38,9 @@ interface ContextMenuProps {
   canUndo: boolean
   canRedo: boolean
   confirmDelete: boolean
+  /** True when the node carries a pinned `position` field that the
+   *  user can reset. */
+  hasPinnedPosition: boolean
   onEdit: () => void
   onAddChild: () => void
   onMoveUp: () => void
@@ -23,6 +51,10 @@ interface ContextMenuProps {
    *  keyboard shortcuts. */
   onUndo: () => void
   onRedo: () => void
+  /** Drop the node's pinned position so dagre can re-place it. */
+  onResetPosition: () => void
+  /** Duplicate the node as a sibling. */
+  onDuplicate: () => void
   onDeleteRequest: () => void
   onDeleteConfirm: () => void
   onCancelDelete: () => void
@@ -51,6 +83,7 @@ export default function MindMapContextMenu({
   canUndo,
   canRedo,
   confirmDelete,
+  hasPinnedPosition,
   onEdit,
   onAddChild,
   onMoveUp,
@@ -58,6 +91,8 @@ export default function MindMapContextMenu({
   onCenter,
   onUndo,
   onRedo,
+  onResetPosition,
+  onDuplicate,
   onDeleteRequest,
   onDeleteConfirm,
   onCancelDelete,
@@ -160,8 +195,8 @@ export default function MindMapContextMenu({
   // edge of the viewport. We keep the original click position as the
   // anchor — the menu opens above-and-left of the cursor if the
   // cursor is in the bottom-right quadrant of the screen.
-  const [menuW, setMenuW] = useState(180)
-  const [menuH, setMenuH] = useState(280)
+  const [menuW, setMenuW] = useState(220)
+  const [menuH, setMenuH] = useState(320)
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -190,7 +225,7 @@ export default function MindMapContextMenu({
       aria-label="节点操作菜单"
       data-node-id={nodeId}
       data-testid="mindmap-context-menu"
-      className="fixed z-50 bg-popover border border-border rounded-md shadow-lg py-1 min-w-[180px] mindmap-context-menu"
+      className="fixed z-50 bg-popover border border-border rounded-md shadow-lg py-1 min-w-[200px] mindmap-context-menu"
       style={{ left, top }}
     >
       {confirmDelete ? (
@@ -244,6 +279,30 @@ export default function MindMapContextMenu({
             <Crosshair className="w-3.5 h-3.5" />
             在画布居中
           </button>
+          <button
+            role="menuitem"
+            className={classFor('center')}
+            onClick={onDuplicate}
+            onMouseEnter={() => setHighlight('center')}
+            title="复制为兄弟节点"
+            data-testid="mindmap-context-duplicate"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            复制节点
+          </button>
+          {hasPinnedPosition && (
+            <button
+              role="menuitem"
+              className={classFor('center')}
+              onClick={onResetPosition}
+              onMouseEnter={() => setHighlight('center')}
+              title="清除节点固定位置,让 dagre 重新排版"
+              data-testid="mindmap-context-reset-position"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              重置位置
+            </button>
+          )}
           <div className="border-t border-border my-1" />
           <button
             role="menuitem"
@@ -293,10 +352,7 @@ export default function MindMapContextMenu({
           <div className="border-t border-border my-1" />
           <button
             role="menuitem"
-            className={classFor(
-              'delete',
-              false,
-            ).replace('hover:bg-accent', 'hover:bg-destructive/10')}
+            className={classFor('delete').replace('hover:bg-accent', 'hover:bg-destructive/10')}
             onClick={onDeleteRequest}
             onMouseEnter={() => setHighlight('delete')}
             title="删除（Delete）"

@@ -3,7 +3,7 @@ import { deriveNodeId } from './id'
 
 export { deriveNodeId }
 
-// ─── Mindmap Output Prompt ──────────────────────────────────────────
+// ─── Mindmap Output Prompt ────────────────────────────────────────
 
 export function buildFullMindmapPrompt(pattern = 'auto'): string {
   const base = `## 思维导图生成指令
@@ -23,19 +23,22 @@ export function buildFullMindmapPrompt(pattern = 'auto'): string {
 - 标记 [用户编辑] 的节点保持原样不要改动`
 
   const extras: Record<string, string> = {
-    '5w1h': `\n## 知识组织模式：5W1H\n请使用 5W1H 六维度组织知识结构：
+    '5w1h': `\n## 知识组织模式：5W1H
+请使用 5W1H 六维度组织知识结构：
 - What: 概念定义和本质
 - Why: 存在原因和动机
 - Who: 相关人物/角色/团队
 - When: 时间节点和时机
 - Where: 应用场景
 - How: 实现方法和步骤`,
-    tech: `\n## 知识组织模式：技术概念\n请使用技术概念模式组织知识结构：
+    tech: `\n## 知识组织模式：技术概念
+请使用技术概念模式组织知识结构：
 - 核心定义和原理
 - 使用场景和典型用例
 - 与同类方案的对比
 - 注意事项和常见陷阱`,
-    'pros-cons': `\n## 知识组织模式：优缺点分析\n请使用优缺点分析模式组织知识结构：
+    'pros-cons': `\n## 知识组织模式：优缺点分析
+请使用优缺点分析模式组织知识结构：
 - 优点和优势场景
 - 缺点和局限性
 - 适用场景判断`,
@@ -236,19 +239,22 @@ export function buildIncrementalPrompt(pattern = 'auto'): string {
 - 如果没有改动，输出 {"operations": []}`
 
   const extras: Record<string, string> = {
-    '5w1h': `\n## 知识组织模式：5W1H\n请使用 5W1H 六维度组织新增的知识：
+    '5w1h': `\n## 知识组织模式：5W1H
+请使用 5W1H 六维度组织新增的知识：
 - What: 概念定义和本质
 - Why: 存在原因和动机
 - Who: 相关人物/角色/团队
 - When: 时间节点和时机
 - Where: 应用场景
 - How: 实现方法和步骤`,
-    tech: `\n## 知识组织模式：技术概念\n请使用技术概念模式组织新增的知识：
+    tech: `\n## 知识组织模式：技术概念
+请使用技术概念模式组织新增的知识：
 - 核心定义和原理
 - 使用场景和典型用例
 - 与同类方案的对比
 - 注意事项和常见陷阱`,
-    'pros-cons': `\n## 知识组织模式：优缺点分析\n请使用优缺点分析模式组织新增的知识：
+    'pros-cons': `\n## 知识组织模式：优缺点分析
+请使用优缺点分析模式组织新增的知识：
 - 优点和优势场景
 - 缺点和局限性
 - 适用场景判断`,

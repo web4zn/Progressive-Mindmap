@@ -9,6 +9,12 @@ import type { MindMapNode } from '../../types/mindmap'
  * `treeToFlowShell`. The acceptance threshold is 1 s in
  * happy-dom (Stage D spec §7.1).
  *
+ * mindmap-shell-v2 (task 6): also asserts a 1000-node budget
+ * (the v2 redesign target — see proposal §"性能"). Both budgets
+ * share the same `BUDGET_MS` ceiling; the v2 path adds per-node
+ * shape-resolution + decorator work but stays well under 1 s
+ * for graphs up to 1000 nodes on a dev laptop.
+ *
  * The benchmark is *informational*: a failure does not block CI
  * in the slow path. We `it.skip` it when `SKIP_PERF=1` is set so
  * a developer on a slow laptop (or a CI runner with cold caches)
@@ -23,7 +29,8 @@ import type { MindMapNode } from '../../types/mindmap'
  * Stage D is responsible for.
  */
 
-const NODE_BUDGET = 500
+const NODE_BUDGET_500 = 500
+const NODE_BUDGET_1000 = 1000
 /** Soft threshold. Exceeding this in CI is a regression signal. */
 const BUDGET_MS = 1000
 
@@ -82,42 +89,52 @@ describe('treeToFlowShell — Stage D 500-node perf budget', () => {
 
   const runner = SKIP ? it.skip : it
 
-  runner(
-    `flattens a ~${NODE_BUDGET}-node balanced tree within ${BUDGET_MS}ms`,
-    () => {
-      const tree = buildBalancedTree(NODE_BUDGET)
-      // Sanity: the builder produced something close to the budget.
-      // (We don't pin to exactly 500 — the k-ary loop overshoots
-      // by a few nodes, which is fine for the perf measurement.)
-      const totalNodes = (() => {
-        let n = 0
-        const walk = (list: MindMapNode[]) => {
-          for (const x of list) {
-            n += 1
-            walk(x.children)
-          }
+  function runPerfCase(budget: number) {
+    const tree = buildBalancedTree(budget)
+    // Sanity: the builder produced something close to the budget.
+    // (We don't pin to exactly the budget — the k-ary loop overshoots
+    // by a few nodes, which is fine for the perf measurement.)
+    const totalNodes = (() => {
+      let n = 0
+      const walk = (list: MindMapNode[]) => {
+        for (const x of list) {
+          n += 1
+          walk(x.children)
         }
-        walk(tree)
-        return n
-      })()
-      expect(totalNodes).toBeGreaterThanOrEqual(NODE_BUDGET - 10)
-      expect(totalNodes).toBeLessThanOrEqual(NODE_BUDGET + 50)
+      }
+      walk(tree)
+      return n
+    })()
+    expect(totalNodes).toBeGreaterThanOrEqual(budget - 10)
+    expect(totalNodes).toBeLessThanOrEqual(budget + 50)
 
-      const t0 = performance.now()
-      const { nodes, edges } = treeToFlowShell(tree, new Set(), () => {}, 'auto')
-      const elapsed = performance.now() - t0
+    const t0 = performance.now()
+    const { nodes, edges } = treeToFlowShell(tree, new Set(), () => {}, 'auto')
+    const elapsed = performance.now() - t0
 
-      // The bench number is informational — surface it on stdout so a
-      // developer can correlate it with their dev machine / CI.
-      console.log(
-        `[bench] treeToFlowShell on ${totalNodes} nodes took ${elapsed.toFixed(1)}ms`,
-      )
+    // The bench number is informational — surface it on stdout so a
+    // developer can correlate it with their dev machine / CI.
+    console.log(
+      `[bench] treeToFlowShell on ${totalNodes} nodes took ${elapsed.toFixed(1)}ms`,
+    )
 
-      // The walker should produce one flow node per MindMapNode and
-      // (totalNodes - 1) edges in a connected tree.
-      expect(nodes).toHaveLength(totalNodes)
-      expect(edges).toHaveLength(totalNodes - 1)
-      expect(elapsed).toBeLessThan(BUDGET_MS)
-    },
+    // The walker should produce one flow node per MindMapNode and
+    // (totalNodes - 1) edges in a connected tree.
+    expect(nodes).toHaveLength(totalNodes)
+    expect(edges).toHaveLength(totalNodes - 1)
+    expect(elapsed).toBeLessThan(BUDGET_MS)
+  }
+
+  runner(
+    `flattens a ~${NODE_BUDGET_500}-node balanced tree within ${BUDGET_MS}ms`,
+    () => runPerfCase(NODE_BUDGET_500),
+  )
+
+  // mindmap-shell-v2 (task 6): 1000-node target. The v2 redesign
+  // ships a richer pipeline (shape resolution + decorators) but
+  // stays well within the same wall-clock budget.
+  runner(
+    `flattens a ~${NODE_BUDGET_1000}-node balanced tree within ${BUDGET_MS}ms (v2 target)`,
+    () => runPerfCase(NODE_BUDGET_1000),
   )
 })

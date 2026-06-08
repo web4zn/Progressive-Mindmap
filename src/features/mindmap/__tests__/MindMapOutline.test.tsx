@@ -110,4 +110,46 @@ describe('MindMapOutline', () => {
     render(<MindMapOutline open={true} onClose={() => {}} onFocus={() => {}} />)
     expect(screen.getByText('暂无节点')).toBeInTheDocument()
   })
+
+  it('Esc closes the outline when open', () => {
+    const onClose = vi.fn()
+    render(<MindMapOutline open={true} onClose={onClose} onFocus={() => {}} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('Esc does NOT close the outline when closed', () => {
+    const onClose = vi.fn()
+    render(<MindMapOutline open={false} onClose={onClose} onFocus={() => {}} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('does not render a full-viewport backdrop (v1 fixed inset-0 is gone)', () => {
+    // The v1 revision rendered a `<div fixed inset-0 z-40 bg-black/10>`
+    // backdrop that dimmed the entire window. The v2 revision is
+    // scoped to the panel (no full-viewport overlay).
+    const { container } = render(
+      <MindMapOutline open={true} onClose={() => {}} onFocus={() => {}} />,
+    )
+    expect(container.querySelector('.fixed.inset-0')).toBeNull()
+  })
+
+  it('docks at the top-right of the canvas container (absolute, in-canvas)', () => {
+    const { getByTestId } = render(
+      <MindMapOutline open={true} onClose={() => {}} onFocus={() => {}} />,
+    )
+    const aside = getByTestId('mindmap-outline')
+    // Absolute positioning (relative to MindMapTree's `flex-1
+    // relative` canvas area) — not full-viewport (`fixed`).
+    expect(aside.className).toMatch(/\babsolute\b/)
+    expect(aside.className).toMatch(/\btop-3\b/)
+    expect(aside.className).toMatch(/\bright-3\b/)
+    expect(aside.className).not.toMatch(/\bfixed\b/)
+    // Not the v3 side-column layout (which used left-0/right-0
+    // with h-full) — the in-canvas overlay is a top-right corner
+    // badge with its own width / capped height.
+    expect(aside.className).not.toMatch(/\bleft-0\b/)
+    expect(aside.className).not.toMatch(/\bh-full\b/)
+  })
 })

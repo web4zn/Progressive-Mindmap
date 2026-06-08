@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -172,27 +173,28 @@ export default function MindMapHeader({
                 <span>{patternMeta.label}</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-52">
-                <DropdownMenuLabel>选择 pattern</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {PATTERN_OPTIONS.map((opt) => {
-                  const Icon = opt.icon
-                  const isCurrent = opt.value === currentPattern
-                  return (
-                    <DropdownMenuItem
-                      key={opt.value}
-                      onClick={() => onChangePattern(opt.value)}
-                      className={cn(isCurrent && 'bg-accent text-accent-foreground')}
-                    >
-                      <Icon className="w-4 h-4 mr-2" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm">{opt.label}</span>
-                        <span className="text-[10px] text-muted-foreground truncate">
-                          {opt.description}
-                        </span>
-                      </div>
-                    </DropdownMenuItem>
-                  )
-                })}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>选择 pattern</DropdownMenuLabel>
+                  {PATTERN_OPTIONS.map((opt) => {
+                    const Icon = opt.icon
+                    const isCurrent = opt.value === currentPattern
+                    return (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => onChangePattern(opt.value)}
+                        className={cn(isCurrent && 'bg-accent text-accent-foreground')}
+                      >
+                        <Icon className="w-4 h-4 mr-2" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm">{opt.label}</span>
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {opt.description}
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuGroup>
                 {activeMindmap.pattern && activeMindmap.pattern !== currentPattern && (
                   <>
                     <DropdownMenuSeparator />
@@ -245,23 +247,24 @@ export default function MindMapHeader({
               <span>导出</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel>下载为</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onExportPng(1)}>
-                <FileImage className="w-4 h-4 mr-2" />PNG 1x
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onExportPng(2)}>
-                <FileImage className="w-4 h-4 mr-2" />PNG 2x
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onExportPng(3)}>
-                <FileImage className="w-4 h-4 mr-2" />PNG 3x
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onExportSvg}>
-                <FileImage className="w-4 h-4 mr-2" />SVG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onExportMd}>
-                <FileText className="w-4 h-4 mr-2" />Markdown
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>下载为</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onExportPng(1)}>
+                  <FileImage className="w-4 h-4 mr-2" />PNG 1x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onExportPng(2)}>
+                  <FileImage className="w-4 h-4 mr-2" />PNG 2x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onExportPng(3)}>
+                  <FileImage className="w-4 h-4 mr-2" />PNG 3x
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExportSvg}>
+                  <FileImage className="w-4 h-4 mr-2" />SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExportMd}>
+                  <FileText className="w-4 h-4 mr-2" />Markdown
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

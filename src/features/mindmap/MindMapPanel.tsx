@@ -7,9 +7,8 @@ import { exportMindmapAsPng, exportMindmapAsSvg } from '@/lib/export-mindmap'
 import MindMapTree from '@/features/mindmap/MindMapTree'
 import MindMapHeader, { type MindMapPattern } from '@/features/mindmap/MindMapHeader'
 import MindMapDrawer from '@/features/mindmap/MindMapDrawer'
-import MindMapOutline from '@/features/mindmap/MindMapOutline'
 import MindMapSearch from '@/features/mindmap/MindMapSearch'
-import MindMapFilter, { type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
+import { MindMapFilterBody, type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
 import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import { matchNodes } from '@/lib/mindmap-search'
 import type { MindMap } from '@/types/mindmap'
@@ -21,11 +20,22 @@ import {
   Grid2x2,
   Grid3x3,
   Square,
-  Plus,
   Sun,
   Moon,
+  MoreHorizontal,
+  Sliders,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 
@@ -36,18 +46,19 @@ interface MindMapPanelProps {
 type BackgroundVariant = 'dots' | 'grid' | 'none'
 
 /**
- * Stage B + Stage C: top-level container.
- * - Stage B: header (3-section grid) + canvas + linked-conversation drawer.
- * - Stage C: the header gains:
- *     - ↶ / ↷  buttons (undo / redo from the lifted history)
- *     - 大纲 (ListTree icon → opens the left outline drawer)
- *     - 搜索 box (label / summary / content match)
- *     - 筛选 dropdown (pattern / depth / edited)
- *     - 背景 switcher (3 icons: dots / grid / none)
- *   Plus a left-side outline drawer (MindMapOutline).
+ * Stage B + Stage C + Stage D + mindmap-shell-v2 (task 5): top-level
+ * container.
  *
- * The lifted `useMindmapHistory` hook lets the top-bar ↶/↷ buttons
- * read canUndo / canRedo without prop-drilling from MindMapTree.
+ * v2 toolbar consolidation: the middle toolbar now has 4 visible
+ * chips (Undo / Redo / Outline / Search) plus a "more" dropdown
+ * that holds the less-frequently-touched controls (filter,
+ * background, theme). This keeps the toolbar under the 6-button
+ * budget the Dify-style redesign calls for.
+ *
+ * Stage D — global theme (light / dark / system). The hook is
+ * mounted here (not in App.tsx) because the toggle button lives
+ * in the panel's toolbar; any other component can still read the
+ * current theme from `document.documentElement.dataset.theme`.
  */
 export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   const mindmaps = useMindmapStore((s) => s.mindmaps)
@@ -68,7 +79,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   const [outlineOpen, setOutlineOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<MindMapFilterValue>({
-    patterns: new Set(),
     maxDepth: 0,
     onlyEdited: false,
   })
@@ -200,7 +210,11 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
 
   const fullscreenClass = isFullscreen
     ? 'fixed inset-0 z-50 flex flex-col bg-background'
-    : 'h-full flex flex-col border-l bg-sidebar text-sidebar-foreground'
+    : // The `relative` anchor is load-bearing — the in-panel side
+      // columns (outline, drawer) position themselves with
+      // `absolute` against this container. Without `relative` they
+      // would escape into the chat canvas.
+      'relative h-full flex flex-col border-l bg-sidebar text-sidebar-foreground'
 
   return (
     <div className={fullscreenClass}>
@@ -223,10 +237,17 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         onClose={onClose}
       />
 
-      {/* Stage C: secondary toolbar — undo / redo / outline / search /
-          filter / background. Sits between the header and the canvas
-          so the existing 3-section grid structure of the header is
-          preserved. */}
+      {/* mindmap-shell-v2 (task 5): consolidated toolbar.
+       *
+       *  Visible (4): Undo / Redo / Outline / Search
+       *  Inside "more" dropdown (3): Filter / Background / Theme
+       *
+       * The search box and outline toggle stay in the primary
+       * bar because users hit them the most (per the Stage C
+       * usage telemetry). Filter, background, and theme are
+       * surfaced in a `DropdownMenu` — they still appear in
+       * discoverable places (the dropdown trigger is a generic
+       * ⋯ button) but the row itself stays compact. */}
       <div
         className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-b border-sidebar-border bg-background/40"
         data-testid="mindmap-toolbar-stage-c"
@@ -279,32 +300,73 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
           compact
         />
 
-        <MindMapFilter value={filter} onChange={setFilter} />
-
-        <div className="w-px h-4 bg-border mx-0.5" />
-
-        <BackgroundSwitcher value={background} onChange={setBackground} />
-
-        {/* Stage D — theme toggle (light ↔ dark). The button shows
-            the icon for the *current* theme so a user on light sees
-            🌙 (click to go dark) and on dark sees ☀ (click to go
-            light). The toggle persists in localStorage via
-            `useTheme`. */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={toggleTheme}
-          title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
-          aria-label={theme === 'dark' ? '切换到浅色' : '切换到深色'}
-          aria-pressed={theme === 'dark'}
-          data-testid="mindmap-theme-toggle"
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-3.5 h-3.5" />
-          ) : (
-            <Moon className="w-3.5 h-3.5" />
-          )}
-        </Button>
+        {/* mindmap-shell-v2 (task 5): "more" dropdown for the
+            three secondary actions. Replaces the previous
+            inline BackgroundSwitcher + theme button. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors outline-none',
+              'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+              'focus-visible:ring-2 focus-visible:ring-ring/40',
+            )}
+            title="更多"
+            aria-label="更多"
+            data-testid="mindmap-toolbar-more"
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56" data-testid="mindmap-toolbar-more-menu">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>画布选项</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={background}
+                onValueChange={(v) => setBackground(v as BackgroundVariant)}
+              >
+                <DropdownMenuRadioItem value="dots" closeOnClick={false}>
+                  <Grid3x3 className="w-4 h-4 mr-2" />
+                  点阵背景
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="grid" closeOnClick={false}>
+                  <Grid2x2 className="w-4 h-4 mr-2" />
+                  网格背景
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="none" closeOnClick={false}>
+                  <Square className="w-4 h-4 mr-2" />
+                  无背景
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="flex items-center gap-1.5">
+                <Sliders className="w-3 h-3" />
+                筛选
+              </DropdownMenuLabel>
+              <div className="px-1.5 pb-1.5">
+                <MindMapFilterBody value={filter} onChange={setFilter} />
+              </div>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={cn(
+                'group/dropdown-menu-item relative flex w-full cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none',
+                'hover:bg-accent hover:text-accent-foreground',
+              )}
+              aria-pressed={theme === 'dark'}
+              data-testid="mindmap-theme-toggle"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 mr-2" />
+              ) : (
+                <Moon className="w-4 h-4 mr-2" />
+              )}
+              {theme === 'dark' ? '切换到浅色' : '切换到深色'}
+            </button>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <MindMapTree
@@ -314,11 +376,18 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         isStreaming={isAgentActive && (activeMindmap?.tree.length ?? 0) > 0}
         error={null}
         searchQuery={searchQuery}
-        filterPattern={filter.patterns}
         filterDepth={filter.maxDepth}
         filterOnlyEdited={filter.onlyEdited}
         history={history}
         background={background}
+        // mindmap-shell-v3 (task 7): the outline is mounted inside
+        // the canvas via FlowShell's `canvasOverlay` slot (see
+        // MindMapTree). MindMapPanel still owns the toggle state
+        // and passes it through so the toolbar button keeps
+        // working unchanged.
+        outlineOpen={outlineOpen}
+        onOutlineClose={() => setOutlineOpen(false)}
+        onOutlineFocus={handleOutlineFocus}
       />
 
       <MindMapDrawer
@@ -329,59 +398,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         activeConversationId={activeConvId}
         onUnlink={handleUnlink}
       />
-
-      <MindMapOutline
-        open={outlineOpen}
-        onClose={() => setOutlineOpen(false)}
-        onFocus={handleOutlineFocus}
-      />
-    </div>
-  )
-}
-
-/**
- * Stage C: 3-icon background switcher. Dots / Grid / None. State is
- * component-level (not persisted). Wired through the `background` prop
- * on FlowShell which already accepted `Background variant` props.
- */
-function BackgroundSwitcher({
-  value,
-  onChange,
-}: {
-  value: BackgroundVariant
-  onChange: (v: BackgroundVariant) => void
-}) {
-  const options: { v: BackgroundVariant; icon: React.ReactNode; title: string }[] = [
-    { v: 'dots', icon: <Grid3x3 className="w-3.5 h-3.5" />, title: '点阵背景' },
-    { v: 'grid', icon: <Grid2x2 className="w-3.5 h-3.5" />, title: '网格背景' },
-    { v: 'none', icon: <Square className="w-3.5 h-3.5" />, title: '无背景' },
-  ]
-  return (
-    <div
-      className="inline-flex items-center rounded-md border border-input bg-background overflow-hidden"
-      data-testid="mindmap-background-switcher"
-      role="group"
-      aria-label="画布背景"
-    >
-      {options.map((o) => (
-        <button
-          key={o.v}
-          type="button"
-          onClick={() => onChange(o.v)}
-          aria-label={o.title}
-          title={o.title}
-          aria-pressed={value === o.v}
-          className={cn(
-            'inline-flex items-center justify-center w-7 h-7 transition-colors outline-none',
-            'focus-visible:ring-2 focus-visible:ring-ring/40',
-            value === o.v
-              ? 'bg-primary/15 text-primary'
-              : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-          )}
-        >
-          {o.icon}
-        </button>
-      ))}
     </div>
   )
 }
@@ -406,7 +422,3 @@ function windowMindmapFocus(): (() => void) | undefined {
     ? (w.__mindmapFocusFirstMatch as () => void)
     : undefined
 }
-
-// `Plus` is exported for any future toolbar extension (e.g. "add root")
-// — keep the import alive.
-void Plus

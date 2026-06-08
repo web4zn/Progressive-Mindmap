@@ -1,3 +1,19 @@
+/**
+ * FlowMiniMap — mindmap-shell-v2 (task 5).
+ *
+ * Custom MiniMap wrapper. Inherited from Stage C:
+ *  - tracks the current viewport via `useReactFlow().getViewport()`
+ *  - renders a viewport rectangle overlay
+ *  - click on the wrapper → re-centre the camera
+ *  - the xyflow MiniMap provides node + edge painting
+ *
+ * mindmap-shell-v2 (task 5) addition: a second SVG layer that
+ * prints the first non-whitespace character of each node's label
+ * on top of the node marker. This makes the minimap scannable
+ * even when zoomed all the way out — Dify calls this the "node
+ * fingerprint". The character extraction is delegated to
+ * `previewLabel` so the rule is unit-testable in isolation.
+ */
 import { memo, useCallback, useState, type CSSProperties } from 'react'
 import {
   MiniMap as XYFlowMiniMap,
@@ -6,25 +22,16 @@ import {
   type Node,
   type Rect,
 } from '@xyflow/react'
+import { previewLabel } from '@/lib/flow-minimap-label'
 
 /**
- * Stage C — custom MiniMap wrapper.
- *
- * The xyflow MiniMap component renders a downscaled copy of the graph
- * but does NOT show a "this is your current viewport" rectangle. This
- * wrapper:
- *   1. Tracks the current viewport via `useReactFlow().getViewport()`
- *      and a ResizeObserver on the wrapper.
- *   2. Renders an SVG overlay on top of the MiniMap with a rectangle
- *      that mirrors the current viewport.
- *   3. Listens to clicks on the wrapper — clicking somewhere on the
- *      MiniMap moves the viewport so that point becomes the centre.
- *
- * The colour function + pannable / zoomable behaviour come from xyflow
- * unchanged. The viewport rectangle is a 2px stroke with a translucent
- * fill so the user can see what's "on screen" vs. the rest of the
- * graph at a glance.
+ * mindmap-shell-v2 (task 5): per-node label size. At the
+ * MiniMap's typical scale (240×160 px) a single character at 8 px
+ * reads cleanly without crowding. Larger MiniMaps scale up
+ * proportionally via the `--flow-minimap-font-scale` CSS var.
  */
+const LABEL_BASE_PX = 8
+
 export interface FlowMiniMapProps extends Pick<MiniMapProps, 'nodeColor' | 'nodeStrokeWidth'> {
   className?: string
   style?: CSSProperties
@@ -69,6 +76,7 @@ function FlowMiniMapImpl({
   const { getViewport, getNodes, setViewport, flowToScreenPosition } = useReactFlow()
   const currentViewport = getViewport()
   const currentBounds = computeNodeBounds(getNodes())
+  const currentNodes = getNodes()
 
   // ResizeObserver attached via ref callback (NOT a setState in effect).
   const wrapperRef = useCallback((node: HTMLDivElement | null) => {
@@ -129,6 +137,29 @@ function FlowMiniMapImpl({
     rectH = (flowVisibleH / currentBounds.height) * wrapperSize.h
   }
 
+  // mindmap-shell-v2 (task 5): pre-compute per-node label positions
+  // and visibility. We hide the label when the node is smaller than
+  // ~14 px on the minimap so we don't pile glyphs on top of each
+  // other in dense maps.
+  type LabelEntry = { x: number; y: number; text: string }
+  const labelEntries: LabelEntry[] = []
+  if (wrapperSize.w > 0 && currentBounds.width > 0) {
+    const sx = wrapperSize.w / currentBounds.width
+    const sy = wrapperSize.h / currentBounds.height
+    for (const n of currentNodes) {
+      const w = (n.measured?.width ?? n.width ?? 0) as number
+      const h = (n.measured?.height ?? n.height ?? 0) as number
+      if (w * sx < 14 || h * sy < 14) continue
+      const char = previewLabel(n)
+      if (!char) continue
+      const cx =
+        ((n.position.x + w / 2 - currentBounds.x) / currentBounds.width) * wrapperSize.w
+      const cy =
+        ((n.position.y + h / 2 - currentBounds.y) / currentBounds.height) * wrapperSize.h
+      labelEntries.push({ x: cx, y: cy, text: char })
+    }
+  }
+
   return (
     <div
       ref={wrapperRef}
@@ -148,6 +179,44 @@ function FlowMiniMapImpl({
         zoomable
         className="flow-minimap"
       />
+      {/* mindmap-shell-v2 (task 5): per-node first-character preview. */}
+      {labelEntries.length > 0 && (
+        <svg
+          aria-hidden
+          width={wrapperSize.w}
+          height={wrapperSize.h}
+          className="flow-minimap-labels"
+          data-testid="flow-minimap-labels"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            fontSize: `${LABEL_BASE_PX}px`,
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            fill: 'var(--flow-text, currentColor)',
+            opacity: 0.85,
+          }}
+        >
+          {labelEntries.map((entry, idx) => (
+            <text
+              key={`minimap-label-${idx}-${entry.text}`}
+              x={entry.x}
+              y={entry.y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              style={{
+                paintOrder: 'stroke',
+                stroke: 'var(--flow-card-bg, white)',
+                strokeWidth: 2,
+                strokeLinejoin: 'round',
+              }}
+            >
+              {entry.text}
+            </text>
+          ))}
+        </svg>
+      )}
       {wrapperSize.w > 0 && rectW > 0 && rectH > 0 && (
         <svg
           aria-hidden

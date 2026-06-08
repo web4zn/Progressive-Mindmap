@@ -1,8 +1,34 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { createJSONStorage } from 'zustand/middleware'
-import { createIndexedDBStorage } from '@/lib/indexeddb-storage-adapter'
-import type { MindMap, MindMapNode } from '../types/mindmap'
+import { createIndexedDBStorage, flushPendingWrites } from '@/lib/indexeddb-storage-adapter'
+import { recordMigrationTimestamp } from '@/lib/db'
+import {
+  migrateV1ToV2All,
+} from '@/lib/migration/mindmap-v1-to-v2'
+import {
+  MINDMAP_SCHEMA_VERSION,
+  type MindMap,
+  type MindMapNode,
+  type MindMapV1,
+} from '../types/mindmap'
+
+/**
+ * Persist version history:
+ *   1 — initial Zustand persist.
+ *   2 — added `updateMindmap` partial setter.
+ *   3 — added `setCollapsedNodeIds`.
+ *   4 — mindmap-shell-v2: rehydrate-time v1→v2 migration. Old
+ *       serialised mindmaps that lack `schemaVersion` are upgraded
+ *       in place; the migrated state is then re-persisted.
+ */
+const PERSIST_VERSION = 4
+
+/** The shape stored under `state.mindmap` inside the persist payload. */
+interface PersistedMindMapSlice {
+  mindmaps: Array<MindMapV1 | MindMap>
+  activeMindmapId: string | null
+}
 
 interface MindMapState {
   mindmaps: MindMap[]
@@ -30,6 +56,13 @@ interface MindMapState {
     nodeId: string,
     patch: Partial<Pick<MindMapNode, 'label' | 'summary' | 'content' | 'contentType'>>,
   ) => void
+  /**
+   * Reset a node's pinned position so the dagre layout takes over
+   * again. We drop `node.position` rather than setting it to
+   * (0, 0) so the dagre pass in `applyDagreLayout` has a clear
+   * "unconstrained" signal.
+   */
+  resetNodePosition: (mindmapId: string, nodeId: string) => void
   addChildNode: (mindmapId: string, parentNodeId: string) => void
   deleteNode: (mindmapId: string, nodeId: string) => void
   moveNode: (mindmapId: string, nodeId: string, direction: 'up' | 'down') => void
@@ -110,6 +143,7 @@ export const useMindmapStore = create<MindMapState>()(
           pattern,
           tree: [],
           monitoredConversationIds: [],
+          schemaVersion: MINDMAP_SCHEMA_VERSION,
           createdAt: now,
           updatedAt: now,
         }
@@ -173,6 +207,32 @@ export const useMindmapStore = create<MindMapState>()(
                 ...patch,
                 editedByUser: true,
               })),
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      resetNodePosition: (mindmapId, nodeId) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) => {
+            if (m.id !== mindmapId) return m
+            return {
+              ...m,
+              tree: findAndUpdateNode(m.tree, nodeId, (node) => {
+                // Strip the `position` field so the next dagre
+                // layout pass can place the node freely. We use
+                // destructuring-rest to keep every other field
+                // intact; `updatedAt` and `editedByUser` get a
+                // touch so the user-edit indicator stays lit.
+                const { position: _drop, ...rest } = node
+                void _drop
+                return {
+                  ...rest,
+                  editedByUser: true,
+                  updatedAt: Date.now(),
+                }
+              }),
               updatedAt: Date.now(),
             }
           }),
@@ -337,8 +397,53 @@ export const useMindmapStore = create<MindMapState>()(
     }),
     {
       name: 'mindmap-store',
-      version: 3,
+      version: PERSIST_VERSION,
       storage: createJSONStorage(() => createIndexedDBStorage()),
+      /**
+       * mindmap-shell-v2: rehydrate-time migration.
+       *
+       * Zustand invokes this when the persisted payload's
+       * `version` differs from the current one (or when forced by
+       * `version: bump`). We use the opportunity to walk the
+       * persisted `mindmaps` array and upgrade any v1 entries to v2
+       * via `migrateV1ToV2All`.
+       *
+       * `partialize` is intentionally absent — the entire `state`
+       * object is what we persist, and we want the *whole* state to
+       * be available to `migrate` (not just the slice we care about).
+       */
+      migrate: (persistedState, _fromVersion) => {
+        if (!persistedState || typeof persistedState !== 'object') return persistedState
+        const slice = persistedState as Partial<PersistedMindMapSlice>
+        if (!Array.isArray(slice.mindmaps)) return persistedState
+
+        const migrated = migrateV1ToV2All(slice.mindmaps)
+
+        // Stamping the global schema version on the payload itself is
+        // not part of the schema — Zustand uses its own `version`
+        // for that — but we want the migration timestamp recorded
+        // for debugging. `onRehydrateStorage` below awaits it.
+        return { ...slice, mindmaps: migrated }
+      },
+      /**
+       * After a successful rehydrate, persist the migrated state
+       * back to IDB and record the migration timestamp. We don't
+       * await the rehydrate flush here — it runs after the store is
+       * usable — but we *do* fire-and-forget the timestamp write so
+       * it shows up in `mindmap-meta` for diagnostics.
+       */
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          console.error('[mindmap-store] rehydrate failed:', error)
+          return
+        }
+        void recordMigrationTimestamp()
+        // Best-effort: flush the just-migrated state to IDB so
+        // subsequent reloads don't re-run the migration. We ignore
+        // the returned promise — debounce guarantees the write will
+        // happen within 500 ms.
+        void flushPendingWrites()
+      },
     },
   ),
 )

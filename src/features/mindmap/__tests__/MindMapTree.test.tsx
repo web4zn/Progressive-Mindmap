@@ -25,6 +25,30 @@ vi.mock('@/lib/mindmap-layout', () => ({
   isDescendantOf: () => false,
 }))
 
+// mindmap-shell-v3 (task 7): MindMapOutline reads from the store
+// (mindmaps / activeMindmapId). Provide a minimal mock so it
+// renders even when there's no active mindmap.
+const mindmaps: Array<{
+  id: string
+  title: string
+  tree: MindMapNode[]
+  pattern: string
+  monitoredConversationIds: string[]
+}> = []
+const activeMindmapId: string | null = null
+vi.mock('@/stores/mindmapStore', () => ({
+  useMindmapStore: (selectorOrNothing?: (s: unknown) => unknown) => {
+    const state = { mindmaps, activeMindmapId }
+    if (typeof selectorOrNothing === 'function') {
+      return selectorOrNothing(state)
+    }
+    return state
+  },
+  // Stub the actions MindMapTree calls so the test doesn't
+  // accidentally hit IndexedDB-backed code paths.
+  default: () => ({}),
+}))
+
 import type { MindMapNode } from '@/types/mindmap'
 
 function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
@@ -77,5 +101,41 @@ describe('MindMapTree', () => {
   it('shows streaming indicator', () => {
     render(<TreeHost tree={[makeNode({ id: 'root' })]} isStreaming={true} />)
     expect(screen.getByText('生成中…')).toBeDefined()
+  })
+
+  // mindmap-shell-v3 (task 7): the outline toggle is reachable
+  // *even when the canvas isn't mounted* (error / loading / empty
+  // states). Each early-return branch must wrap its content in a
+  // `position: relative` container so MindMapOutline can anchor
+  // to the canvas area's top-right.
+  it('still renders the outline anchor in the empty state (no FlowShell)', () => {
+    render(<TreeHost tree={[]} outlineOpen={true} />)
+    // The FlowShell mock should NOT be present in the empty state.
+    expect(screen.queryByTestId('flow-shell')).toBeNull()
+    // But the outline element is.
+    expect(screen.getByTestId('mindmap-outline')).toBeDefined()
+  })
+
+  it('still renders the outline anchor in the loading state', () => {
+    render(<TreeHost tree={[]} isGenerating={true} outlineOpen={true} />)
+    expect(screen.queryByTestId('flow-shell')).toBeNull()
+    expect(screen.getByTestId('mindmap-outline')).toBeDefined()
+  })
+
+  it('still renders the outline anchor in the error state', () => {
+    render(<TreeHost tree={[]} error="boom" outlineOpen={true} />)
+    expect(screen.queryByTestId('flow-shell')).toBeNull()
+    expect(screen.getByTestId('mindmap-outline')).toBeDefined()
+  })
+
+  it('still renders the outline anchor in the live state (with FlowShell)', () => {
+    render(
+      <TreeHost
+        tree={[makeNode({ id: 'root', label: 'Root' })]}
+        outlineOpen={true}
+      />,
+    )
+    expect(screen.getByTestId('flow-shell')).toBeDefined()
+    expect(screen.getByTestId('mindmap-outline')).toBeDefined()
   })
 })

@@ -12,6 +12,7 @@ import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
 import type { Node as FlowNode } from '@xyflow/react'
 import MindMapEditModal from './MindMapEditModal'
 import MindMapContextMenu from './MindMapContextMenu'
+import MindMapOutline from './MindMapOutline'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
 import type { UseMindmapHistoryResult } from '@/hooks/useMindmapHistory'
 import type { MindMapNode } from '@/types/mindmap'
@@ -26,9 +27,12 @@ interface MindMapTreeProps {
   /** Stage C: search query from the top-bar search box. The canvas
    *  highlights matching nodes + dims non-matching ones. */
   searchQuery?: string
-  /** Stage C: pattern / depth / edited filter. Non-matching nodes are
-   *  hidden from the canvas entirely. */
-  filterPattern?: ReadonlySet<string>
+  /** Stage C: depth / edited filter. Non-matching nodes are hidden
+   *  from the canvas entirely. Pattern filtering was removed: the
+   *  pattern is a *mindmap-level* attribute, not a per-node marker,
+   *  so the multi-select was a black-box filter that could only
+   *  hide every node of the active mindmap. Use the mindmap-level
+   *  pattern selector in the header instead. */
   filterDepth?: number
   filterOnlyEdited?: boolean
   /** Stage C: undo / redo controller. Lifted to the parent so the
@@ -37,6 +41,13 @@ interface MindMapTreeProps {
   /** Stage C: background variant (dots / grid / none). Drives the
    *  FlowShell `Background` component. */
   background?: 'dots' | 'grid' | 'none'
+  /** mindmap-shell-v3 (task 7): outline visibility. The state
+   *  lives in MindMapPanel (the toolbar button toggles it) but the
+   *  outline itself is mounted *inside* the canvas, so the actual
+   *  rendering happens here via FlowShell's `canvasOverlay` slot. */
+  outlineOpen?: boolean
+  onOutlineClose?: () => void
+  onOutlineFocus?: (nodeId: string) => void
 }
 
 export default function MindMapTree({
@@ -47,14 +58,23 @@ export default function MindMapTree({
   error,
   onRetry,
   searchQuery = '',
-  filterPattern,
   filterDepth,
   filterOnlyEdited = false,
   history,
   background = 'dots',
+  outlineOpen = false,
+  onOutlineClose,
+  onOutlineFocus,
 }: MindMapTreeProps) {
-  const { updateNode, addChildNode, deleteNode, moveNode, reparentNode, updateMindmapTree } =
-    useMindmapStore()
+  const {
+    updateNode,
+    resetNodePosition,
+    addChildNode,
+    deleteNode,
+    moveNode,
+    reparentNode,
+    updateMindmapTree,
+  } = useMindmapStore()
   const { collapsedIds, toggleCollapse } = useMindmapLayout(tree)
 
   const [editNode, setEditNode] = useState<MindMapNode | null>(null)
@@ -67,9 +87,6 @@ export default function MindMapTree({
   } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Stage A1: in-place expand state lives at the tree level (not in store).
-  // Refresh = lost. Ctrl/Cmd+double-click still opens the legacy modal.
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
   // Stage A2: hover state for path highlight. When a node is hovered, we
@@ -114,44 +131,20 @@ export default function MindMapTree({
     return s.mindmaps.find((m) => m.id === s.activeMindmapId)?.pattern ?? 'auto'
   })
 
-  const toggleExpand = useCallback((nodeId: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(nodeId)) {
-        next.delete(nodeId)
-      } else {
-        next.add(nodeId)
-      }
-      return next
-    })
-  }, [])
-
   // Stage C: compute the effective tree based on filter rules. The
   // filter is a "hide non-matching" pass that runs on the full tree
   // before collapse-pruning. Collapsed-state takes priority — if a
   // node is collapsed in `collapsedIds` its descendants never reach
   // the canvas regardless of filter.
-  //
-  // Pattern filtering is mindmap-level (the active mindmap has a
-  // single `pattern` value), so the predicate checks "is the active
-  // pattern in the selected set OR is the selected set empty".
   const effectiveTree = useMemo<MindMapNode[]>(() => {
-    const noFilter =
-      !filterPattern ||
-      (filterPattern.size === 0 &&
-        filterOnlyEdited === false &&
-        (filterDepth === undefined || filterDepth === 0))
+    const noFilter = filterOnlyEdited === false && (filterDepth === undefined || filterDepth === 0)
     if (noFilter) return tree
     const depthCap = filterDepth && filterDepth > 0 ? filterDepth : Infinity
-    const patternSelected = filterPattern && filterPattern.size > 0
-    // Predicate: node passes when its depth is at or below the cap,
-    // when the active mindmap's pattern is in the selected set (if
-    // the user picked at least one pattern checkbox), and (if the
-    // user wants "only edited") when the node carries the user-edit
-    // mark.
+    // Predicate: node passes when its depth is at or below the cap
+    // and (if the user wants "only edited") when the node carries
+    // the user-edit mark.
     const matches = (n: MindMapNode, depth: number): boolean => {
       if (depth > depthCap) return false
-      if (patternSelected && !filterPattern.has(pattern)) return false
       if (filterOnlyEdited && !n.editedByUser) return false
       return true
     }
@@ -167,7 +160,7 @@ export default function MindMapTree({
       return out
     }
     return walk(tree, 0)
-  }, [tree, filterPattern, filterDepth, filterOnlyEdited, pattern])
+  }, [tree, filterDepth, filterOnlyEdited])
 
   const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
@@ -176,16 +169,8 @@ export default function MindMapTree({
       toggleCollapse,
       pattern,
     )
-    // Apply in-place expand flag without rebuilding the tree.
-    if (expandedIds.size > 0) {
-      for (const n of rawNodes) {
-        if (expandedIds.has(n.id)) {
-          n.data.expanded = true
-        }
-      }
-    }
     return { nodes: rawNodes, edges: rawEdges }
-  }, [effectiveTree, collapsedIds, toggleCollapse, pattern, expandedIds])
+  }, [effectiveTree, collapsedIds, toggleCollapse, pattern])
 
   // Stage C: search-match set + dim set. When the search box has a
   // query, only the matching nodes stay at 100% opacity; everything
@@ -261,6 +246,15 @@ export default function MindMapTree({
     return { dimmedNodeIds: new Set<string>(), dimmedEdgeIds: new Set<string>() }
   }, [hoveredNodeId, hoveredEdgeId, tree, nodes, edges, searchMatchNodeIds])
 
+  // Context-menu target lookup. Used to read the "has pinned
+  // position" flag off the node so the right-click menu can show
+  // the "reset position" action only when relevant.
+  const contextMenuTarget = useMemo<MindMapNode | null>(() => {
+    if (!contextMenu) return null
+    return findNodeInTree(tree, contextMenu.nodeId)
+  }, [contextMenu, tree])
+  const hasPinnedPosition = contextMenuTarget?.position !== undefined
+
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
       return (instance as { getNodes?: () => unknown }).getNodes?.() ?? []
@@ -282,15 +276,15 @@ export default function MindMapTree({
   }
 
   const handleNodeDoubleClick = useCallback(
-    (event: React.MouseEvent, node: FlowNode) => {
-      if (event.ctrlKey || event.metaKey) {
-        const found = findNodeInTree(treeRef.current, node.id)
-        if (found) setEditNode(found)
-        return
-      }
-      toggleExpand(node.id)
+    (_event: React.MouseEvent, node: FlowNode) => {
+      // Double-clicking a node opens the editor directly. The
+      // earlier Stage A1 "in-place expand" toggle was a no-op
+      // visually (RectCardNode renders the full body either way),
+      // so the v2 cleanup drops it.
+      const found = findNodeInTree(treeRef.current, node.id)
+      if (found) setEditNode(found)
     },
-    [toggleExpand],
+    [],
   )
 
   const handleNodeContextMenu = useCallback(
@@ -450,6 +444,49 @@ export default function MindMapTree({
       setConfirmDelete(false)
     }
   }, [mindmapId, contextMenu, deleteNode, history])
+
+  // Drop a node's pinned position so dagre can re-place it on
+  // the next layout pass.
+  const handleResetPosition = useCallback(
+    (nodeId: string) => {
+      if (!mindmapId) return
+      history.record({ mindmapId, tree: cloneTree(treeRef.current) })
+      resetNodePosition(mindmapId, nodeId)
+    },
+    [mindmapId, resetNodePosition, history],
+  )
+
+  // mindmap-shell-v2 (task 5): duplicate a node as a sibling. The
+  // store does not have a dedicated `duplicateNode` action, so we
+  // patch the tree in-place: clone the node (with a fresh id),
+  // insert it after the original in the parent's children array,
+  // and call `updateMindmapTree`.
+  const handleDuplicate = useCallback(
+    (nodeId: string) => {
+      if (!mindmapId) return
+      const pos = findParentAndIndexLocal(treeRef.current, nodeId)
+      if (!pos) return
+      const { parent, index } = pos
+      const original = parent[index]
+      if (!original) return
+      const cloned: MindMapNode = {
+        ...JSON.parse(JSON.stringify(original)) as MindMapNode,
+        id:
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        label: `${original.label} 副本`,
+        editedByUser: true,
+      }
+      const newTree = JSON.parse(JSON.stringify(treeRef.current)) as MindMapNode[]
+      const newPos = findParentAndIndexLocal(newTree, nodeId)
+      if (!newPos) return
+      newPos.parent.splice(newPos.index + 1, 0, cloned)
+      history.record({ mindmapId, tree: cloneTree(treeRef.current) })
+      updateMindmapTree(mindmapId, newTree)
+    },
+    [mindmapId, updateMindmapTree, history],
+  )
 
   const handleReparent = useCallback(
     (mindmapIdArg: string, draggedId: string, targetId: string) => {
@@ -645,7 +682,6 @@ export default function MindMapTree({
         setHoveredEdgeId(null)
         setContextMenu(null)
         setConfirmDelete(false)
-        if (expandedIds.size > 0) setExpandedIds(new Set())
       },
       onUndo: handleUndo,
       onRedo: handleRedo,
@@ -655,7 +691,6 @@ export default function MindMapTree({
       addChildNode,
       deleteNode,
       history,
-      expandedIds,
       handleOpenContextMenuFor,
       handleArrowNavigate,
       handleTabJump,
@@ -672,67 +707,99 @@ export default function MindMapTree({
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <div className="rounded-full bg-destructive/10 p-4">
-          <AlertCircle className="w-10 h-10 text-destructive" />
+      <div
+        // mindmap-shell-v3 (task 7): the `position: relative`
+        // wrapper keeps the outline anchored to the canvas area
+        // even in the error branch.
+        className="flex-1 relative"
+      >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
+          <div className="rounded-full bg-destructive/10 p-4">
+            <AlertCircle className="w-10 h-10 text-destructive" />
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-medium text-foreground">脑图加载失败</p>
+            <p className="text-xs text-muted-foreground max-w-[280px]">{error}</p>
+          </div>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5" />
+              重试
+            </Button>
+          )}
+          <a
+            href="https://github.com/web4zn/progressive-mindmap/issues"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+          >
+            联系支持 →
+          </a>
         </div>
-        <div className="text-center space-y-1">
-          <p className="text-sm font-medium text-foreground">脑图加载失败</p>
-          <p className="text-xs text-muted-foreground max-w-[280px]">{error}</p>
-        </div>
-        {onRetry && (
-          <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
-            <RefreshCw className="w-3.5 h-3.5" />
-            重试
-          </Button>
-        )}
-        <a
-          href="https://github.com/web4zn/progressive-mindmap/issues"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-        >
-          联系支持 →
-        </a>
+        <MindMapOutline
+          open={outlineOpen}
+          onClose={onOutlineClose ?? (() => {})}
+          onFocus={onOutlineFocus ?? (() => {})}
+        />
       </div>
     )
   }
 
   if (isGenerating && (!isStreaming || tree.length === 0)) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <div className="rounded-full bg-primary/10 p-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      <div
+        // mindmap-shell-v3 (task 7): see error branch.
+        className="flex-1 relative"
+      >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
+          <div className="rounded-full bg-primary/10 p-4">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          </div>
+          <p className="text-sm font-medium text-foreground">正在生成思维导图…</p>
+          <p className="text-xs text-muted-foreground">智能体正在从关联会话中抽取节点</p>
+          <div className="w-full max-w-[280px] space-y-2 mt-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-5 rounded bg-muted animate-pulse"
+                style={{ width: `${85 - i * 15}%`, marginLeft: `${i * 12}px` }}
+              />
+            ))}
+          </div>
         </div>
-        <p className="text-sm font-medium text-foreground">正在生成思维导图…</p>
-        <p className="text-xs text-muted-foreground">智能体正在从关联会话中抽取节点</p>
-        <div className="w-full max-w-[280px] space-y-2 mt-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-5 rounded bg-muted animate-pulse"
-              style={{ width: `${85 - i * 15}%`, marginLeft: `${i * 12}px` }}
-            />
-          ))}
-        </div>
+        <MindMapOutline
+          open={outlineOpen}
+          onClose={onOutlineClose ?? (() => {})}
+          onFocus={onOutlineFocus ?? (() => {})}
+        />
       </div>
     )
   }
 
   if (tree.length === 0 && !isGenerating) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-        <div className="rounded-full bg-primary/5 p-5 mb-1 relative">
-          <Sparkles className="w-10 h-10 text-primary/60" />
-          <Network
-            className="w-4 h-4 absolute -bottom-1 -right-1 text-primary/40"
-            aria-hidden
-          />
+      <div
+        // mindmap-shell-v3 (task 7): see error branch.
+        className="flex-1 relative"
+      >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
+          <div className="rounded-full bg-primary/5 p-5 mb-1 relative">
+            <Sparkles className="w-10 h-10 text-primary/60" />
+            <Network
+              className="w-4 h-4 absolute -bottom-1 -right-1 text-primary/40"
+              aria-hidden
+            />
+          </div>
+          <p className="text-sm font-medium text-foreground text-center">还没有图谱</p>
+          <p className="text-xs text-center max-w-[260px] leading-relaxed opacity-80">
+            关联一个会话,聊着聊着脑图就长出来了
+          </p>
         </div>
-        <p className="text-sm font-medium text-foreground text-center">还没有图谱</p>
-        <p className="text-xs text-center max-w-[260px] leading-relaxed opacity-80">
-          关联一个会话,聊着聊着脑图就长出来了
-        </p>
+        <MindMapOutline
+          open={outlineOpen}
+          onClose={onOutlineClose ?? (() => {})}
+          onFocus={onOutlineFocus ?? (() => {})}
+        />
       </div>
     )
   }
@@ -773,8 +840,26 @@ export default function MindMapTree({
         background={background}
         onPaneDoubleClick={() => {
           flowShellRef.current?.fitView({ padding: 0.3, duration: 200 })
-          if (expandedIds.size > 0) setExpandedIds(new Set())
         }}
+      />
+
+      {/* mindmap-shell-v3 (task 7): the outline is *part of* the
+       *  canvas. Mounted as a sibling of <FlowShell /> inside the
+       *  same `position: relative` wrapper so it docks against the
+       *  canvas area's top-right corner (not the whole panel).
+       *
+       *  Crucially, the wrapper is present in *every* branch of
+       *  this component (see error / loading / empty early-returns
+       *  below — each has a matching `flex-1 relative` shell) so
+       *  the outline is reachable even when there's no React Flow
+       *  canvas to inject it into. The element itself is always
+       *  rendered (regardless of `outlineOpen`) so the slide-in /
+       *  fade-in animation can play — the `open` prop drives
+       *  opacity + transform. */}
+      <MindMapOutline
+        open={outlineOpen}
+        onClose={onOutlineClose ?? (() => {})}
+        onFocus={onOutlineFocus ?? (() => {})}
       />
 
       {editNode && (
@@ -795,8 +880,9 @@ export default function MindMapTree({
           canUndo={history.canUndo}
           canRedo={history.canRedo}
           confirmDelete={confirmDelete}
+          hasPinnedPosition={hasPinnedPosition}
           onEdit={() => {
-            const found = findNodeInTree(treeRef.current, contextMenu.nodeId)
+            const found = findNodeInTree(tree, contextMenu.nodeId)
             if (found) setEditNode(found)
             setContextMenu(null)
           }}
@@ -806,6 +892,14 @@ export default function MindMapTree({
           onCenter={handleCenterOnNode}
           onUndo={handleUndo}
           onRedo={handleRedo}
+          onResetPosition={() => {
+            handleResetPosition(contextMenu.nodeId)
+            setContextMenu(null)
+          }}
+          onDuplicate={() => {
+            handleDuplicate(contextMenu.nodeId)
+            setContextMenu(null)
+          }}
           onDeleteRequest={() => setConfirmDelete(true)}
           onDeleteConfirm={handleDeleteConfirm}
           onCancelDelete={() => setConfirmDelete(false)}
@@ -823,6 +917,29 @@ export default function MindMapTree({
 
 function cloneTree(tree: MindMapNode[]): MindMapNode[] {
   return JSON.parse(JSON.stringify(tree)) as MindMapNode[]
+}
+
+/**
+ * Local re-implementation of `findParentAndIndex` (which lives in
+ * `@/stores/mindmapStore`). We keep the helper here so the
+ * duplicate handler doesn't need to import private store
+ * internals. The behaviour is identical: returns
+ * `{ parent, index }` for the node, or `null` if not found.
+ */
+function findParentAndIndexLocal(
+  nodes: MindMapNode[],
+  nodeId: string,
+): { parent: MindMapNode[]; index: number } | null {
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]
+    if (!n) continue
+    if (n.id === nodeId) return { parent: nodes, index: i }
+    if (n.children.length > 0) {
+      const found = findParentAndIndexLocal(n.children, nodeId)
+      if (found) return found
+    }
+  }
+  return null
 }
 
 // Type-safe noop for unused-but-imported helpers in case the search

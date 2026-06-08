@@ -11,8 +11,6 @@ export interface FlowNodeData extends Record<string, unknown> {
   editedByUser: boolean
   hasChildren: boolean
   collapsed: boolean
-  /** Stage A1: in-place expand state (component-level, not persisted). */
-  expanded?: boolean
   /** Stage A1: optional override for runtime width/height hint from the layout. */
   size?: { width: number; height: number }
   /** Stage A2: hover-path highlight. When true the node is rendered with

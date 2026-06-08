@@ -57,7 +57,7 @@ CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx e
 
 - Never commit secrets — `.env` is in `.gitignore`. API keys live in `providerStore`, not in code.
 - Mindmap node content is sanitized via `src/lib/html-sanitizer.ts` (DOMPurify) before render. Don't bypass it.
-- AI-generated nodes must carry a `[源: convId/msgId]` source annotation in the prompt and surface it in the UI.
+- Mindmap nodes do **not** carry an AI source annotation. The previous `[源: convId/msgId]` requirement was dropped in the mindmap-shell-v2 refactor; if a future audit / provenance layer is needed it should live in a dedicated store, not on the node.
 
 ## Project context
 
