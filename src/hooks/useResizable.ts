@@ -25,14 +25,19 @@ export interface UseResizableReturn {
 }
 
 /**
- * Tiny imperative-resize hook used by `MindMapEditModal`. We don't
- * pull in `react-resizable-panels` (or `react-resizable`) for this —
- * the editor modal has exactly one drag handle, the math is 30
- * lines, and a dep would add 30kb+ to the bundle for a single
- * use-site.
+ * Tiny imperative-resize hook. Originally extracted for the
+ * `MindMapEditModal` dialog (now removed — replaced by
+ * `NodeEditorCard` which does not expose a resize handle). Kept
+ * as a public hook so any future floating panel that *does* want
+ * a drag-resize handle can reuse it without re-deriving the math.
+ *
+ * We don't pull in `react-resizable-panels` (or `react-resizable`)
+ * for this — the typical use-site has exactly one drag handle,
+ * the math is ~30 lines, and a dep would add 30kb+ to the bundle
+ * for a single use-site.
  *
  * The hook clamps to [minSize, maxSize] on every mousemove so the
- * user can never drag the modal off-screen.
+ * user can never drag the host off-screen.
  */
 export function useResizable({
   defaultSize,

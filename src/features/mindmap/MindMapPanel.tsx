@@ -77,6 +77,13 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   // Stage C: top-bar / drawer state
   const [outlineOpen, setOutlineOpen] = useState(false)
+  // node-editor-card (Stage mindmap-shell-v3+): editor card
+  // state. The editor and the outline are mutually exclusive —
+  // they both anchor to the canvas's top-right corner, so they
+  // cannot be visible at the same time. MindMapPanel owns the
+  // state machine (see `openEditor` / `toggleOutline`).
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorNodeId, setEditorNodeId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<MindMapFilterValue>({
     maxDepth: 0,
@@ -152,6 +159,22 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     },
     [activeMindmapId, removeMonitoredConversation],
   )
+
+  // node-editor-card: open the editor for a specific node and
+  // close the outline at the same time. Both panels anchor to
+  // the canvas's top-right corner, so the strict mutual exclusion
+  // is enforced here in a single setState batch — they flip in
+  // the same render and only one card is visible at a time.
+  const openEditor = useCallback((nodeId: string) => {
+    setEditorNodeId(nodeId)
+    setEditorOpen(true)
+    setOutlineOpen(false)
+  }, [])
+
+  const closeEditor = useCallback(() => {
+    setEditorOpen(false)
+    setEditorNodeId(null)
+  }, [])
 
   const handleExportPng = useCallback(
     (pixelRatio: 1 | 2 | 3) => {
@@ -284,7 +307,18 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         <Button
           variant={outlineOpen ? 'secondary' : 'ghost'}
           size="icon-sm"
-          onClick={() => setOutlineOpen((o) => !o)}
+          onClick={() => {
+            // node-editor-card: outline and editor are mutually
+            // exclusive. If the editor is open, treat the click as
+            // "switch to outline" (close editor, open outline).
+            // Otherwise toggle as before.
+            if (editorOpen) {
+              closeEditor()
+              setOutlineOpen(true)
+            } else {
+              setOutlineOpen((o) => !o)
+            }
+          }}
           title="大纲"
           aria-label="大纲"
           data-testid="mindmap-toolbar-outline"
@@ -388,6 +422,15 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         outlineOpen={outlineOpen}
         onOutlineClose={() => setOutlineOpen(false)}
         onOutlineFocus={handleOutlineFocus}
+        // node-editor-card: editor state and callbacks. The Tree
+        // mounts <NodeEditorCard> at the top-right of the canvas
+        // and routes right-click / double-click into `onEditorOpen`.
+        // The Tree never opens the editor itself — only the panel
+        // can flip the state.
+        editorOpen={editorOpen}
+        editorNodeId={editorNodeId}
+        onEditorOpen={openEditor}
+        onEditorClose={closeEditor}
       />
 
       <MindMapDrawer

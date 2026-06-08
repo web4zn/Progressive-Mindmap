@@ -10,7 +10,7 @@ import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
 import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
 import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
 import type { Node as FlowNode } from '@xyflow/react'
-import MindMapEditModal from './MindMapEditModal'
+import NodeEditorCard from './NodeEditorCard'
 import MindMapContextMenu from './MindMapContextMenu'
 import MindMapOutline from './MindMapOutline'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
@@ -48,6 +48,15 @@ interface MindMapTreeProps {
   outlineOpen?: boolean
   onOutlineClose?: () => void
   onOutlineFocus?: (nodeId: string) => void
+  /** node-editor-card: editor visibility. State and open / close
+   *  callbacks are owned by `MindMapPanel`; the Tree only renders
+   *  the card. The Tree itself never opens the editor — it routes
+   *  the trigger (double-click / context-menu) into `onEditorOpen`
+   *  and lets the panel decide. */
+  editorOpen?: boolean
+  editorNodeId?: string | null
+  onEditorOpen?: (nodeId: string) => void
+  onEditorClose?: () => void
 }
 
 export default function MindMapTree({
@@ -65,6 +74,10 @@ export default function MindMapTree({
   outlineOpen = false,
   onOutlineClose,
   onOutlineFocus,
+  editorOpen = false,
+  editorNodeId = null,
+  onEditorOpen,
+  onEditorClose,
 }: MindMapTreeProps) {
   const {
     updateNode,
@@ -77,7 +90,6 @@ export default function MindMapTree({
   } = useMindmapStore()
   const { collapsedIds, toggleCollapse } = useMindmapLayout(tree)
 
-  const [editNode, setEditNode] = useState<MindMapNode | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -281,10 +293,12 @@ export default function MindMapTree({
       // earlier Stage A1 "in-place expand" toggle was a no-op
       // visually (RectCardNode renders the full body either way),
       // so the v2 cleanup drops it.
-      const found = findNodeInTree(treeRef.current, node.id)
-      if (found) setEditNode(found)
+      // node-editor-card: route through `onEditorOpen` so the
+      // panel owns the state and can enforce the strict mutual
+      // exclusion with the outline.
+      onEditorOpen?.(node.id)
     },
-    [],
+    [onEditorOpen],
   )
 
   const handleNodeContextMenu = useCallback(
@@ -403,9 +417,11 @@ export default function MindMapTree({
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
         updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       }
-      setEditNode(null)
+      // node-editor-card: card is owned by the panel; close it
+      // through the callback rather than local state.
+      onEditorClose?.()
     },
-    [mindmapId, updateNode, history],
+    [mindmapId, updateNode, history, onEditorClose],
   )
 
   const handleAddChild = useCallback(
@@ -702,7 +718,10 @@ export default function MindMapTree({
   useMindmapHotkeys({
     handlers: hotkeyHandlers,
     selectedNodeId,
-    enabled: editNode === null && contextMenu === null,
+    // node-editor-card: disable canvas hotkeys while the editor
+    // card is open (so e.g. "F2 to edit" doesn't re-fire on the
+    // textarea). Same as the previous editNode === null guard.
+    enabled: !editorOpen && contextMenu === null,
   })
 
   if (error) {
@@ -862,13 +881,22 @@ export default function MindMapTree({
         onFocus={onOutlineFocus ?? (() => {})}
       />
 
-      {editNode && (
-        <MindMapEditModal
-          node={editNode}
-          onConfirm={handleEditConfirm}
-          onCancel={() => setEditNode(null)}
-        />
-      )}
+      {editorOpen && editorNodeId && (() => {
+        // node-editor-card: the card renders the node looked up
+        // at render time. If the node was deleted between the
+        // panel opening the card and the next render, we fall
+        // back to null (no card) rather than crashing.
+        const found = findNodeInTree(tree, editorNodeId)
+        if (!found) return null
+        return (
+          <NodeEditorCard
+            node={found}
+            open={editorOpen}
+            onConfirm={handleEditConfirm}
+            onCancel={onEditorClose ?? (() => {})}
+          />
+        )
+      })()}
 
       {contextMenu && (
         <MindMapContextMenu
@@ -882,8 +910,9 @@ export default function MindMapTree({
           confirmDelete={confirmDelete}
           hasPinnedPosition={hasPinnedPosition}
           onEdit={() => {
-            const found = findNodeInTree(tree, contextMenu.nodeId)
-            if (found) setEditNode(found)
+            // node-editor-card: route through the panel so the
+            // mutual exclusion with the outline is enforced.
+            onEditorOpen?.(contextMenu.nodeId)
             setContextMenu(null)
           }}
           onAddChild={() => handleAddChild()}
