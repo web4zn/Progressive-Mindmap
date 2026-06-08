@@ -55,32 +55,35 @@ describe('migrateV1ToV2', () => {
     // The v2 mindmap node carries no `shape` field; the migration
     // must drop a `shape` left over from a pre-cleanup v1 client
     // so the persisted payload stays clean.
-    const v1 = makeV1({
-      tree: [
+    // The v2 type carries no `shape`; the v1 fixture intentionally
+    // includes one to exercise the migration's drop-path. We cast
+    // the literal through `unknown` so we can attach an extra
+    // `shape` key without the @ts-expect-error ceremony.
+    const rootFixture = {
+      id: 'root',
+      label: 'Root',
+      summary: '',
+      shape: 'circle',
+      children: [
         {
-          id: 'root',
-          label: 'Root',
+          id: 'child',
+          label: 'Child',
           summary: '',
-          // @ts-expect-error — pre-cleanup v1 carried a `shape`
-          shape: 'circle',
-          children: [
-            {
-              id: 'child',
-              label: 'Child',
-              summary: '',
-              // @ts-expect-error
-              shape: 'chip',
-              children: [],
-              editedByUser: false,
-            },
-          ],
+          shape: 'chip',
+          children: [],
           editedByUser: false,
         },
       ],
-    })
+      editedByUser: false,
+    } as unknown as MindMapNodeV1
+    const v1 = makeV1({ tree: [rootFixture] })
     const v2 = migrateV1ToV2(v1)
-    expect(v2.tree[0]?.shape).toBeUndefined()
-    expect(v2.tree[0]?.children[0]?.shape).toBeUndefined()
+    // The v2 type carries no `shape` field; the migration must
+    // drop the key on the persisted object so the on-disk shape
+    // stays clean (we read via `in` to avoid relying on a
+    // type-level `shape` property which has been removed).
+    expect('shape' in (v2.tree[0] as object)).toBe(false)
+    expect('shape' in ((v2.tree[0]?.children ?? [])[0] as object)).toBe(false)
   })
 
   it('walks a deep chain without any shape field', () => {
@@ -107,7 +110,7 @@ describe('migrateV1ToV2', () => {
       depth++
     }
     expect(depth).toBe(4)
-    expect(walker?.shape).toBeUndefined()
+    expect(walker && 'shape' in walker).toBe(false)
   })
 
   it('falls back to "未命名" for empty labels', () => {

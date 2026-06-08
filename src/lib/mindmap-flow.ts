@@ -46,7 +46,11 @@ export function treeToFlowShell(
     for (const n of list) {
       const hasChildren = n.children.length > 0
       const isCollapsed = collapsedIds.has(n.id)
-      const shape = resolveShapeName(n.shape)
+      // The v2 node carries no `shape` field; the renderer always
+      // falls back to `'rect'`. Pass `undefined` so `resolveShapeName`
+      // can collapse any stale value (e.g. a v1 carry-over) into the
+      // same default.
+      const shape = resolveShapeName(undefined)
 
       flowNodes.push({
         id: n.id,
