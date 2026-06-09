@@ -298,7 +298,7 @@ describe('NodeEditorCard — resizable width', () => {
     window.localStorage.removeItem(STORAGE_KEY)
   })
 
-  it('exposes a left-edge resize handle with a bottom-left grip affordance', () => {
+  it('exposes a left-edge resize handle with a 2x2 grip-dot affordance', () => {
     renderCard()
     const handle = screen.getByTestId('node-editor-resize-handle')
     expect(handle).toBeInTheDocument()
@@ -307,15 +307,18 @@ describe('NodeEditorCard — resizable width', () => {
     expect(handle.className).toContain('left-0')
     // Cursor must be ew-resize, not the br-handle's nwse-resize.
     expect(handle.className).toContain('cursor-ew-resize')
-    // The handle is a `group` so the inner grip icon can react
+    // The handle is a `group` so the inner dots can react
     // to hover / active states on the parent.
     expect(handle.className).toContain('group')
-    // Visible affordance: a `GripVertical` lucide icon sits in
-    // the bottom-left corner so the user can *see* that the
-    // edge is resizable (a bare 4-8px transparent strip was
-    // too easy to miss — reported by the user).
-    const grip = handle.querySelector('svg.lucide-grip-vertical')
+    // Visible affordance: 2×2 grip dots in the bottom-left
+    // corner. User feedback: a bare 4-8px transparent strip
+    // was too easy to miss, and a 6-dot `GripVertical` was
+    // too dense — the 2×2 dot pattern is the classic shadcn
+    // / ResizeHandle "this is resizable" cue.
+    const grip = screen.getByTestId('node-editor-resize-grip')
     expect(grip).toBeInTheDocument()
+    // 2×2 = exactly 4 dots.
+    expect(grip.querySelectorAll('span')).toHaveLength(4)
     // The handle should announce itself for assistive tech.
     expect(handle.getAttribute('aria-label')).toMatch(/宽度/)
   })
