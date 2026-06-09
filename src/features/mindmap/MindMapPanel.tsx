@@ -8,7 +8,7 @@ import MindMapTree from '@/features/mindmap/MindMapTree'
 import MindMapHeader, { type MindMapPattern } from '@/features/mindmap/MindMapHeader'
 import MindMapDrawer from '@/features/mindmap/MindMapDrawer'
 import MindMapSearch from '@/features/mindmap/MindMapSearch'
-import { MindMapFilterBody, type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
+import MindMapFilter, { type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
 import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import { matchNodes } from '@/lib/mindmap-search'
 import type { MindMap } from '@/types/mindmap'
@@ -22,20 +22,8 @@ import {
   Square,
   Sun,
   Moon,
-  MoreHorizontal,
-  Sliders,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 
@@ -46,14 +34,20 @@ interface MindMapPanelProps {
 type BackgroundVariant = 'dots' | 'grid' | 'none'
 
 /**
- * Stage B + Stage C + Stage D + mindmap-shell-v2 (task 5): top-level
- * container.
+ * Stage B + Stage C + Stage D + mindmap-shell-v2 (task 5) +
+ * toolbar-flatten pass: top-level container.
  *
- * v2 toolbar consolidation: the middle toolbar now has 4 visible
- * chips (Undo / Redo / Outline / Search) plus a "more" dropdown
- * that holds the less-frequently-touched controls (filter,
- * background, theme). This keeps the toolbar under the 6-button
- * budget the Dify-style redesign calls for.
+ * Toolbar layout (post flatten — no more "more" dropdown):
+ *
+ *   [Undo] [Redo] | [Outline] [Search] | [Background] [Theme] | [Filter]
+ *
+ * The earlier v2 grouped Background / Filter / Theme inside a
+ * "more" dropdown. User feedback was that the dropdown felt
+ * redundant — the three controls are all small, frequently
+ * touched, and visually parallel (icon + label). They're now
+ * inline; the segmented background switcher and the depth-only
+ * filter button retain their popover where the control itself
+ * is multi-state.
  *
  * Stage D — global theme (light / dark / system). The hook is
  * mounted here (not in App.tsx) because the toggle button lives
@@ -334,73 +328,78 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
           compact
         />
 
-        {/* mindmap-shell-v2 (task 5): "more" dropdown for the
-            three secondary actions. Replaces the previous
-            inline BackgroundSwitcher + theme button. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors outline-none',
-              'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-              'focus-visible:ring-2 focus-visible:ring-ring/40',
-            )}
-            title="更多"
-            aria-label="更多"
-            data-testid="mindmap-toolbar-more"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56" data-testid="mindmap-toolbar-more-menu">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>画布选项</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={background}
-                onValueChange={(v) => setBackground(v as BackgroundVariant)}
+        <div className="w-px h-4 bg-border mx-0.5" />
+
+        {/* Background switcher — 3-way segmented control
+            (dots / grid / none). Pinned inline so the user can
+            see the current variant at a glance instead of
+            having to open a "more" menu (the v2 dropdown
+            hidden all three of these together; user feedback
+            was that the dropdown felt redundant). */}
+        <div
+          role="radiogroup"
+          aria-label="画布背景"
+          data-testid="background-switcher"
+          className="inline-flex items-center rounded-md border border-input bg-background p-0.5"
+        >
+          {(
+            [
+              { value: 'dots', icon: Grid3x3, label: '点阵背景' },
+              { value: 'grid', icon: Grid2x2, label: '网格背景' },
+              { value: 'none', icon: Square, label: '无背景' },
+            ] as const
+          ).map(({ value, icon: Icon, label }) => {
+            const active = background === value
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={label}
+                title={label}
+                onClick={() => setBackground(value)}
+                data-testid={`background-switcher-${value}`}
+                className={cn(
+                  'inline-flex items-center justify-center w-6 h-6 rounded transition-colors outline-none',
+                  'focus-visible:ring-2 focus-visible:ring-ring/40',
+                  active
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
               >
-                <DropdownMenuRadioItem value="dots" closeOnClick={false}>
-                  <Grid3x3 className="w-4 h-4 mr-2" />
-                  点阵背景
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="grid" closeOnClick={false}>
-                  <Grid2x2 className="w-4 h-4 mr-2" />
-                  网格背景
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="none" closeOnClick={false}>
-                  <Square className="w-4 h-4 mr-2" />
-                  无背景
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex items-center gap-1.5">
-                <Sliders className="w-3 h-3" />
-                筛选
-              </DropdownMenuLabel>
-              <div className="px-1.5 pb-1.5">
-                <MindMapFilterBody value={filter} onChange={setFilter} />
-              </div>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={cn(
-                'group/dropdown-menu-item relative flex w-full cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none',
-                'hover:bg-accent hover:text-accent-foreground',
-              )}
-              aria-pressed={theme === 'dark'}
-              data-testid="mindmap-theme-toggle"
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4 mr-2" />
-              ) : (
-                <Moon className="w-4 h-4 mr-2" />
-              )}
-              {theme === 'dark' ? '切换到浅色' : '切换到深色'}
-            </button>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Theme toggle — single button, Sun in dark mode
+            (suggests "switch to light") and Moon in light
+            mode. Pinned inline for the same discoverability
+            reason as the background switcher. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          aria-pressed={theme === 'dark'}
+          title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          data-testid="mindmap-toolbar-theme-toggle"
+        >
+          {theme === 'dark' ? (
+            <Sun className="w-3.5 h-3.5" />
+          ) : (
+            <Moon className="w-3.5 h-3.5" />
+          )}
+        </Button>
+
+        <div className="w-px h-4 bg-border mx-0.5" />
+
+        {/* Depth-only filter. The previously-also-exposed
+            "only-edited" checkbox was removed (user feedback:
+            too narrow, never useful). See `MindMapFilter`. */}
+        <MindMapFilter value={filter} onChange={setFilter} />
       </div>
 
       <MindMapTree
