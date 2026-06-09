@@ -4,6 +4,7 @@ import {
   Code,
   Columns2,
   Eye,
+  GripVertical,
   Heading2,
   Heading3,
   Heading4,
@@ -471,22 +472,33 @@ export default function NodeEditorCard({
       )}
     >
       {/*
-        Left-edge resize handle. 4px wide, full height of the
-        card, hover/active tint via primary colour. Drawn
-        before the body so it never sits on top of the toolbar's
-        focus ring or the textarea's selection.
+        Left-edge resize handle. The whole edge is the drag
+        target (so the user doesn't have to aim at a 16×16
+        square) but the affordance is a `GripVertical` icon
+        pinned to the bottom-left corner — a 4px transparent
+        strip on its own was too easy to miss. Hover paints a
+        weak primary tint on the strip and brightens the icon;
+        active (mid-drag) deepens both. Drawn before the body
+        so it never sits on top of the toolbar's focus ring or
+        the textarea's selection.
       */}
       <div
         ref={resizeHandleRef}
         data-testid="node-editor-resize-handle"
         onMouseDown={startResize}
         onDoubleClick={resetWidth}
-        className="absolute top-0 bottom-0 left-0 w-1 cursor-ew-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        className="group absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize hover:bg-primary/15 active:bg-primary/30 transition-colors"
         aria-label="拖动调整编辑器宽度,双击重置为默认"
         title="拖动调整宽度 · 双击重置"
         role="separator"
         aria-orientation="vertical"
-      />
+      >
+        <GripVertical
+          aria-hidden="true"
+          strokeWidth={2.5}
+          className="absolute bottom-1 left-1 w-2 h-3.5 text-muted-foreground/50 group-hover:text-foreground/80 group-active:text-foreground transition-colors pointer-events-none"
+        />
+      </div>
       <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border">
         <div className="flex items-center gap-1.5 min-w-0">
           <Pencil className="w-4 h-4 text-primary shrink-0" />

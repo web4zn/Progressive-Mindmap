@@ -298,7 +298,7 @@ describe('NodeEditorCard — resizable width', () => {
     window.localStorage.removeItem(STORAGE_KEY)
   })
 
-  it('exposes a left-edge resize handle', () => {
+  it('exposes a left-edge resize handle with a bottom-left grip affordance', () => {
     renderCard()
     const handle = screen.getByTestId('node-editor-resize-handle')
     expect(handle).toBeInTheDocument()
@@ -307,6 +307,15 @@ describe('NodeEditorCard — resizable width', () => {
     expect(handle.className).toContain('left-0')
     // Cursor must be ew-resize, not the br-handle's nwse-resize.
     expect(handle.className).toContain('cursor-ew-resize')
+    // The handle is a `group` so the inner grip icon can react
+    // to hover / active states on the parent.
+    expect(handle.className).toContain('group')
+    // Visible affordance: a `GripVertical` lucide icon sits in
+    // the bottom-left corner so the user can *see* that the
+    // edge is resizable (a bare 4-8px transparent strip was
+    // too easy to miss — reported by the user).
+    const grip = handle.querySelector('svg.lucide-grip-vertical')
+    expect(grip).toBeInTheDocument()
     // The handle should announce itself for assistive tech.
     expect(handle.getAttribute('aria-label')).toMatch(/宽度/)
   })
