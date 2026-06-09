@@ -501,12 +501,16 @@ export default function NodeEditorCard({
       >
         {/*
           6-dot diagonal grip. Coordinates mirror the modal's
-          bottom-right grip along the vertical axis — the
-          bottom row has 3 dots (3, 7, 11), the middle has
-          2 (7, 9), the top has 1 (11), creating a ↗
-          density gradient. `currentColor` lets the muted
-          colour and the hover override flow through from
-          the parent's `text-…` classes.
+          bottom-right grip across the vertical axis so the
+          density gradient now points at the LEFT-bottom
+          corner (where the grip actually lives) instead of
+          the right-bottom corner. Concretely: 3 dots share
+          the x=3 column, 2 dots share x=7, 1 dot sits at
+          x=11 — i.e. column-count falls 3→2→1 from left to
+          right, density increases from top-right toward the
+          bottom-LEFT. `currentColor` lets the muted colour
+          and the hover override flow through from the
+          parent's `text-…` classes.
         */}
         <svg
           aria-hidden="true"
@@ -514,12 +518,12 @@ export default function NodeEditorCard({
           viewBox="0 0 16 16"
           className="w-full h-full fill-current"
         >
+          <circle cx="3" cy="5" r="1" />
+          <circle cx="3" cy="9" r="1" />
+          <circle cx="7" cy="9" r="1" />
           <circle cx="3" cy="13" r="1" />
           <circle cx="7" cy="13" r="1" />
           <circle cx="11" cy="13" r="1" />
-          <circle cx="7" cy="9" r="1" />
-          <circle cx="11" cy="9" r="1" />
-          <circle cx="11" cy="5" r="1" />
         </svg>
       </div>
       <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border">

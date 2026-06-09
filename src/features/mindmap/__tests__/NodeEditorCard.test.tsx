@@ -317,12 +317,28 @@ describe('NodeEditorCard — resizable width', () => {
     expect(handle.className).toContain('cursor-ew-resize')
     // The visible affordance is a 6-dot diagonal grip SVG,
     // the same one the deleted `MindMapEditModal` used in
-    // its bottom-right corner — mirrored along the
-    // vertical axis for the left corner.
+    // its bottom-right corner — mirrored across the
+    // vertical axis so the density gradient points at the
+    // LEFT-bottom corner where the grip actually lives.
     const grip = screen.getByTestId('node-editor-resize-grip')
     expect(grip).toBeInTheDocument()
     expect(grip.tagName.toLowerCase()).toBe('svg')
-    expect(grip.querySelectorAll('circle')).toHaveLength(6)
+    const dots = grip.querySelectorAll('circle')
+    expect(dots).toHaveLength(6)
+    // Density orientation: in a 16×16 viewBox the column at
+    // x=3 should have 3 dots (the most), x=7 should have 2,
+    // x=11 should have 1. That is the leftward-pointing
+    // gradient — an earlier iteration got this wrong and
+    // pointed the gradient at the right (i.e. away from
+    // the actual grip), which the user immediately noticed.
+    const columnCounts: Record<string, number> = { '3': 0, '7': 0, '11': 0 }
+    dots.forEach((dot) => {
+      const cx = dot.getAttribute('cx') ?? ''
+      if (cx in columnCounts) columnCounts[cx] = (columnCounts[cx] ?? 0) + 1
+    })
+    expect(columnCounts['3']).toBe(3)
+    expect(columnCounts['7']).toBe(2)
+    expect(columnCounts['11']).toBe(1)
     // The handle should announce itself for assistive tech.
     expect(handle.getAttribute('aria-label')).toMatch(/宽度/)
   })
