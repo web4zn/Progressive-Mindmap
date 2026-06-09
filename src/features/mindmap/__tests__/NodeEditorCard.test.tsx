@@ -298,27 +298,31 @@ describe('NodeEditorCard — resizable width', () => {
     window.localStorage.removeItem(STORAGE_KEY)
   })
 
-  it('exposes a left-edge resize handle with a 2x2 grip-dot affordance', () => {
+  it('exposes a corner resize grip modelled on the old modal handle', () => {
     renderCard()
     const handle = screen.getByTestId('node-editor-resize-handle')
     expect(handle).toBeInTheDocument()
-    // The handle sits on the left edge — same side the user
-    // drags to widen the card.
-    expect(handle.className).toContain('left-0')
-    // Cursor must be ew-resize, not the br-handle's nwse-resize.
+    // The grip lives in the bottom-left corner (card is
+    // anchored to `right-3`, so the right edge is fixed
+    // and the user widens by pulling the LEFT side).
+    expect(handle.className).toContain('left-1.5')
+    expect(handle.className).toContain('bottom-1.5')
+    // 18×18 — small enough not to get in the way, big
+    // enough to land without aiming.
+    expect(handle.className).toContain('w-[18px]')
+    expect(handle.className).toContain('h-[18px]')
+    // ew-resize because only width is adjusted (the hook
+    // uses `direction: 'l'` so height is intentionally
+    // ignored even though dh is non-zero).
     expect(handle.className).toContain('cursor-ew-resize')
-    // The handle is a `group` so the inner dots can react
-    // to hover / active states on the parent.
-    expect(handle.className).toContain('group')
-    // Visible affordance: 2×2 grip dots in the bottom-left
-    // corner. User feedback: a bare 4-8px transparent strip
-    // was too easy to miss, and a 6-dot `GripVertical` was
-    // too dense — the 2×2 dot pattern is the classic shadcn
-    // / ResizeHandle "this is resizable" cue.
+    // The visible affordance is a 6-dot diagonal grip SVG,
+    // the same one the deleted `MindMapEditModal` used in
+    // its bottom-right corner — mirrored along the
+    // vertical axis for the left corner.
     const grip = screen.getByTestId('node-editor-resize-grip')
     expect(grip).toBeInTheDocument()
-    // 2×2 = exactly 4 dots.
-    expect(grip.querySelectorAll('span')).toHaveLength(4)
+    expect(grip.tagName.toLowerCase()).toBe('svg')
+    expect(grip.querySelectorAll('circle')).toHaveLength(6)
     // The handle should announce itself for assistive tech.
     expect(handle.getAttribute('aria-label')).toMatch(/宽度/)
   })

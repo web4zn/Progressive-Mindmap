@@ -471,49 +471,56 @@ export default function NodeEditorCard({
       )}
     >
       {/*
-        Left-edge resize handle. The whole edge is the drag
-        target (so the user doesn't have to aim at a tiny
-        square) but the affordance is a 2×2 grid of dots
-        pinned to the bottom-left corner — the classic
-        "this is resizable" cue, the same one shadcn's
-        `ResizableHandle` uses. Hover paints a weak primary
-        tint on the strip and brightens the dots; active
-        (mid-drag) deepens both. Drawn before the body so it
-        never sits on top of the toolbar's focus ring or the
-        textarea's selection.
+        Bottom-left resize grip. Modelled on the
+        `MindMapEditModal` (now removed) resize handle — a
+        18×18px square in the corner with a 6-dot diagonal
+        grip SVG. That modal used the handle in the
+        bottom-RIGHT corner with a ↘ density gradient; here
+        the card is anchored to `right-3` (so the right edge
+        is fixed) and only width is resizable, so we mirror
+        the grip to the bottom-LEFT and flip the gradient
+        to ↗.
+
+        Drag target is the whole 18×18 corner — small enough
+        to stay out of the user's way when they're typing,
+        big enough to land with a casual aim. `cursor-ew-resize`
+        because the only adjusted axis is width (the hook is
+        called with `direction: 'l'` so the height change
+        in the mousemove handler is ignored).
       */}
       <div
         ref={resizeHandleRef}
         data-testid="node-editor-resize-handle"
         onMouseDown={startResize}
         onDoubleClick={resetWidth}
-        className="group absolute top-0 bottom-0 left-0 w-2.5 cursor-ew-resize hover:bg-primary/15 active:bg-primary/30 transition-colors"
-        aria-label="拖动调整编辑器宽度,双击重置为默认"
-        title="拖动调整宽度 · 双击重置"
         role="separator"
         aria-orientation="vertical"
+        aria-label="拖动调整编辑器宽度,双击重置为默认"
+        title="拖动调整宽度 · 双击重置"
+        className="group absolute left-1.5 bottom-1.5 w-[18px] h-[18px] flex items-center justify-center cursor-ew-resize rounded-sm text-muted-foreground/60 hover:text-foreground transition-colors"
       >
         {/*
-          2×2 grip dot pattern. Drawn with plain divs rather
-          than a lucide icon because lucide's `Grip*` family
-          is 6-dot (3×2 or 2×3) — too dense for the corner
-          affordance. The dots are 3px circles, 2px apart, in
-          a 10×10 box anchored 4px from the corner. `current`
-          colour lets `text-muted-foreground/…` and the
-          `group-hover` / `group-active` overrides flow
-          through. `pointer-events-none` so the strip's
-          mousedown handler always fires.
+          6-dot diagonal grip. Coordinates mirror the modal's
+          bottom-right grip along the vertical axis — the
+          bottom row has 3 dots (3, 7, 11), the middle has
+          2 (7, 9), the top has 1 (11), creating a ↗
+          density gradient. `currentColor` lets the muted
+          colour and the hover override flow through from
+          the parent's `text-…` classes.
         */}
-        <div
+        <svg
           aria-hidden="true"
           data-testid="node-editor-resize-grip"
-          className="pointer-events-none absolute bottom-1 left-1 grid grid-cols-2 gap-[2px] text-muted-foreground/55 group-hover:text-foreground/85 group-active:text-foreground transition-colors"
+          viewBox="0 0 16 16"
+          className="w-full h-full fill-current"
         >
-          <span className="block h-[3px] w-[3px] rounded-full bg-current" />
-          <span className="block h-[3px] w-[3px] rounded-full bg-current" />
-          <span className="block h-[3px] w-[3px] rounded-full bg-current" />
-          <span className="block h-[3px] w-[3px] rounded-full bg-current" />
-        </div>
+          <circle cx="3" cy="13" r="1" />
+          <circle cx="7" cy="13" r="1" />
+          <circle cx="11" cy="13" r="1" />
+          <circle cx="7" cy="9" r="1" />
+          <circle cx="11" cy="9" r="1" />
+          <circle cx="11" cy="5" r="1" />
+        </svg>
       </div>
       <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border">
         <div className="flex items-center gap-1.5 min-w-0">
