@@ -22,6 +22,7 @@ import { sanitizeHtml } from '@/lib/html-sanitizer'
 import { markdownToHtml } from '@/lib/markdown'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useResizable } from '@/hooks/useResizable'
 import type { MindMapNode } from '@/types/mindmap'
 import {
   FLOATING_PANEL_BASE_CLASSES,
@@ -30,6 +31,36 @@ import {
 } from './floatingPanelClasses'
 
 type ContentType = 'text' | 'html' | 'markdown'
+
+/**
+ * Card-width persistence. The user can drag the left edge of
+ * the in-canvas editor to make it wider or narrower; we remember
+ * the choice across re-opens so the user doesn't have to drag
+ * every time. Persisted in `localStorage` (not the IndexedDB
+ * `mindmapStore`) because card width is a UI preference, not
+ * mindmap data — same pattern as `useTheme`.
+ *
+ * Bounds: 360–640px. Below 360 the split view collapses into
+ * illegible columns; above 640 the card starts eating the
+ * canvas's central node area on common 1280px viewports.
+ */
+const EDITOR_WIDTH_STORAGE_KEY = 'progressive-mindmap:node-editor-width'
+const EDITOR_MIN_WIDTH = 360
+const EDITOR_MAX_WIDTH = 640
+const EDITOR_DEFAULT_WIDTH = 420
+
+function readStoredEditorWidth(): number {
+  if (typeof window === 'undefined') return EDITOR_DEFAULT_WIDTH
+  try {
+    const raw = window.localStorage.getItem(EDITOR_WIDTH_STORAGE_KEY)
+    if (!raw) return EDITOR_DEFAULT_WIDTH
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return EDITOR_DEFAULT_WIDTH
+    return Math.min(Math.max(Math.round(n), EDITOR_MIN_WIDTH), EDITOR_MAX_WIDTH)
+  } catch {
+    return EDITOR_DEFAULT_WIDTH
+  }
+}
 
 interface NodeEditorCardProps {
   node: MindMapNode
@@ -229,6 +260,43 @@ export default function NodeEditorCard({
   const inputRef = useRef<HTMLInputElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
 
+  // Width-only resize, anchored to the left edge of the card.
+  // Height is intentionally not resizable — the card already
+  // fills the available canvas height (max-h-[calc(100%-24px)])
+  // and grows naturally with its content. Direction `'l'`
+  // selects the left-edge handle and skips the height axis in
+  // `useResizable`'s mousemove handler.
+  const {
+    size: cardSize,
+    resizeHandleRef,
+    startResize,
+    reset: resetWidth,
+  } = useResizable({
+    defaultSize: { width: readStoredEditorWidth(), height: 0 },
+    minSize: { width: EDITOR_MIN_WIDTH, height: 0 },
+    maxSize: { width: EDITOR_MAX_WIDTH, height: 0 },
+    direction: 'l',
+  })
+
+  // Persist the width after every drag so the next open restores
+  // the user's choice. We skip the very first render (when
+  // `cardSize.width` is just the read-back value from
+  // `localStorage`) — not strictly required since the value is
+  // identical, but it avoids a useless write on mount.
+  const widthMountedRef = useRef(false)
+  useEffect(() => {
+    if (!widthMountedRef.current) {
+      widthMountedRef.current = true
+      return
+    }
+    try {
+      window.localStorage.setItem(EDITOR_WIDTH_STORAGE_KEY, String(cardSize.width))
+    } catch {
+      // Private mode / quota / disabled storage — silently keep
+      // the in-memory width for this session.
+    }
+  }, [cardSize.width])
+
   // Esc to close. Mirrors `MindMapOutline` / `MindMapDrawer` —
   // bound at the document level so the user can hit Esc even when
   // the card has no focused element.
@@ -383,14 +451,42 @@ export default function NodeEditorCard({
       aria-hidden={!open}
       data-state={open ? 'open' : 'closed'}
       data-testid="node-editor-card"
+      // Width is user-resizable (drag the left edge, or
+      // double-click to reset to the default). The inline style
+      // only carries the live px value — the small-viewport
+      // gutter is enforced via the `max-w-[calc(100vw-24px)]`
+      // utility below, which lets Tailwind's JIT handle the
+      // `calc()` (inline styles can't reliably carry CSS
+      // functional values in some test renderers).
+      style={{ width: `${cardSize.width}px` }}
       className={cn(
         FLOATING_PANEL_BASE_CLASSES,
-        // Width: 420px on ≥ 1024px viewports, capped to the
-        // viewport with a 12px gutter on smaller screens.
-        'w-[min(420px,calc(100vw-24px))] max-h-[calc(100%-24px)]',
+        // Cap the card to the viewport with a 12px gutter on
+        // each side, and to the canvas height (so it never
+        // bleeds out the bottom). On ≥1024px viewports the
+        // chosen width is well below the max and the user
+        // just sees the dragged width.
+        'max-w-[calc(100vw-24px)] max-h-[calc(100%-24px)]',
         open ? FLOATING_PANEL_OPEN_CLASSES : FLOATING_PANEL_CLOSED_CLASSES,
       )}
     >
+      {/*
+        Left-edge resize handle. 4px wide, full height of the
+        card, hover/active tint via primary colour. Drawn
+        before the body so it never sits on top of the toolbar's
+        focus ring or the textarea's selection.
+      */}
+      <div
+        ref={resizeHandleRef}
+        data-testid="node-editor-resize-handle"
+        onMouseDown={startResize}
+        onDoubleClick={resetWidth}
+        className="absolute top-0 bottom-0 left-0 w-1 cursor-ew-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        aria-label="拖动调整编辑器宽度,双击重置为默认"
+        title="拖动调整宽度 · 双击重置"
+        role="separator"
+        aria-orientation="vertical"
+      />
       <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border">
         <div className="flex items-center gap-1.5 min-w-0">
           <Pencil className="w-4 h-4 text-primary shrink-0" />

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import NodeEditorCard from '../NodeEditorCard'
 import type { MindMapNode } from '@/types/mindmap'
 
@@ -281,5 +281,128 @@ describe('NodeEditorCard — Esc to close', () => {
     renderCard({ onCancel, open: false })
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onCancel).not.toHaveBeenCalled()
+  })
+})
+
+describe('NodeEditorCard — resizable width', () => {
+  const STORAGE_KEY = 'progressive-mindmap:node-editor-width'
+
+  beforeEach(() => {
+    document.body.style.overflow = ''
+    window.localStorage.removeItem(STORAGE_KEY)
+  })
+  afterEach(() => {
+    document.body.style.overflow = ''
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.localStorage.removeItem(STORAGE_KEY)
+  })
+
+  it('exposes a left-edge resize handle', () => {
+    renderCard()
+    const handle = screen.getByTestId('node-editor-resize-handle')
+    expect(handle).toBeInTheDocument()
+    // The handle sits on the left edge — same side the user
+    // drags to widen the card.
+    expect(handle.className).toContain('left-0')
+    // Cursor must be ew-resize, not the br-handle's nwse-resize.
+    expect(handle.className).toContain('cursor-ew-resize')
+    // The handle should announce itself for assistive tech.
+    expect(handle.getAttribute('aria-label')).toMatch(/宽度/)
+  })
+
+  it('uses the default 420px width when no value is stored', () => {
+    renderCard()
+    const card = screen.getByTestId('node-editor-card') as HTMLElement
+    // The card carries the live width on its inline style; the
+    // small-viewport gutter lives in a Tailwind utility (the
+    // `max-w-[calc(100vw-24px)]` class — happy-dom doesn't
+    // compute those but the production browser does).
+    expect(card.style.width).toBe('420px')
+    expect(card.className).toContain('max-w-[calc(100vw-24px)]')
+  })
+
+  it('reads a stored width from localStorage on mount', () => {
+    window.localStorage.setItem(STORAGE_KEY, '560')
+    renderCard()
+    const card = screen.getByTestId('node-editor-card') as HTMLElement
+    expect(card.style.width).toBe('560px')
+  })
+
+  it('clamps a stored width to the supported [360, 640] range', () => {
+    // Garbage in, defaults out — protects against bad data
+    // left over from a previous schema / manual edits.
+    window.localStorage.setItem(STORAGE_KEY, '50')
+    renderCard()
+    const card = screen.getByTestId('node-editor-card') as HTMLElement
+    expect(card.style.width).toBe('360px')
+  })
+
+  it('persists the chosen width to localStorage on drag', () => {
+    renderCard()
+    const handle = screen.getByTestId('node-editor-resize-handle')
+    // All three events are wrapped in `act` because the hook
+    // calls setState synchronously from the window-level
+    // mousemove handler — without `act` React will warn and the
+    // assertion can race the re-render.
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 0, clientY: 0 })
+    })
+    act(() => {
+      // Drag 100px to the LEFT — width grows by 100 (520px).
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: -100, clientY: 0 }))
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe('520')
+  })
+
+  it('clamps the dragged width to the configured maximum (640px)', () => {
+    renderCard()
+    const handle = screen.getByTestId('node-editor-resize-handle')
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 0, clientY: 0 })
+    })
+    act(() => {
+      // Try to grow by 9999px.
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: -9999, clientY: 0 }))
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+
+    const card = screen.getByTestId('node-editor-card') as HTMLElement
+    expect(card.style.width).toBe('640px')
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe('640')
+  })
+
+  it('resets to the stored width when the handle is double-clicked', () => {
+    // Pre-store a non-default width.
+    window.localStorage.setItem(STORAGE_KEY, '500')
+    renderCard()
+    const handle = screen.getByTestId('node-editor-resize-handle')
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 0, clientY: 0 })
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: -80, clientY: 0 }))
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+
+    const card = screen.getByTestId('node-editor-card') as HTMLElement
+    expect(card.style.width).toBe('580px')
+
+    // Double-click the handle — should reset to the defaultSize
+    // (i.e. the value the hook was constructed with, which is
+    // the value read from localStorage on mount = 500px).
+    act(() => {
+      fireEvent.doubleClick(handle)
+    })
+
+    expect(card.style.width).toBe('500px')
   })
 })

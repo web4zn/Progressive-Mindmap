@@ -172,3 +172,162 @@ describe('useResizable', () => {
     expect(document.body.style.userSelect).toBe('')
   })
 })
+
+describe('useResizable — direction: l (left-edge width-only handle)', () => {
+  const defaultSize = { width: 420, height: 600 }
+  const minSize = { width: 360, height: 400 }
+  const maxSize = { width: 640, height: 800 }
+
+  it('keeps default "br" behaviour when direction is omitted (backward compat)', () => {
+    // Sanity: an existing call-site that doesn't pass `direction`
+    // still grows height and width together, with the nwse
+    // cursor — i.e. nothing about the historical `MindMapEditModal`
+    // use-case broke when we added the `direction` prop.
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+    expect(document.body.style.cursor).toBe('nwse-resize')
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 100, clientY: 50 }))
+    })
+    expect(result.current.size).toEqual({ width: 520, height: 650 })
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('grows width when the user drags the left handle to the left', () => {
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize, direction: 'l' }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+    // Left handle: cursor should be ew-resize, not nwse-resize.
+    expect(document.body.style.cursor).toBe('ew-resize')
+
+    // Drag the mouse 80px to the LEFT (clientX = -80) — the
+    // card should grow by 80px because the right edge is
+    // anchored to the viewport.
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: -80, clientY: 9999 }))
+    })
+
+    expect(result.current.size.width).toBe(500)
+    // Height must NOT change in `'l'` mode, regardless of dh.
+    expect(result.current.size.height).toBe(defaultSize.height)
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('shrinks width when the user drags the left handle to the right', () => {
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize, direction: 'l' }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+
+    // Drag 40px to the RIGHT — card shrinks by 40px.
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 40, clientY: 0 }))
+    })
+    expect(result.current.size.width).toBe(380)
+    expect(result.current.size.height).toBe(defaultSize.height)
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('clamps to minSize.width when dragging far right (cannot shrink past min)', () => {
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize, direction: 'l' }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 9999, clientY: 0 }))
+    })
+    expect(result.current.size.width).toBe(minSize.width)
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('clamps to maxSize.width when dragging far left (cannot grow past max)', () => {
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize, direction: 'l' }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: -9999, clientY: 0 }))
+    })
+    expect(result.current.size.width).toBe(maxSize.width)
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('cleans up the ew-resize cursor on mouseup', () => {
+    const { result } = renderHook(() =>
+      useResizable({ defaultSize, minSize, maxSize, direction: 'l' }),
+    )
+
+    act(() => {
+      result.current.startResize({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent)
+    })
+    expect(document.body.style.cursor).toBe('ew-resize')
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'))
+    })
+    expect(document.body.style.cursor).toBe('')
+  })
+})
