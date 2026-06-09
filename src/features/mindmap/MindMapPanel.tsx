@@ -61,7 +61,19 @@ export default function MindMapPanel() {
   const conversations = useConversationStore((s) => s.conversations)
   const activeConvId = useConversationStore((s) => s.activeConversationId)
   const agentStatus = useChatStore((s) => s.agentStatus)
-  const isAgentActive = agentStatus !== 'idle'
+  // The agent runs through six discrete statuses
+  // (idle / thinking / reading_mindmap / generating_mindmap
+  // / complete / error). The status pill on MindMapHeader only
+  // distinguishes "正在干活" from "闲着", so we treat only the
+  // three in-flight phases as active. `complete` and `error`
+  // both fall through to the idle branch — otherwise the pill
+  // would freeze on "生成中" forever after a successful run
+  // (user feedback). The error state is still surfaced via
+  // `agentMessage` in the chat panel itself.
+  const isAgentActive =
+    agentStatus === 'thinking' ||
+    agentStatus === 'reading_mindmap' ||
+    agentStatus === 'generating_mindmap'
 
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
