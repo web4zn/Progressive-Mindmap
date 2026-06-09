@@ -194,7 +194,7 @@ export default function ChatPage() {
           {!mindmapCollapsed && (
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
-              <div className="flex-1 h-full hidden md:block min-w-[300px]">
+              <div className="flex-1 h-full hidden md:block min-w-[640px]">
                 <MemoMindMapPanel onClose={handleMindmapClose} />
               </div>
             </>
@@ -217,7 +217,7 @@ export default function ChatPage() {
           {!mindmapCollapsed && (
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
-              <div className="flex-1 h-full hidden md:block min-w-[300px]">
+              <div className="flex-1 h-full hidden md:block min-w-[640px]">
                 <MemoMindMapPanel onClose={handleMindmapClose} />
               </div>
             </>
@@ -249,7 +249,7 @@ export default function ChatPage() {
         {!mindmapCollapsed && (
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
-            <div className="flex-1 h-full hidden md:block min-w-[300px]">
+            <div className="flex-1 h-full hidden md:block min-w-[640px]">
               <MemoMindMapPanel onClose={handleMindmapClose} />
             </div>
           </>
