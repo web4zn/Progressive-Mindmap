@@ -27,10 +27,6 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 
-interface MindMapPanelProps {
-  onClose: () => void
-}
-
 type BackgroundVariant = 'dots' | 'grid' | 'none'
 
 /**
@@ -54,7 +50,7 @@ type BackgroundVariant = 'dots' | 'grid' | 'none'
  * in the panel's toolbar; any other component can still read the
  * current theme from `document.documentElement.dataset.theme`.
  */
-export default function MindMapPanel({ onClose }: MindMapPanelProps) {
+export default function MindMapPanel() {
   const mindmaps = useMindmapStore((s) => s.mindmaps)
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const setActiveMindmapId = useMindmapStore((s) => s.setActiveMindmapId)
@@ -251,7 +247,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         onExportSvg={handleExportSvg}
         onExportMd={handleExportMd}
         onToggleFullscreen={() => setIsFullscreen((v) => !v)}
-        onClose={onClose}
       />
 
       {/* mindmap-shell-v2 (task 5): consolidated toolbar.

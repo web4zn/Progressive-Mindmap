@@ -10,7 +10,6 @@ import {
   Scale,
   UserCircle,
   Wand2,
-  X,
   Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -83,8 +82,16 @@ export interface MindMapHeaderProps {
   onExportSvg: () => void
   onExportMd: () => void
   onToggleFullscreen: () => void
-  onClose: () => void
 }
+
+/**
+ * The header used to carry its own "关闭面板" X button (parity
+ * with browser-tab close). ChatPage already exposes a Network
+ * toggle in the top-level app toolbar that collapses/expands
+ * the panel, so the in-panel X was redundant — the user saw
+ * two close affordances next to each other. Collapsing is now
+ * exclusively driven from the app-level toolbar.
+ */
 
 export default function MindMapHeader({
   mindmaps,
@@ -102,7 +109,6 @@ export default function MindMapHeader({
   onExportSvg,
   onExportMd,
   onToggleFullscreen,
-  onClose,
 }: MindMapHeaderProps) {
   // The combobox is a top-level import; the only thing we wrap in
   // useMemo is the `mindmaps` ref, so a fresh array doesn't churn
@@ -292,15 +298,6 @@ export default function MindMapHeader({
           aria-label={isFullscreen ? '退出全屏' : '全屏'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          title="关闭面板"
-          aria-label="关闭面板"
-        >
-          <X className="w-4 h-4" />
         </Button>
       </div>
     </header>

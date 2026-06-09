@@ -41,8 +41,6 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const hasProviders = providers.length > 0
 
-  const handleMindmapClose = useCallback(() => setMindmapCollapsed(true), [])
-
   // ── 使用抽取的 Chat Hook ──
   const agent = useMindmapAgent()
   const { sendMessage, stopGeneration, isGenerating } = useConversation({
@@ -195,7 +193,7 @@ export default function ChatPage() {
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
               <div className="flex-1 h-full hidden md:block min-w-[640px]">
-                <MemoMindMapPanel onClose={handleMindmapClose} />
+                <MemoMindMapPanel />
               </div>
             </>
           )}
@@ -218,7 +216,7 @@ export default function ChatPage() {
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
               <div className="flex-1 h-full hidden md:block min-w-[640px]">
-                <MemoMindMapPanel onClose={handleMindmapClose} />
+                <MemoMindMapPanel />
               </div>
             </>
           )}
@@ -250,7 +248,7 @@ export default function ChatPage() {
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
             <div className="flex-1 h-full hidden md:block min-w-[640px]">
-              <MemoMindMapPanel onClose={handleMindmapClose} />
+              <MemoMindMapPanel />
             </div>
           </>
         )}

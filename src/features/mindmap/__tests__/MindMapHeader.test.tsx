@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import MindMapHeader from '../MindMapHeader'
 import type { MindMap } from '@/types/mindmap'
@@ -39,7 +39,6 @@ const baseProps = {
   onExportSvg: () => {},
   onExportMd: () => {},
   onToggleFullscreen: () => {},
-  onClose: () => {},
 }
 
 describe('MindMapHeader — min-width invariant', () => {
@@ -89,17 +88,19 @@ describe('MindMapHeader — left section', () => {
 })
 
 describe('MindMapHeader — right section', () => {
-  it('renders export / fullscreen / close controls', () => {
+  it('renders export / fullscreen controls', () => {
     render(<MindMapHeader {...baseProps} />)
     expect(screen.getByLabelText('导出')).toBeInTheDocument()
     expect(screen.getByLabelText('全屏')).toBeInTheDocument()
-    expect(screen.getByLabelText('关闭面板')).toBeInTheDocument()
   })
 
-  it('calls onClose when the close button is clicked', () => {
-    const onClose = vi.fn()
-    render(<MindMapHeader {...baseProps} onClose={onClose} />)
-    screen.getByLabelText('关闭面板').click()
-    expect(onClose).toHaveBeenCalledTimes(1)
+  it('does NOT render a "关闭面板" button (collapse lives at app-level)', () => {
+    // The header used to carry an in-panel X button that
+    // duplicated ChatPage's app-level Network toggle
+    // (title="关闭脑图"). User feedback flagged the two
+    // close affordances; collapse is now exclusively driven
+    // from the app-level toolbar.
+    render(<MindMapHeader {...baseProps} />)
+    expect(screen.queryByLabelText('关闭面板')).toBeNull()
   })
 })
