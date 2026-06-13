@@ -147,8 +147,8 @@ describe('OperationsArraySchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects more than 10 operations', () => {
-    const ops = Array.from({ length: 11 }, (_, i) => ({
+  it('rejects more than 20 operations', () => {
+    const ops = Array.from({ length: 21 }, (_, i) => ({
       type: 'add_child' as const,
       parentId: `n${i}`,
       label: `Node ${i}`,
@@ -157,8 +157,8 @@ describe('OperationsArraySchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('accepts exactly 10 operations', () => {
-    const ops = Array.from({ length: 10 }, (_, i) => ({
+  it('accepts exactly 20 operations', () => {
+    const ops = Array.from({ length: 20 }, (_, i) => ({
       type: 'add_child' as const,
       parentId: `n${i}`,
       label: `Node ${i}`,
