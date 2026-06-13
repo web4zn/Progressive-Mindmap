@@ -58,6 +58,28 @@ export default function MindMapPanel() {
   const updateMindmapTree = useMindmapStore((s) => s.updateMindmapTree)
   const removeMonitoredConversation = useMindmapStore((s) => s.removeMonitoredConversation)
 
+  // Block render until IndexedDB rehydration completes. Without this
+  // gate the component reads `activeMindmap?.tree ?? []` before the
+  // persisted state arrives, producing an empty tree → zero edges on
+  // the first frame. ReactFlow then needs to reconcile from zero to
+  // many edges on the second frame, a fragile path that occasionally
+  // drops edge rendering.
+  const [hydrated, setHydrated] = useState(useMindmapStore.persist.hasHydrated())
+  useEffect(() => {
+    if (hydrated) return
+    const unsubFinish = useMindmapStore.persist.onFinishHydration(() => {
+      setHydrated(true)
+    })
+    // Belt-and-suspenders: Zustand's persist middleware fires
+    // `onRehydrateStorage` after set() is called, but
+    // `onFinishHydration` only fires once. If the store has
+    // already hydrated by the time this effect runs, the
+    // callback fires synchronously — no flash.
+    return () => {
+      unsubFinish()
+    }
+  }, [hydrated])
+
   const conversations = useConversationStore((s) => s.conversations)
   const activeConvId = useConversationStore((s) => s.activeConversationId)
   const agentStatus = useChatStore((s) => s.agentStatus)
@@ -232,6 +254,24 @@ export default function MindMapPanel() {
     // through MindMapTree. This hook is here for future expansion
     // (e.g. selecting the node after focusing).
   }, [])
+
+  // Hydration guard: wait until IndexedDB rehydration completes
+  // before rendering the full panel. Without this the tree reads
+  // as `[]` on first frame → zero edges → ReactFlow initialises
+  // with an empty canvas, then must reconcile to populated state
+  // when the persisted data arrives. That empty→populated
+  // transition is the source of intermittent edge disappearance.
+  if (!hydrated) {
+    return (
+      <div className="h-full flex flex-col border-l bg-sidebar text-sidebar-foreground">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-pulse text-sm text-muted-foreground">
+            加载中…
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const fullscreenClass = isFullscreen
     ? 'fixed inset-0 z-50 flex flex-col bg-background'

@@ -75,6 +75,7 @@ export function treeToFlowShell(
           id: `${parentId}-${n.id}`,
           source: parentId,
           target: n.id,
+          type: 'smoothstep',
         })
       }
 
