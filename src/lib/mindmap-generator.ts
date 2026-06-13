@@ -11,8 +11,10 @@ export function buildFullMindmapPrompt(pattern = 'auto'): string {
 你必须输出JSON格式，包含两个字段：
 {
   "answer": "你对用户问题的Markdown格式回答，完整详细",
-  "mindmap": {"nodes": [{"label": "概念", "summary": "摘要", "children": [{"label": "子概念", "summary": "...", "children": []}]}]}
+  "mindmap": {"nodes": [{"label": "概念", "summary": "摘要", "content": "<h3>详细内容</h3><p>对概念的详细说明。</p>", "contentType": "html", "children": [{"label": "子概念", "summary": "...", "content": "<p>子概念详情</p>", "contentType": "html", "children": []}]}]}
 }
+
+每个节点都必须包含 content（HTML 富文本）和 contentType（设为 "html"）字段。
 
 "mindmap" 字段的规则：
 - nodes 通常只包含一个根节点，所有内容在它的 children 下面
@@ -218,10 +220,10 @@ export function buildIncrementalPrompt(pattern = 'auto'): string {
 输出格式（严格 JSON）：
 {
   "operations": [
-    {"type": "add_child", "parentId": "n1a2b3c", "label": "新概念", "summary": "描述"},
-    {"type": "update", "nodeId": "n2b3c4d", "patch": {"summary": "更新后的摘要"}},
+    {"type": "add_child", "parentId": "n1a2b3c", "label": "新概念", "summary": "描述", "content": "<p>新概念的详细说明</p>", "contentType": "html"},
+    {"type": "update", "nodeId": "n2b3c4d", "patch": {"summary": "更新后的摘要", "content": "<p>更新后的详细内容</p>", "contentType": "html"}},
     {"type": "delete_leaf", "nodeId": "n5f6g7h"},
-    {"type": "add_root", "label": "新概念", "summary": "描述"}
+    {"type": "add_root", "label": "新概念", "summary": "描述", "content": "<p>新概念的详细说明</p>", "contentType": "html"}
   ]
 }
 
