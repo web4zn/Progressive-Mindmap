@@ -35,7 +35,7 @@ describe('applyOperations with content/contentType', () => {
       ]
       const result = applyOperations([], ops)
       expect(result).toHaveLength(1)
-      expect(result[0]!.content).toBe('<h3>Title</h3><p>Body</p>')
+      expect(result[0]!.content).toBe('<h3>Title</h3>\n<p>Body</p>')
       expect(result[0]!.contentType).toBe('html')
     })
 
@@ -68,7 +68,7 @@ describe('applyOperations with content/contentType', () => {
       ]
       const result = applyOperations(tree, ops)
       expect(result[0]!.children).toHaveLength(1)
-      expect(result[0]!.children[0]!.content).toBe('<ul><li>item</li></ul>')
+      expect(result[0]!.children[0]!.content).toBe('<ul>\n  <li>item</li>\n</ul>')
       expect(result[0]!.children[0]!.contentType).toBe('html')
     })
   })

@@ -6,6 +6,7 @@ import {
 import { deriveNodeId } from '@/lib/id'
 import type { MindMapNode } from '@/types/mindmap'
 import { validateOperations } from './schema'
+import { formatHtml } from '@/lib/html-formatter'
 
 const LOG = '[🧠 Tools]'
 
@@ -172,12 +173,22 @@ function applyOne(
             console.warn(LOG, `跳过 update: 节点 "${node.label}" 已被用户编辑`)
             return node
           }
+          const resolvedContentType =
+            op.patch.contentType ??
+            (op as { contentType?: 'text' | 'html' }).contentType ??
+            node.contentType
+          const resolvedContent =
+            op.patch.content !== undefined
+              ? resolvedContentType === 'html'
+                ? formatHtml(op.patch.content)
+                : op.patch.content
+              : node.content
           return {
             ...node,
             label: op.patch.label ?? node.label,
             summary: op.patch.summary ?? node.summary,
-            content: op.patch.content ?? node.content,
-            contentType: op.patch.contentType ?? (op as { contentType?: 'text' | 'html' }).contentType ?? node.contentType,
+            content: resolvedContent,
+            contentType: resolvedContentType,
           }
         }
         if (node.children.length > 0) {
@@ -223,11 +234,15 @@ function newNodeFromOp(
     { type: 'add_child' | 'add_root' }
   >,
 ): MindMapNode {
+  const content =
+    op.content && op.contentType === 'html'
+      ? formatHtml(op.content)
+      : op.content
   return {
     id: op.id || deriveNodeId(op.label, []),
     label: op.label,
     summary: op.summary ?? '',
-    content: op.content,
+    content,
     contentType: op.contentType,
     children: [],
     editedByUser: false,

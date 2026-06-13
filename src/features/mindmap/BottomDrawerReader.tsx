@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Pencil, X, Check, ChevronUp } from 'lucide-react'
+import { formatHtml } from '@/lib/html-formatter'
 import { Button } from '@/components/ui/button'
 import { sanitizeHtml } from '@/lib/html-sanitizer'
 import { cn } from '@/lib/utils'
@@ -125,7 +126,7 @@ export default function BottomDrawerReader({
   const [summary, setSummary] = useState('')
   const [content, setContent] = useState('')
   const [contentType, setContentType] = useState<'text' | 'html'>('text')
-  const [contentTab, setContentTab] = useState<'edit' | 'split' | 'preview'>('edit')
+  const [contentTab, setContentTab] = useState<'edit' | 'split' | 'preview'>('split')
   const [isDirty, setIsDirty] = useState(false)
   const [showSavedFeedback, setShowSavedFeedback] = useState(false)
   const [pendingConfirmAction, setPendingConfirmAction] = useState<(() => void) | null>(null)
@@ -208,16 +209,21 @@ export default function BottomDrawerReader({
     setIsDirty(changed)
   }, [label, summary, content, contentType, node, externalMode])
 
+  // ── Format handler ─────────────────────────────────────────────────────
+  const handleFormat = useCallback(() => {
+    setContent((prev) => (prev ? formatHtml(prev) : prev))
+  }, [])
+
   // ── Save handler ───────────────────────────────────────────────────────
   const handleSave = useCallback(() => {
     if (!node) return
-    onSave(
-      node.id,
-      label.trim(),
-      summary.trim(),
-      contentType === 'text' ? undefined : content,
-      contentType,
-    )
+    // Auto-format HTML content on save so stored content is always indented
+    const contentToSave =
+      contentType === 'html' && content ? formatHtml(content) : undefined
+    onSave(node.id, label.trim(), summary.trim(), contentToSave, contentType)
+    if (contentToSave && contentToSave !== content) {
+      setContent(contentToSave)
+    }
     setShowSavedFeedback(true)
     setIsDirty(false)
     setTimeout(() => setShowSavedFeedback(false), 1500)
@@ -481,7 +487,7 @@ export default function BottomDrawerReader({
                   variant={contentType === 'html' ? 'default' : 'outline'}
                   size="sm"
                   className="h-6 text-[11px] px-2"
-                  onClick={() => { setContentType('html'); setContentTab('edit') }}
+                  onClick={() => { setContentType('html'); setContentTab('split') }}
                 >
                   HTML
                 </Button>
@@ -490,46 +496,61 @@ export default function BottomDrawerReader({
 
             {/* Content area tabs (HTML mode only): 编辑 / 对比 / 预览 */}
             {contentType === 'html' && (
-              <div className="flex gap-1 border-b border-border">
-                <button
-                  className={cn(
-                    'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
-                    contentTab === 'edit'
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => setContentTab('edit')}
-                >
-                  编辑
-                </button>
-                <button
-                  className={cn(
-                    'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
-                    contentTab === 'split'
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => setContentTab('split')}
-                >
-                  对比
-                </button>
-                <button
-                  className={cn(
-                    'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
-                    contentTab === 'preview'
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => setContentTab('preview')}
-                >
-                  预览
-                </button>
+              <div className="flex items-center justify-between border-b border-border">
+                <div className="flex gap-1">
+                  <button
+                    className={cn(
+                      'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
+                      contentTab === 'edit'
+                        ? 'border-primary text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                    )}
+                    onClick={() => setContentTab('edit')}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    className={cn(
+                      'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
+                      contentTab === 'split'
+                        ? 'border-primary text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                    )}
+                    onClick={() => setContentTab('split')}
+                  >
+                    对比
+                  </button>
+                  <button
+                    className={cn(
+                      'px-3 py-1.5 text-[11px] font-medium border-b-2 -mb-px transition-colors',
+                      contentTab === 'preview'
+                        ? 'border-primary text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                    )}
+                    onClick={() => setContentTab('preview')}
+                  >
+                    预览
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Content editor / split / preview */}
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">内容</label>
+              <div className="flex items-center gap-2 mb-1">
+                <label className="text-xs text-muted-foreground">内容</label>
+                {contentType === 'html' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs gap-1"
+                    onClick={handleFormat}
+                  >
+                    <span className="text-xs">✨</span>
+                    格式化
+                  </Button>
+                )}
+              </div>
 
               {contentType === 'html' && contentTab === 'split' ? (
                 /* ── Split: editor left, preview right ────────────────── */
