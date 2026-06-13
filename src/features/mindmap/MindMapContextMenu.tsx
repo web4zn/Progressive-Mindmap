@@ -64,6 +64,8 @@ const MENU_ORDER = [
   'edit',
   'addChild',
   'center',
+  'duplicate',
+  'resetPosition',
   'moveUp',
   'moveDown',
   'undo',
@@ -110,6 +112,12 @@ export default function MindMapContextMenu({
         return
       case 'center':
         onCenter()
+        return
+      case 'duplicate':
+        onDuplicate()
+        return
+      case 'resetPosition':
+        onResetPosition()
         return
       case 'moveUp':
         if (canMoveUp) onMoveUp()
@@ -280,9 +288,9 @@ export default function MindMapContextMenu({
           </button>
           <button
             role="menuitem"
-            className={classFor('center')}
+            className={classFor('duplicate')}
             onClick={onDuplicate}
-            onMouseEnter={() => setHighlight('center')}
+            onMouseEnter={() => setHighlight('duplicate')}
             title="复制为兄弟节点"
             data-testid="mindmap-context-duplicate"
           >
@@ -292,9 +300,9 @@ export default function MindMapContextMenu({
           {hasPinnedPosition && (
             <button
               role="menuitem"
-              className={classFor('center')}
+              className={classFor('resetPosition')}
               onClick={onResetPosition}
-              onMouseEnter={() => setHighlight('center')}
+              onMouseEnter={() => setHighlight('resetPosition')}
               title="清除节点固定位置,让 dagre 重新排版"
               data-testid="mindmap-context-reset-position"
             >

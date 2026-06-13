@@ -286,14 +286,14 @@ export default function MindMapTree({
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx > 0
+    return idx !== -1 && idx < parent.children.length - 1
   }
 
   const checkCanMoveDown = (nodeId: string): boolean => {
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx !== -1 && idx < parent.children.length - 1
+    return idx > 0
   }
 
   const handleNodeClick = useCallback(
@@ -472,7 +472,7 @@ export default function MindMapTree({
   const handleMoveUp = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'up')
+      moveNode(mindmapId, contextMenu.nodeId, 'down')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
@@ -480,7 +480,7 @@ export default function MindMapTree({
   const handleMoveDown = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'down')
+      moveNode(mindmapId, contextMenu.nodeId, 'up')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
