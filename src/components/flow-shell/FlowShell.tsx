@@ -38,6 +38,7 @@ export interface FlowShellProps {
     import('@xyflow/react').Edge
   >
   onNodeDoubleClick?: import('@xyflow/react').NodeMouseHandler
+  onNodeClick?: import('@xyflow/react').NodeMouseHandler
   onNodeContextMenu?: import('@xyflow/react').NodeMouseHandler
   onNodeDragStop?: import('@xyflow/react').OnNodeDrag
   onNodeMouseEnter?: import('@xyflow/react').NodeMouseHandler

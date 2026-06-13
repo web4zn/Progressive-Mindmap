@@ -111,6 +111,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     onPaneDoubleClick,
     onInit,
     onNodeDoubleClick,
+    onNodeClick,
     onNodeContextMenu,
     onNodeDragStop,
     onNodeMouseEnter,
@@ -277,6 +278,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
       onEdgesChange={onEdgesChange}
       onSelectionChange={handleSelectionChange}
       onNodeDoubleClick={onNodeDoubleClick as unknown as NodeMouseHandler}
+      onNodeClick={onNodeClick as unknown as NodeMouseHandler}
       onNodeContextMenu={onNodeContextMenu as unknown as NodeMouseHandler}
       onNodeMouseEnter={onNodeMouseEnter as unknown as NodeMouseHandler}
       onNodeMouseLeave={onNodeMouseLeave as unknown as NodeMouseHandler}

@@ -90,7 +90,7 @@ export interface MindMapNode {
   label: string
   summary: string
   content?: string
-  contentType?: 'text' | 'html' | 'markdown'
+  contentType?: 'text' | 'html'
   children: MindMapNode[]
   editedByUser: boolean
 

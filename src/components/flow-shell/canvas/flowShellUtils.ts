@@ -18,9 +18,6 @@ export type ShapeFlowNode = Node<FlowNodeData, NodeShapeName>
 /** Stage A1: text-node default. */
 const DEFAULT_TEXT_SIZE: NodeSize = { width: 200, height: 100 }
 
-/** Stage A1: rich HTML content size hint. */
-const EXPANDED_HTML_HEIGHT = 380
-
 /**
  * Run the dagre LR/TB layout over the supplied React Flow
  * nodes/edges. Pure function — given the same input, always
@@ -43,20 +40,11 @@ export function applyDagreLayout(
 
   const sizes = new Map<string, NodeSize>()
   for (const n of flowNodes) {
-    const hasRichContent = n.data?.contentType === 'html' && !!n.data?.content
-    const computed = computeNodeSize({
+    const size = computeNodeSize({
       label: n.data?.label ?? '',
       summary: n.data?.summary ?? '',
-      contentLength: n.data?.content?.length,
-      hasHtml: hasRichContent,
       hasChildren: !!n.data?.hasChildren,
     })
-    const size: NodeSize = hasRichContent
-      ? {
-          width: computed.width,
-          height: Math.min(EXPANDED_HTML_HEIGHT, Math.max(computed.height, 140)),
-        }
-      : computed
     sizes.set(n.id, size)
     g.setNode(n.id, { width: size.width, height: size.height })
   }

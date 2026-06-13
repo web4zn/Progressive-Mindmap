@@ -10,7 +10,7 @@ import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
 import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
 import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
 import type { Node as FlowNode } from '@xyflow/react'
-import NodeEditorCard from './NodeEditorCard'
+import BottomDrawerReader from './BottomDrawerReader'
 import MindMapContextMenu from './MindMapContextMenu'
 import MindMapOutline from './MindMapOutline'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
@@ -99,6 +99,8 @@ export default function MindMapTree({
   } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  void editorNodeId
+
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
   // Stage A2: hover state for path highlight. When a node is hovered, we
@@ -110,6 +112,13 @@ export default function MindMapTree({
   // are dimmed. The hovered node takes precedence (you can only be
   // hovering one thing at a time anyway).
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null)
+
+  // bottom-drawer-reader: drawer state. The drawer shows node content
+  // in read mode (single-click) or edit mode (double-click / edit button).
+  // `drawerNodeId` is the currently open node; `drawerMode` controls
+  // whether the user is reading or editing.
+  const [drawerNodeId, setDrawerNodeId] = useState<string | null>(null)
+  const [drawerMode, setDrawerMode] = useState<'read' | 'edit'>('read')
 
   // Imperative handle on FlowShell so we can drive `fitView()` / `zoomIn()` /
   // `zoomOut()` / `getIntersectingNodes()` from here. `useReactFlow()`
@@ -287,15 +296,33 @@ export default function MindMapTree({
     return idx !== -1 && idx < parent.children.length - 1
   }
 
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: FlowNode) => {
+      // bottom-drawer-reader: single-click opens the drawer in read mode.
+      // If the drawer was already open in edit mode on the same node,
+      // switch to read mode (re-click). If opening a different node,
+      // close any edit mode first.
+      if (editorOpen) {
+        onEditorClose?.()
+      }
+      if (drawerNodeId === node.id) {
+        // Toggle-off if clicking the same node.
+        setDrawerNodeId(null)
+        return
+      }
+      setDrawerNodeId(node.id)
+      setDrawerMode('read')
+    },
+    [editorOpen, onEditorClose, drawerNodeId],
+  )
+
   const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => {
-      // Double-clicking a node opens the editor directly. The
-      // earlier Stage A1 "in-place expand" toggle was a no-op
-      // visually (RectCardNode renders the full body either way),
-      // so the v2 cleanup drops it.
-      // node-editor-card: route through `onEditorOpen` so the
-      // panel owns the state and can enforce the strict mutual
+      // bottom-drawer-reader: double-click opens the drawer in edit mode.
+      // Route through `onEditorOpen` so the panel can enforce mutual
       // exclusion with the outline.
+      setDrawerNodeId(node.id)
+      setDrawerMode('edit')
       onEditorOpen?.(node.id)
     },
     [onEditorOpen],
@@ -405,24 +432,30 @@ export default function MindMapTree({
     return () => cancelLongPress()
   }, [cancelLongPress])
 
-  const handleEditConfirm = useCallback(
+  const handleDrawerSave = useCallback(
     (
       nodeId: string,
       label: string,
       summary: string,
       content?: string,
-      contentType?: 'text' | 'html' | 'markdown',
+      contentType?: 'text' | 'html',
     ) => {
       if (mindmapId) {
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
         updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       }
-      // node-editor-card: card is owned by the panel; close it
-      // through the callback rather than local state.
-      onEditorClose?.()
+      // After save, switch to read mode (drawer stays open).
+      // The drawer component handles its own "saved" feedback.
+      setDrawerMode('read')
     },
-    [mindmapId, updateNode, history, onEditorClose],
+    [mindmapId, updateNode, history],
   )
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerNodeId(null)
+    setDrawerMode('read')
+    onEditorClose?.()
+  }, [onEditorClose])
 
   const handleAddChild = useCallback(
     (nodeId?: string) => {
@@ -843,6 +876,7 @@ export default function MindMapTree({
         theme="light"
         layout="dagre-lr"
         onInit={handleInit}
+        onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeMouseEnter={handleNodeMouseEnter}
@@ -881,22 +915,22 @@ export default function MindMapTree({
         onFocus={onOutlineFocus ?? (() => {})}
       />
 
-      {editorOpen && editorNodeId && (() => {
-        // node-editor-card: the card renders the node looked up
-        // at render time. If the node was deleted between the
-        // panel opening the card and the next render, we fall
-        // back to null (no card) rather than crashing.
-        const found = findNodeInTree(tree, editorNodeId)
-        if (!found) return null
-        return (
-          <NodeEditorCard
-            node={found}
-            open={editorOpen}
-            onConfirm={handleEditConfirm}
-            onCancel={onEditorClose ?? (() => {})}
-          />
-        )
-      })()}
+      {/* bottom-drawer-reader: bottom panel for reading full node content
+       *  or editing node details. Replaces the old NodeEditorCard modal. */}
+      <BottomDrawerReader
+        node={drawerNodeId ? findNodeInTree(tree, drawerNodeId) ?? null : null}
+        mode={drawerMode}
+        onClose={handleDrawerClose}
+        onEdit={() => {
+          setDrawerMode('edit')
+          onEditorOpen?.(drawerNodeId!)
+        }}
+        onCancel={() => {
+          setDrawerMode('read')
+        }}
+        onSave={handleDrawerSave}
+        pattern={pattern}
+      />
 
       {contextMenu && (
         <MindMapContextMenu
@@ -910,8 +944,9 @@ export default function MindMapTree({
           confirmDelete={confirmDelete}
           hasPinnedPosition={hasPinnedPosition}
           onEdit={() => {
-            // node-editor-card: route through the panel so the
-            // mutual exclusion with the outline is enforced.
+            // bottom-drawer-reader: open drawer in edit mode directly.
+            setDrawerNodeId(contextMenu.nodeId)
+            setDrawerMode('edit')
             onEditorOpen?.(contextMenu.nodeId)
             setContextMenu(null)
           }}

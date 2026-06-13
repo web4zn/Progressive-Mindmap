@@ -186,66 +186,34 @@ describe('computeNodeSize', () => {
     const size = computeNodeSize({
       label: '短',
       summary: '',
-      hasHtml: false,
       hasChildren: false,
     })
     expect(size.width).toBeGreaterThanOrEqual(120)
     expect(size.width).toBeLessThanOrEqual(280)
     expect(size.height).toBeGreaterThan(0)
-    expect(size.height).toBeLessThan(380)
+    expect(size.height).toBeLessThanOrEqual(110)
   })
 
-  it('long label grows width up to the 280/360 cap, never beyond', () => {
+  it('long label grows width up to the 280 cap, never beyond', () => {
     const longLabel = '一个非常长的标题 '.repeat(40).trim()
     const textSize = computeNodeSize({
       label: longLabel,
       summary: '',
-      hasHtml: false,
       hasChildren: false,
     })
     expect(textSize.width).toBeLessThanOrEqual(280)
     expect(textSize.width).toBeGreaterThan(180)
-
-    const htmlSize = computeNodeSize({
-      label: longLabel,
-      summary: '',
-      hasHtml: true,
-      hasChildren: false,
-    })
-    expect(htmlSize.width).toBeLessThanOrEqual(360)
-    expect(htmlSize.width).toBeGreaterThan(240)
-  })
-
-  it('HTML content caps height at 380 and grows with content length', () => {
-    const short = computeNodeSize({
-      label: 'X',
-      summary: '',
-      hasHtml: true,
-      hasChildren: false,
-    })
-    const long = computeNodeSize({
-      label: 'X',
-      summary: '',
-      hasHtml: true,
-      hasChildren: false,
-      contentLength: 4000,
-    })
-    expect(short.height).toBeLessThanOrEqual(380)
-    expect(long.height).toBeLessThanOrEqual(380)
-    expect(long.height).toBeGreaterThanOrEqual(short.height)
   })
 
   it('summary line count widens node up to 280 cap', () => {
     const a = computeNodeSize({
       label: '短',
       summary: '',
-      hasHtml: false,
       hasChildren: false,
     })
     const b = computeNodeSize({
       label: '短',
       summary: 'X'.repeat(400),
-      hasHtml: false,
       hasChildren: false,
     })
     expect(b.width).toBeGreaterThanOrEqual(a.width)
@@ -336,12 +304,10 @@ describe('treeToFlowShell — Stage D boundary cases', () => {
     const size = computeNodeSize({
       label: nodes[0]!.data.label,
       summary: nodes[0]!.data.summary,
-      contentLength: longContent.length,
-      hasHtml: true,
       hasChildren: false,
     })
-    expect(size.width).toBeLessThanOrEqual(360)
-    expect(size.height).toBeLessThanOrEqual(380)
+    expect(size.width).toBeLessThanOrEqual(280)
+    expect(size.height).toBeLessThanOrEqual(110)
   })
 
   it('multiple roots with deeply nested children: every root has no parent edge', () => {

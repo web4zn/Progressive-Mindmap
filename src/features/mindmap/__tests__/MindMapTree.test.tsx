@@ -34,7 +34,7 @@ vi.mock('@/components/flow-shell', () => ({
   },
 }))
 
-vi.mock('../NodeEditorCard', () => ({ default: () => null }))
+vi.mock('../BottomDrawerReader', () => ({ default: () => null }))
 vi.mock('../MindMapContextMenu', () => ({ default: () => null }))
 vi.mock('../useMindmapLayout', () => ({
   useMindmapLayout: () => ({

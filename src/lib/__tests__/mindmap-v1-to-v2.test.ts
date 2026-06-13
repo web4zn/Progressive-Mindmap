@@ -165,7 +165,8 @@ describe('migrateV1ToV2', () => {
     })
     const v2 = migrateV1ToV2(v1)
     expect(v2.tree[0]?.contentType).toBe('html')
-    expect(v2.tree[1]?.contentType).toBe('markdown')
+    // bottom-drawer-reader: 'markdown' is no longer supported; converted to 'text'.
+    expect(v2.tree[1]?.contentType).toBe('text')
     expect(v2.tree[2]?.contentType).toBe('text')
     expect(v2.tree[3]?.contentType).toBeUndefined()
   })

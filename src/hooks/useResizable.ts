@@ -7,15 +7,18 @@ export interface Size {
 
 /**
  * Where the resize handle sits on the host element and which
- * axes the drag adjusts. `'br'` is the historical "bottom-right
- * corner" behaviour (used by the now-removed `MindMapEditModal`).
- * `'l'` is a left-edge handle that adjusts width only — useful
- * for in-canvas cards anchored to the right side of the canvas
- * (e.g. `NodeEditorCard`) where the user wants a wider editing
- * surface without re-flowing the height, and where a right-edge
- * handle would fall off the viewport.
+ * axes the drag adjusts.
+ *
+ * - `'br'` — bottom-right corner (historical): dragging right/down
+ *   grows both axes.
+ * - `'l'` — left-edge handle: dragging left grows width only
+ *   (right edge anchored).
+ * - `'t'` — top-edge handle: dragging UP grows height, dragging
+ *   DOWN shrinks. Width is untouched. Designed for bottom-docked
+ *   panels whose drag handle sits on the top edge (e.g.
+ *   `BottomDrawerReader`).
  */
-export type ResizeDirection = 'br' | 'l'
+export type ResizeDirection = 'br' | 'l' | 't'
 
 export interface UseResizableOptions {
   /** Initial size in CSS pixels. */
@@ -94,7 +97,8 @@ export function useResizable({
       // Capture the cursor and mark the document so the user gets
       // a continuous resize-cursor while moving the mouse anywhere
       // over the window.
-      document.body.style.cursor = direction === 'l' ? 'ew-resize' : 'nwse-resize'
+      document.body.style.cursor =
+        direction === 'l' ? 'ew-resize' : direction === 't' ? 'ns-resize' : 'nwse-resize'
       document.body.style.userSelect = 'none'
     },
     [size, direction],
@@ -112,6 +116,14 @@ export function useResizable({
         // Height is intentionally untouched.
         const nextW = clamp(start.w - dw, min.width, max.width)
         setSize({ width: nextW, height: start.h })
+      } else if (dirRef.current === 't') {
+        // Top-edge handle for bottom-docked panels: dragging the
+        // mouse UP shrinks the clientY, which should GROW the
+        // panel height (the bottom edge is anchored to the
+        // viewport bottom). We negate the delta so up → +height.
+        const dh = -(event.clientY - start.y)
+        const nextH = clamp(start.h + dh, min.height, max.height)
+        setSize({ width: start.w, height: nextH })
       } else {
         const dh = event.clientY - start.y
         const nextW = clamp(start.w + dw, min.width, max.width)

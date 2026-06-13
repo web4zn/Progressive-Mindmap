@@ -2,9 +2,10 @@
  * Mindmap v1 → v2 migration — pure function.
  *
  * Responsibilities:
- *   1. Normalise the `contentType` field — older data only had
- *      `'text' | 'html'`, but the v2 type includes `'markdown'`. Any
- *      string we don't recognise becomes `'text'`.
+ *   1. Normalise the `contentType` field — the v2 type only accepts
+ *      `'text' | 'html'`. Any `'markdown'` values from older data are
+ *      converted to `'text'` (the raw markdown source is readable as
+ *      plain text, and we no longer bundle a markdown renderer).
  *   2. Ensure every node has a non-empty `label` (fall back to
  *      `'未命名'`, matching the parser in `mindmap-generator.ts`).
  *   3. Stamp the mindmap with `schemaVersion: 2`.
@@ -31,8 +32,6 @@ import {
   type MindMapV1,
 } from '@/types/mindmap'
 
-const VALID_CONTENT_TYPES = new Set(['text', 'html', 'markdown'] as const)
-
 /**
  * Normalise a single node. Recursive over `children`.
  *
@@ -56,12 +55,16 @@ function migrateNode(node: MindMapNodeV1, depth: number): MindMapNode {
     editedByUser: node.editedByUser ?? false,
   }
 
-  if (
-    node.contentType !== undefined &&
-    VALID_CONTENT_TYPES.has(node.contentType as 'text' | 'html' | 'markdown')
-  ) {
-    migrated.contentType = node.contentType as 'text' | 'html' | 'markdown'
+  const raw = node.contentType
+  if (raw === 'html' || raw === 'text') {
+    migrated.contentType = raw
+  } else if (raw === 'markdown') {
+    // 'markdown' is no longer supported; fall back to 'text' so the
+    // raw markdown source remains readable as plain text.
+    migrated.contentType = 'text'
   }
+  // Any unrecognised contentType value is silently dropped; the
+  // renderer treats absence as 'text'.
 
   return migrated
 }

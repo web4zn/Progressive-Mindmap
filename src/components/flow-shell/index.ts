@@ -2,10 +2,8 @@ export interface FlowNodeData extends Record<string, unknown> {
   label: string
   summary: string
   content?: string
-  /** Stage B: 'markdown' is a third content type. The FlowNode
-   *  renders anything other than 'html' as plain text; the modal
-   *  preview (in edit mode) is the canonical markdown renderer. */
-  contentType?: 'text' | 'html' | 'markdown'
+  /** Stage B: the FlowNode renders anything other than 'html' as plain text. */
+  contentType?: 'text' | 'html'
   depth: number
   pattern: string
   editedByUser: boolean

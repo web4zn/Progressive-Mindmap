@@ -24,7 +24,6 @@
  */
 import { memo, useMemo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { sanitizeHtml } from '@/lib/html-sanitizer'
 import { selectNodeIcon, type NodeIconName } from '@/lib/node-icon'
 import type { FlowNodeData } from '../index'
 import { getNodeShape } from '@/lib/shapes/registry'
@@ -173,12 +172,6 @@ function BaseNodeInner({
   defaultSize,
 }: BaseNodeProps) {
   const depth = data.depth ?? 0
-  const hasHtml = data.contentType === 'html' && !!data.content
-
-  const safeHtml = useMemo(
-    () => (hasHtml ? { __html: sanitizeHtml(data.content!) } : undefined),
-    [data.content, hasHtml],
-  )
 
   // Look up the icon deterministically from the registry. The icon
   // is purely a hint; the parent owns the actual <svg>.
@@ -254,12 +247,7 @@ function BaseNodeInner({
 
       {body ?? (
         <>
-          {hasHtml ? (
-            <div
-              className="flow-node-content nowheel"
-              dangerouslySetInnerHTML={safeHtml}
-            />
-          ) : data.summary ? (
+          {data.summary ? (
             <div className="flow-node-summary">{data.summary}</div>
           ) : null}
         </>
