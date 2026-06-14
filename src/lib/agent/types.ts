@@ -8,6 +8,7 @@ export type MindmapOperation =
   | { type: 'update'; nodeId: string; patch: Partial<{ label: string; summary: string; content: string; contentType: 'text' | 'html' }> }
   | { type: 'delete_leaf'; nodeId: string }
   | { type: 'add_root'; id?: string; label: string; summary?: string; content?: string; contentType?: 'text' | 'html' }
+  | { type: 'reparent'; nodeId: string; newParentId: string }
   | { type: 'noop' }
 
 // ─── Agent 状态 ───
@@ -15,6 +16,7 @@ export type AgentStatus =
   | 'idle'
   | 'thinking'
   | 'reading_mindmap'
+  | 'reading_node'
   | 'generating_mindmap'
   | 'complete'
   | 'error'

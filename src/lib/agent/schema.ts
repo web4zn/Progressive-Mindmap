@@ -7,7 +7,7 @@ import { z } from 'zod'
  * This is the data integrity gate — LLM output is untrusted.
  */
 export const MindmapOperationSchema = z.object({
-  type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root']),
+  type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root', 'reparent']),
   parentId: z.string().optional(),
   nodeId: z.string().optional(),
   id: z.string().optional(),

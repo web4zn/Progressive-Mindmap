@@ -18,6 +18,114 @@ function getMindmapForConversation(
   return mindmaps.find((m) => m.monitoredConversationIds?.includes(conversationId)) ?? null
 }
 
+// ─── 树遍历辅助函数 ───
+
+export function findNodeById(nodes: MindMapNode[], id: string): MindMapNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    if (node.children.length > 0) {
+      const found = findNodeById(node.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+export function findParentNode(
+  nodes: MindMapNode[],
+  targetId: string,
+): { node: MindMapNode; childArray: MindMapNode[]; index: number } | null {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
+    if (!node) continue
+    if (node.id === targetId) return null
+    for (let j = 0; j < node.children.length; j++) {
+      if (node.children[j]!.id === targetId) {
+        return { node, childArray: node.children, index: j }
+      }
+    }
+    if (node.children.length > 0) {
+      const result = findParentNode(node.children, targetId)
+      if (result) return result
+    }
+  }
+  return null
+}
+
+export function getAncestorPath(
+  nodes: MindMapNode[],
+  nodeId: string,
+): { id: string; label: string; depth: number }[] {
+  function walk(
+    ns: MindMapNode[],
+    target: string,
+    path: { id: string; label: string; depth: number }[],
+  ): { id: string; label: string; depth: number }[] | null {
+    for (const node of ns) {
+      const nextPath = [...path, { id: node.id, label: node.label, depth: path.length }]
+      if (node.id === target) return nextPath
+      if (node.children.length > 0) {
+        const result = walk(node.children, target, nextPath)
+        if (result) return result
+      }
+    }
+    return null
+  }
+  return walk(nodes, nodeId, []) ?? []
+}
+
+export function buildSubtree(node: MindMapNode, depth: number): MindMapNode {
+  if (depth <= 1) return { ...node, children: [] }
+  return {
+    ...node,
+    children: node.children.map((c) => buildSubtree(c, depth - 1)),
+  }
+}
+
+export function searchTree(
+  nodes: MindMapNode[],
+  query: string,
+  currentPath: string[],
+): { id: string; label: string; summary: string; path: string }[] {
+  const results: { id: string; label: string; summary: string; path: string }[] = []
+  const lower = query.toLowerCase()
+  for (const node of nodes) {
+    const nodePath = [...currentPath, node.label]
+    if (
+      node.label.toLowerCase().includes(lower) ||
+      (node.summary ?? '').toLowerCase().includes(lower)
+    ) {
+      results.push({
+        id: node.id,
+        label: node.label,
+        summary: node.summary ?? '',
+        path: nodePath.join(' > '),
+      })
+    }
+    if (node.children.length > 0) {
+      results.push(...searchTree(node.children, query, nodePath))
+    }
+  }
+  return results
+}
+
+/**
+ * Remove a node from the tree by ID (mutates the array in place).
+ * Searches recursively through children. Returns true if found and removed.
+ */
+export function removeNodeFromTree(nodes: MindMapNode[], targetId: string): boolean {
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i]!.id === targetId) {
+      nodes.splice(i, 1)
+      return true
+    }
+    if (nodes[i]!.children.length > 0) {
+      if (removeNodeFromTree(nodes[i]!.children, targetId)) return true
+    }
+  }
+  return false
+}
+
 // ─── 工具处理器注册表 ───
 export const agentToolHandlers: Record<
   string,
@@ -28,19 +136,18 @@ export const agentToolHandlers: Record<
     const conv = useConversationStore.getState().getActiveConversation()
     if (!conv) {
       console.log(LOG, 'readMindmap: 无活跃会话')
-      return { treeContext: '', nodeCount: 0, tree: [] }
+      return { treeContext: '', nodeCount: 0, pattern: 'auto' }
     }
     const mm = getMindmapForConversation(conv.id)
     if (!mm || mm.tree.length === 0) {
       console.log(LOG, 'readMindmap: 未找到关联脑图或脑图为空')
-      return { treeContext: '', nodeCount: 0, tree: [] }
+      return { treeContext: '', nodeCount: 0, pattern: 'auto' }
     }
     const nodeCount = countNodes(mm.tree)
     console.log(LOG, `readMindmap: 读取脑图 "${mm.title}" (${nodeCount} 节点)`)
     return {
       treeContext: mindmapTreeToFlatContext(mm.tree),
       nodeCount,
-      tree: mm.tree,
       pattern: mm.pattern ?? 'auto',
     }
   },
@@ -94,6 +201,131 @@ export const agentToolHandlers: Record<
 
     console.log(LOG, `✅ "${targetMindmap.title}" 更新: ${countNodes(newTree)} 节点 (${ops.length} 操作)`)
     return { success: true, nodeCount: countNodes(newTree), operations: ops }
+  },
+
+  // ─── 节点级查询处理器 ───
+  getNodeDetail: async (args: unknown) => {
+    const { nodeId } = args as { nodeId: string }
+    console.log(LOG, 'getNodeDetail:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const node = findNodeById(mm.tree, nodeId)
+    if (!node) return { error: `未找到节点: ${nodeId}` }
+    return {
+      node: {
+        id: node.id,
+        label: node.label,
+        summary: node.summary ?? '',
+        content: node.content,
+        contentType: node.contentType,
+        childCount: node.children.length,
+        hasChildren: node.children.length > 0,
+        editedByUser: node.editedByUser,
+      },
+    }
+  },
+
+  getChildren: async (args: unknown) => {
+    const { nodeId } = args as { nodeId: string }
+    console.log(LOG, 'getChildren:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const node = findNodeById(mm.tree, nodeId)
+    if (!node) return { error: `未找到节点: ${nodeId}` }
+    return {
+      parentLabel: node.label,
+      children: node.children.map((c) => ({
+        id: c.id,
+        label: c.label,
+        summary: c.summary ?? '',
+        hasChildren: c.children.length > 0,
+      })),
+    }
+  },
+
+  getParent: async (args: unknown) => {
+    const { nodeId } = args as { nodeId: string }
+    console.log(LOG, 'getParent:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const node = findNodeById(mm.tree, nodeId)
+    if (!node) return { error: `未找到节点: ${nodeId}` }
+    const parentResult = findParentNode(mm.tree, nodeId)
+    return {
+      parent: parentResult
+        ? { id: parentResult.node.id, label: parentResult.node.label }
+        : null,
+    }
+  },
+
+  getSiblings: async (args: unknown) => {
+    const { nodeId } = args as { nodeId: string }
+    console.log(LOG, 'getSiblings:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const node = findNodeById(mm.tree, nodeId)
+    if (!node) return { error: `未找到节点: ${nodeId}` }
+    const parentResult = findParentNode(mm.tree, nodeId)
+    if (!parentResult) {
+      return {
+        parent: null,
+        siblings: mm.tree
+          .filter((s) => s.id !== nodeId)
+          .map((s) => ({ id: s.id, label: s.label })),
+      }
+    }
+    return {
+      parent: { id: parentResult.node.id, label: parentResult.node.label },
+      siblings: parentResult.childArray
+        .filter((s) => s.id !== nodeId)
+        .map((s) => ({ id: s.id, label: s.label })),
+    }
+  },
+
+  getAncestors: async (args: unknown) => {
+    const { nodeId } = args as { nodeId: string }
+    console.log(LOG, 'getAncestors:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const path = getAncestorPath(mm.tree, nodeId)
+    if (path.length === 0) return { error: `未找到节点: ${nodeId}` }
+    return { path }
+  },
+
+  getSubtree: async (args: unknown) => {
+    const { nodeId, depth } = args as { nodeId: string; depth?: number }
+    console.log(LOG, 'getSubtree:', nodeId)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    const node = findNodeById(mm.tree, nodeId)
+    if (!node) return { error: `未找到节点: ${nodeId}` }
+    const d = typeof depth === 'number' && depth >= 1 && depth <= 5 ? depth : 2
+    const subtree = buildSubtree(node, d)
+    return { root: subtree, nodeCount: countNodes([subtree]) }
+  },
+
+  searchNodes: async (args: unknown) => {
+    const { query } = args as { query: string }
+    console.log(LOG, 'searchNodes:', query)
+    const conv = useConversationStore.getState().getActiveConversation()
+    if (!conv) return { error: '无活跃会话' }
+    const mm = getMindmapForConversation(conv.id)
+    if (!mm) return { error: '会话未关联脑图' }
+    if (!query || query.trim().length === 0) return { matches: [] }
+    const matches = searchTree(mm.tree, query.trim(), [])
+    return { matches: matches.slice(0, 20) }
   },
 }
 
@@ -219,6 +451,54 @@ function applyOne(
           }
           return node
         })
+
+    case 'reparent': {
+      const rp = op as import('@/lib/agent/types').MindmapOperation & {
+        type: 'reparent'
+        nodeId: string
+        newParentId: string
+      }
+      const { nodeId: targetId, newParentId } = rp
+
+      if (targetId === newParentId) {
+        console.warn(LOG, `跳过 reparent: 不能将节点移到自身`)
+        return nodes
+      }
+
+      const targetNode = findNodeById(nodes, targetId)
+      if (!targetNode) {
+        console.warn(LOG, `跳过 reparent: 未找到节点 "${targetId}"`)
+        return nodes
+      }
+      if (targetNode.editedByUser) {
+        console.warn(LOG, `跳过 reparent: 节点 "${targetNode.label}" 已被用户编辑`)
+        return nodes
+      }
+      if (findNodeById(targetNode.children, newParentId)) {
+        console.warn(LOG, `跳过 reparent: 不能将节点移到自己的子节点下`)
+        return nodes
+      }
+
+      const newParent = findNodeById(nodes, newParentId)
+      if (!newParent) {
+        console.warn(LOG, `跳过 reparent: 未找到目标父节点 "${newParentId}"`)
+        return nodes
+      }
+      if (newParent.editedByUser) {
+        console.warn(LOG, `跳过 reparent: 目标父节点 "${newParent.label}" 已被用户编辑`)
+        return nodes
+      }
+
+      // Deep clone, then do remove + add on the clone
+      const cloned = JSON.parse(JSON.stringify(nodes)) as MindMapNode[]
+      const clonedTarget = findNodeById(cloned, targetId)
+      const clonedParent = findNodeById(cloned, newParentId)
+      if (!clonedTarget || !clonedParent) return nodes
+
+      removeNodeFromTree(cloned, targetId)
+      clonedParent.children.push(clonedTarget)
+      return cloned
+    }
 
     case 'noop':
       return nodes

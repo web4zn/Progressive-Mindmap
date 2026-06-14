@@ -35,7 +35,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       try {
         const model = createModel(providerConfig.apiKey, providerConfig.apiEndpoint, modelId)
         runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus })
-        console.log(LOG, '✅ Agent 初始化成功')
+        console.log(LOG, '✅ Agent 初始化成功，已注册工具:', Object.keys(agentTools).join(', '))
         reportStatus('idle', 'Agent 就绪')
       } catch (err) {
         console.error(LOG, '❌ 初始化失败:', err)
