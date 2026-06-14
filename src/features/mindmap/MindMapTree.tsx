@@ -9,6 +9,7 @@ import { findAncestorChain } from '@/lib/mindmap-path'
 import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
 import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
 import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
+import DrillBreadcrumb from '@/components/flow-shell/DrillBreadcrumb'
 import type { Node as FlowNode } from '@xyflow/react'
 import BottomDrawerReader from './BottomDrawerReader'
 import MindMapContextMenu from './MindMapContextMenu'
@@ -120,6 +121,10 @@ export default function MindMapTree({
   const [drawerNodeId, setDrawerNodeId] = useState<string | null>(null)
   const [drawerMode, setDrawerMode] = useState<'read' | 'edit'>('read')
 
+  // mindmap-drill-down: when set, the canvas only renders the subtree
+  // rooted at this node. null means "show the full tree".
+  const [drillNodeId, setDrillNodeId] = useState<string | null>(null)
+
   // Imperative handle on FlowShell so we can drive `fitView()` / `zoomIn()` /
   // `zoomOut()` / `getIntersectingNodes()` from here. `useReactFlow()`
   // cannot be called from MindMapTree because the ReactFlowProvider only
@@ -158,6 +163,13 @@ export default function MindMapTree({
   // node is collapsed in `collapsedIds` its descendants never reach
   // the canvas regardless of filter.
   const effectiveTree = useMemo<MindMapNode[]>(() => {
+    // mindmap-drill-down: when focused on a subtree, drill-down takes
+    // precedence over depth / edit filters — the user wants to see the
+    // full subtree rooted at the drilled node.
+    if (drillNodeId) {
+      const node = findNodeInTree(tree, drillNodeId)
+      return node ? [node] : tree
+    }
     const noFilter = filterOnlyEdited === false && (filterDepth === undefined || filterDepth === 0)
     if (noFilter) return tree
     const depthCap = filterDepth && filterDepth > 0 ? filterDepth : Infinity
@@ -181,17 +193,27 @@ export default function MindMapTree({
       return out
     }
     return walk(tree, 0)
-  }, [tree, filterDepth, filterOnlyEdited])
+  }, [tree, drillNodeId, filterDepth, filterOnlyEdited])
+
+  // mindmap-drill-down: when drilling, temporarily un-collapse the drill
+  // root so its children are visible. The store's `collapsedIds` is NOT
+  // mutated — the override only affects this render path.
+  const layoutCollapsedIds = useMemo<Set<string>>(() => {
+    if (!drillNodeId || !collapsedIds.has(drillNodeId)) return collapsedIds
+    const next = new Set(collapsedIds)
+    next.delete(drillNodeId)
+    return next
+  }, [collapsedIds, drillNodeId])
 
   const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
       effectiveTree,
-      collapsedIds,
+      layoutCollapsedIds,
       toggleCollapse,
       pattern,
     )
     return { nodes: rawNodes, edges: rawEdges }
-  }, [effectiveTree, collapsedIds, toggleCollapse, pattern])
+  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern])
 
   // Stage C: search-match set + dim set. When the search box has a
   // query, only the matching nodes stay at 100% opacity; everything
@@ -199,8 +221,11 @@ export default function MindMapTree({
   // label / summary / content contain the substring (case-insensitive).
   const searchMatchNodeIds = useMemo<Set<string>>(() => {
     if (!searchQuery.trim()) return new Set()
-    return matchNodes(tree, searchQuery)
-  }, [tree, searchQuery])
+    // mindmap-drill-down: when drilling, only search within the
+    // visible subtree (effectiveTree), not the full tree.
+    const searchTree = drillNodeId ? effectiveTree : tree
+    return matchNodes(searchTree, searchQuery)
+  }, [tree, effectiveTree, drillNodeId, searchQuery])
 
   // Stage A2 + Stage C: dim everything that isn't on the ancestor chain
   // of the hovered node OR on the edge path. Edge hover wins over node
@@ -275,6 +300,7 @@ export default function MindMapTree({
     return findNodeInTree(tree, contextMenu.nodeId)
   }, [contextMenu, tree])
   const hasPinnedPosition = contextMenuTarget?.position !== undefined
+  const hasChildrenForContextNode = (contextMenuTarget?.children.length ?? 0) > 0
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -667,14 +693,18 @@ export default function MindMapTree({
   )
 
   const handleCenterOnNode = useCallback(() => {
-    if (selectedNodeId) {
-      flowShellRef.current?.focusNode(selectedNodeId, {
-        padding: 0.3,
-        duration: 200,
-        maxZoom: 1.5,
-      })
+    const nodeId = contextMenu?.nodeId
+    if (nodeId) {
+      flowShellRef.current?.centerOnNode(nodeId, { duration: 200 })
+      setContextMenu(null)
     }
-  }, [selectedNodeId])
+  }, [contextMenu?.nodeId])
+
+  // mindmap-drill-down: enter drill mode for a node (via context menu).
+  const handleDrillDown = useCallback((nodeId: string) => {
+    setDrillNodeId(nodeId)
+    setContextMenu(null)
+  }, [])
 
   // Stage C: handle the top-bar "Enter" / focus-first-match on search.
   // The search box lives in MindMapPanel but calls into MindMapTree
@@ -792,6 +822,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -823,6 +854,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -851,6 +883,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -868,6 +901,22 @@ export default function MindMapTree({
         <div className="absolute top-0 left-0 right-0 z-10 px-3 py-1.5 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm animate-pulse">
           生成中…
         </div>
+      )}
+      {/* mindmap-drill-down: breadcrumb shown when drilling into a subtree. */}
+      {drillNodeId && (
+        <DrillBreadcrumb
+          tree={tree}
+          drillNodeId={drillNodeId}
+          onNavigate={(nodeId) => {
+            setDrillNodeId(nodeId)
+            // When exiting drill (nodeId === null), fit the full tree.
+            if (nodeId === null) {
+              setTimeout(() => {
+                flowShellRef.current?.fitView({ padding: 0.3, duration: 300 })
+              }, 100)
+            }
+          }}
+        />
       )}
       <FlowShell
         ref={flowShellRef}
@@ -913,6 +962,7 @@ export default function MindMapTree({
         open={outlineOpen}
         onClose={onOutlineClose ?? (() => {})}
         onFocus={onOutlineFocus ?? (() => {})}
+        tree={drillNodeId ? effectiveTree : undefined}
       />
 
       {/* bottom-drawer-reader: bottom panel for reading full node content
@@ -943,6 +993,7 @@ export default function MindMapTree({
           canRedo={history.canRedo}
           confirmDelete={confirmDelete}
           hasPinnedPosition={hasPinnedPosition}
+          hasChildren={hasChildrenForContextNode}
           onEdit={() => {
             // bottom-drawer-reader: open drawer in edit mode directly.
             setDrawerNodeId(contextMenu.nodeId)
@@ -964,6 +1015,7 @@ export default function MindMapTree({
             handleDuplicate(contextMenu.nodeId)
             setContextMenu(null)
           }}
+          onDrillDown={() => handleDrillDown(contextMenu.nodeId)}
           onDeleteRequest={() => setConfirmDelete(true)}
           onDeleteConfirm={handleDeleteConfirm}
           onCancelDelete={() => setConfirmDelete(false)}

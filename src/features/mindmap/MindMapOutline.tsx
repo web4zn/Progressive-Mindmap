@@ -47,6 +47,9 @@ export interface MindMapOutlineProps {
   open: boolean
   onClose: () => void
   onFocus: (nodeId: string) => void
+  /** mindmap-drill-down: optional override tree. When provided, the
+   *  outline displays this tree instead of `activeMindmap?.tree`. */
+  tree?: MindMapNode[]
 }
 
 interface OutlineRow {
@@ -57,7 +60,7 @@ interface OutlineRow {
   hasChildren: boolean
 }
 
-export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlineProps) {
+export default function MindMapOutline({ open, onClose, onFocus, tree: treeOverride }: MindMapOutlineProps) {
   const mindmaps = useMindmapStore((s) => s.mindmaps)
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const activeMindmap = useMemo(
@@ -84,7 +87,8 @@ export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlin
   }, [open, onClose])
 
   const rows = useMemo<OutlineRow[]>(() => {
-    const tree = activeMindmap?.tree ?? []
+    // mindmap-drill-down: use the override tree when provided.
+    const tree = treeOverride ?? activeMindmap?.tree ?? []
     const pattern = activeMindmap?.pattern ?? 'auto'
     const out: OutlineRow[] = []
     function walk(list: MindMapNode[], depth: number) {
@@ -103,7 +107,7 @@ export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlin
     }
     walk(tree, 0)
     return out
-  }, [activeMindmap?.tree, activeMindmap?.pattern, collapsedIds])
+  }, [treeOverride, activeMindmap?.tree, activeMindmap?.pattern, collapsedIds])
 
   const toggleCollapse = (id: string) => {
     setCollapsedIds((prev) => {

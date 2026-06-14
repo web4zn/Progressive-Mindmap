@@ -24,6 +24,7 @@ import {
   Redo2,
   Copy,
   MapPin,
+  ZoomIn,
 } from 'lucide-react'
 
 interface ContextMenuProps {
@@ -40,6 +41,8 @@ interface ContextMenuProps {
   /** True when the node carries a pinned `position` field that the
    *  user can reset. */
   hasPinnedPosition: boolean
+  /** mindmap-drill-down: whether the node has children (enables drill-down). */
+  hasChildren: boolean
   onEdit: () => void
   onAddChild: () => void
   onMoveUp: () => void
@@ -54,6 +57,8 @@ interface ContextMenuProps {
   onResetPosition: () => void
   /** Duplicate the node as a sibling. */
   onDuplicate: () => void
+  /** mindmap-drill-down: focus the node and isolate its subtree. */
+  onDrillDown: () => void
   onDeleteRequest: () => void
   onDeleteConfirm: () => void
   onCancelDelete: () => void
@@ -64,6 +69,7 @@ const MENU_ORDER = [
   'edit',
   'addChild',
   'center',
+  'drillDown',
   'duplicate',
   'resetPosition',
   'moveUp',
@@ -85,6 +91,7 @@ export default function MindMapContextMenu({
   canRedo,
   confirmDelete,
   hasPinnedPosition,
+  hasChildren,
   onEdit,
   onAddChild,
   onMoveUp,
@@ -94,6 +101,7 @@ export default function MindMapContextMenu({
   onRedo,
   onResetPosition,
   onDuplicate,
+  onDrillDown,
   onDeleteRequest,
   onDeleteConfirm,
   onCancelDelete,
@@ -112,6 +120,9 @@ export default function MindMapContextMenu({
         return
       case 'center':
         onCenter()
+        return
+      case 'drillDown':
+        onDrillDown()
         return
       case 'duplicate':
         onDuplicate()
@@ -286,6 +297,19 @@ export default function MindMapContextMenu({
             <Crosshair className="w-3.5 h-3.5" />
             在画布居中
           </button>
+          {hasChildren && (
+            <button
+              role="menuitem"
+              className={classFor('drillDown')}
+              onClick={onDrillDown}
+              onMouseEnter={() => setHighlight('drillDown')}
+              title="聚焦此节点及其子树"
+              data-testid="mindmap-context-drill-down"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+              下钻到此
+            </button>
+          )}
           <button
             role="menuitem"
             className={classFor('duplicate')}
