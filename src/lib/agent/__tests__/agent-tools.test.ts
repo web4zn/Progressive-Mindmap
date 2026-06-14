@@ -81,14 +81,15 @@ describe('applyOperations with content/contentType', () => {
     })
   })
 
-  describe('update with content patch', () => {
+  describe('update node fields', () => {
     it('updates content and contentType on existing node', () => {
       const tree = [makeNode('n1', 'Old', [], { content: 'old text', contentType: 'text' })]
       const ops: MindmapOperation[] = [
         {
           type: 'update',
           nodeId: 'n1',
-          patch: { content: '<p>new html</p>', contentType: 'html' },
+          content: '<p>new html</p>',
+          contentType: 'html',
         },
       ]
       const result = applyOperations(tree, ops)
@@ -107,7 +108,8 @@ describe('applyOperations with content/contentType', () => {
         {
           type: 'update',
           nodeId: 'n1',
-          patch: { label: 'New Label', summary: 'New Summary' },
+          label: 'New Label',
+          summary: 'New Summary',
         },
       ]
       const result = applyOperations(tree, ops)
@@ -123,7 +125,8 @@ describe('applyOperations with content/contentType', () => {
         {
           type: 'update',
           nodeId: 'n1',
-          patch: { content: '<p>ai overwrite</p>', contentType: 'html' },
+          content: '<p>ai overwrite</p>',
+          contentType: 'html',
         },
       ]
       const result = applyOperations(tree, ops)

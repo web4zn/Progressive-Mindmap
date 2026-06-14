@@ -217,11 +217,11 @@ export function buildIncrementalPrompt(pattern = 'auto'): string {
 
 根据对话内容和现有脑图，输出增量操作来更新脑图。
 
-输出格式（严格 JSON）：
+ 输出格式（严格 JSON）：
 {
   "operations": [
     {"type": "add_child", "parentId": "n1a2b3c", "label": "新概念", "summary": "描述", "content": "<p>新概念的详细说明</p>", "contentType": "html"},
-    {"type": "update", "nodeId": "n2b3c4d", "patch": {"summary": "更新后的摘要", "content": "<p>更新后的详细内容</p>", "contentType": "html"}},
+    {"type": "update", "nodeId": "n2b3c4d", "label": "新标题", "summary": "更新后的摘要", "content": "<p>更新后的详细内容</p>", "contentType": "html"},
     {"type": "delete_leaf", "nodeId": "n5f6g7h"},
     {"type": "add_root", "label": "新概念", "summary": "描述", "content": "<p>新概念的详细说明</p>", "contentType": "html"}
   ]
@@ -229,7 +229,7 @@ export function buildIncrementalPrompt(pattern = 'auto'): string {
 
 操作类型说明：
 - add_child: 在指定父节点下添加子节点。parentId 必须是已有脑图中的真实 ID
-- update: 更新已有节点的 label 或 summary。nodeId 必须是真实 ID
+- update: 更新已有节点的 label/summary/content。字段选填，只传要改的部分。nodeId 必须是真实 ID
 - delete_leaf: 删除无子节点的叶子节点。nodeId 必须是真实 ID
 - add_root: 在脑图根层级添加新节点（仅当没有合适的父节点时使用）
 

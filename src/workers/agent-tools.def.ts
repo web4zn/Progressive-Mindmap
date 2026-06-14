@@ -46,18 +46,9 @@ export function reportStatus(
 
 // ─── 工具定义（使用 AI SDK 原生 tool，含 inputSchema） ───
 export const agentTools = {
-  readMindmap: tool({
-    description:
-      '读取当前脑图结构，返回每个节点的 ID、标签、摘要、content（HTML富文本）。用于了解现有结构后再决定操作。',
-    inputSchema: z.object({}),
-    execute: async () => {
-      reportStatus('reading_mindmap', '正在读取脑图...')
-      return callMain('readMindmap', {}) as Promise<Record<string, unknown>>
-    },
-  }),
   generateMindmapOps: tool({
     description:
-      '应用脑图增量更新操作。先调用 readMindmap 获取节点 ID，然后根据对话内容决定操作，最后调用本工具提交操作。每个节点都必须包含 content（HTML富文本）和 contentType（设为"html"）字段，不得省略。',
+      '应用脑图增量更新操作。当前脑图结构已在上下文中提供，直接利用其中的节点 ID 决定操作后调用本工具提交。每个节点都必须包含 content（HTML富文本）和 contentType（设为"html"）字段，不得省略。',
     inputSchema: z.object({
       operations: z.array(
         z.object({
@@ -77,15 +68,6 @@ export const agentTools = {
             .enum(['text', 'html'])
             .optional()
             .describe('内容类型，新建节点时请设为 "html"。'),
-          patch: z
-            .object({
-              label: z.string().optional(),
-              summary: z.string().optional(),
-              content: z.string().optional().describe('更新节点的 HTML 富文本内容'),
-              contentType: z.enum(['text', 'html']).optional().describe('设为 "html"'),
-            })
-            .optional()
-            .describe('update 时使用，要更新的字段。推荐同时更新 content 为 HTML 格式'),
         }),
       ),
     }),

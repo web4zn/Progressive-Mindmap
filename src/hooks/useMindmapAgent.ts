@@ -5,6 +5,7 @@ import { useMindmapStore } from '@/stores/mindmapStore'
 import { useChatStore } from '@/stores/chatStore'
 import { agentToolHandlers } from '@/lib/agent/agent-tools'
 import { buildMindmapAgentPrompt } from '@/lib/agent/system-prompt'
+import { mindmapTreeToFlatContext } from '@/lib/mindmap-generator'
 import { createAgentStatusGuard } from '@/lib/agent/agent-status-guard'
 import type {
   MainToWorkerMessage,
@@ -272,7 +273,7 @@ export function useMindmapAgent() {
             content: m.content,
           })),
           mindmapTreeJson:
-            mm.tree.length > 0 ? JSON.stringify(mm.tree) : '',
+            mm.tree.length > 0 ? mindmapTreeToFlatContext(mm.tree) : '',
           pattern: mm.pattern ?? 'auto',
           providerConfig: provider
             ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
@@ -318,7 +319,7 @@ export function useMindmapAgent() {
             role: m.role,
             content: m.content,
           })),
-          mindmapTreeJson: mm?.tree.length ? JSON.stringify(mm.tree) : '',
+          mindmapTreeJson: mm?.tree.length ? mindmapTreeToFlatContext(mm.tree) : '',
           providerConfig: provider
             ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
             : { apiEndpoint: '', apiKey: '' },

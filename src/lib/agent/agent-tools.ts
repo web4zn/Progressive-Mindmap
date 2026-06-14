@@ -1,8 +1,5 @@
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
-import {
-  mindmapTreeToFlatContext,
-} from '@/lib/mindmap-generator'
 import { deriveNodeId } from '@/lib/id'
 import type { MindMapNode } from '@/types/mindmap'
 import { validateOperations } from './schema'
@@ -131,27 +128,6 @@ export const agentToolHandlers: Record<
   string,
   (args: unknown) => Promise<unknown>
 > = {
-  readMindmap: async () => {
-    console.log(LOG, 'readMindmap 开始')
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) {
-      console.log(LOG, 'readMindmap: 无活跃会话')
-      return { treeContext: '', nodeCount: 0, pattern: 'auto' }
-    }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm || mm.tree.length === 0) {
-      console.log(LOG, 'readMindmap: 未找到关联脑图或脑图为空')
-      return { treeContext: '', nodeCount: 0, pattern: 'auto' }
-    }
-    const nodeCount = countNodes(mm.tree)
-    console.log(LOG, `readMindmap: 读取脑图 "${mm.title}" (${nodeCount} 节点)`)
-    return {
-      treeContext: mindmapTreeToFlatContext(mm.tree),
-      nodeCount,
-      pattern: mm.pattern ?? 'auto',
-    }
-  },
-
   generateMindmapOps: async (args: unknown) => {
     const { operations } = args as {
       operations?: Array<{
@@ -162,7 +138,6 @@ export const agentToolHandlers: Record<
         summary?: string
         content?: string
         contentType?: string
-        patch?: { label?: string; summary?: string; content?: string; contentType?: string }
       }>
     }
 
@@ -405,20 +380,18 @@ function applyOne(
             console.warn(LOG, `跳过 update: 节点 "${node.label}" 已被用户编辑`)
             return node
           }
-          const resolvedContentType =
-            op.patch.contentType ??
-            (op as { contentType?: 'text' | 'html' }).contentType ??
-            node.contentType
+          const u = op as { label?: string; summary?: string; content?: string; contentType?: 'text' | 'html' }
+          const resolvedContentType = u.contentType ?? node.contentType
           const resolvedContent =
-            op.patch.content !== undefined
+            u.content !== undefined
               ? resolvedContentType === 'html'
-                ? formatHtml(op.patch.content)
-                : op.patch.content
+                ? formatHtml(u.content)
+                : u.content
               : node.content
           return {
             ...node,
-            label: op.patch.label ?? node.label,
-            summary: op.patch.summary ?? node.summary,
+            label: u.label ?? node.label,
+            summary: u.summary ?? node.summary,
             content: resolvedContent,
             contentType: resolvedContentType,
           }

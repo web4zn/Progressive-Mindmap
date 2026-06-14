@@ -5,7 +5,7 @@
 // ─── 增量操作类型 ───
 export type MindmapOperation =
   | { type: 'add_child'; parentId?: string; id?: string; label: string; summary?: string; content?: string; contentType?: 'text' | 'html' }
-  | { type: 'update'; nodeId: string; patch: Partial<{ label: string; summary: string; content: string; contentType: 'text' | 'html' }> }
+  | { type: 'update'; nodeId: string; label?: string; summary?: string; content?: string; contentType?: 'text' | 'html' }
   | { type: 'delete_leaf'; nodeId: string }
   | { type: 'add_root'; id?: string; label: string; summary?: string; content?: string; contentType?: 'text' | 'html' }
   | { type: 'reparent'; nodeId: string; newParentId: string }

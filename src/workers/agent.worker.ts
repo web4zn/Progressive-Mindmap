@@ -34,7 +34,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       console.log(LOG, '初始化 Agent', { model: modelId, endpoint: providerConfig.apiEndpoint })
       try {
         const model = createModel(providerConfig.apiKey, providerConfig.apiEndpoint, modelId)
-        runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus })
+        runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus, maxSteps: 15 })
         console.log(LOG, '✅ Agent 初始化成功，已注册工具:', Object.keys(agentTools).join(', '))
         reportStatus('idle', 'Agent 就绪')
       } catch (err) {
@@ -66,9 +66,13 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       reportStatus('thinking', '开始分析对话内容...')
       try {
         const patternHint = getPatternHint(msg.payload.pattern)
+        const treeContext =
+          msg.payload.mindmapTreeJson || '(空白脑图)'
         const userPrompt = `基于以下对话内容，更新思维导图。
 
-${patternHint}
+${patternHint}当前脑图结构：
+${treeContext}
+
 对话内容：
 ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
 
@@ -128,12 +132,17 @@ ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
             ? `最近对话（上下文参考）：
 ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`).join('\n')}`
             : ''
+        const treeContext =
+          msg.payload.mindmapTreeJson || '(空白脑图)'
         const userPrompt = `用户提问：
 ${msg.payload.content}
 
+当前脑图结构：
+${treeContext}
+
 ${recentContext}
 
-请按系统指令工作：先读脑图 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
+请按系统指令工作：分析脑图结构 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
         console.log(LOG, '进入 ReAct 循环')
         const finalAnswer = await runner!.run(userPrompt)
         console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
