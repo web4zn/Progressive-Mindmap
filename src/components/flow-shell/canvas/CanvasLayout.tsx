@@ -192,7 +192,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
 
   // 4. Imperative handle — parent drives the camera.
   const rfInstanceRef = useRef<ReactFlowInstance<ShapeFlowNode> | null>(null)
-  const { fitView: rfFitView, getIntersectingNodes, zoomIn, zoomOut } =
+  const { fitView: rfFitView, getIntersectingNodes, zoomIn, zoomOut, setCenter, getZoom, getNode } =
     useReactFlow<ShapeFlowNode>()
 
   useImperativeHandle(
@@ -213,6 +213,16 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
           maxZoom: options?.maxZoom ?? 1.5,
         })
       },
+      centerOnNode: (nodeId: string, options?: { duration?: number }) => {
+        const node = getNode(nodeId)
+        if (!node) return
+        const cx = node.position.x + ((node.measured?.width ?? 0) / 2)
+        const cy = node.position.y + ((node.measured?.height ?? 0) / 2)
+        setCenter(cx, cy, {
+          zoom: getZoom(),
+          duration: options?.duration ?? 200,
+        })
+      },
       getIntersectingNodes: (nodeId) => {
         try {
           return getIntersectingNodes({ id: nodeId }) as ShapeFlowNode[]
@@ -227,7 +237,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
         zoomOut({ duration: 200 })
       },
     }),
-    [rfFitView, getIntersectingNodes, zoomIn, zoomOut],
+    [rfFitView, getIntersectingNodes, zoomIn, zoomOut, setCenter, getZoom, getNode],
   )
 
   const handleInit = useCallback<OnInit<ShapeFlowNode>>(

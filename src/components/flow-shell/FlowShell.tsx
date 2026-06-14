@@ -64,6 +64,10 @@ export interface FlowShellHandle {
   ) => import('@xyflow/react').Node<import('./index').FlowNodeData, string>[]
   zoomIn: () => void
   zoomOut: () => void
+  centerOnNode: (
+    nodeId: string,
+    options?: { duration?: number },
+  ) => void
 }
 
 function readDocumentTheme(): 'light' | 'dark' {
