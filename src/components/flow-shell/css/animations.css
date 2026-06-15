@@ -117,6 +117,23 @@
   animation: flow-node-collapse-in var(--duration-base) var(--ease-out);
 }
 
+/* ── node-llm-chat: highlight pulse ─────────────────────────────────────
+ * Brief scale + glow bounce when the user navigates to a linked
+ * conversation. Applied by `.flow-node.highlighted` in node.css.
+ * The class is removed by a 3 s timer in MindMapTree so this is
+ * a one-shot. */
+@keyframes flow-highlight-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flow-node.collapsing-out,
   .flow-node.fade-in {

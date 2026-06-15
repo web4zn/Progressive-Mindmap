@@ -156,6 +156,7 @@ function buildNodeClasses(args: {
     args.data.isDimmed ? 'dimmed' : '',
     args.data.isStreaming ? 'streaming' : '',
     args.data.isSearchMatch ? 'search-match' : '',
+    args.data.highlighted ? 'highlighted' : '',
     args.data.collapsed ? 'collapsed' : '',
   ]
     .filter(Boolean)

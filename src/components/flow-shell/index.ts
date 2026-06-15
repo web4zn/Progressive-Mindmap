@@ -32,6 +32,9 @@ export interface FlowNodeData extends Record<string, unknown> {
   /** node-llm-chat: callback when the conversation bubble icon is clicked.
    *  Receives the linked conversation id to navigate to. */
   onNavigateToConversation?: (convId: string) => void
+  /** node-llm-chat: when true the node is highlighted (pattern-colored ring)
+   *  after navigating to its linked conversation. Auto-clears after 3 s. */
+  highlighted?: boolean
 }
 
 export type { FlowShellProps, FlowShellHandle } from './FlowShell'

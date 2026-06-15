@@ -58,7 +58,6 @@
 
 .flow-node.depth-0 .flow-node-accent {
   width: 4px;
-  border-radius: 4px 0 0 4px;
 }
 
 /* Per-depth label sizing (root already handled above) */
@@ -80,10 +79,9 @@
 .flow-node-accent {
   position: absolute;
   left: 0;
-  top: 0.5rem;
-  bottom: 0.5rem;
+  top: 0;
+  bottom: 0;
   width: 3px;
-  border-radius: 3px 0 0 3px;
   background: var(--flow-pattern);
 }
 
@@ -221,6 +219,30 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+}
+
+/* ── node-llm-chat: linked-conversation navigation highlight ──────────
+ *
+ * When the user clicks a 💬 bubble or uses Ask LLM to navigate to a
+ * linked conversation, the linked node gets a pattern-coloured ring
+ * + soft glow that auto-fades. The class is removed by a 3 s timer
+ * in MindMapTree, so the animation is a one-shot.
+ *
+ * The `flow-highlight-pulse` keyframe lives in animations.css. */
+.flow-node.highlighted {
+  outline: 3px solid var(--flow-pattern, currentColor);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--flow-pattern) 20%, transparent),
+    0 0 16px color-mix(in srgb, var(--flow-pattern) 15%, transparent);
+  animation: flow-highlight-pulse 0.6s var(--ease-out) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node.highlighted {
+    animation: none;
+  }
 }
 
 /* ── Stage A2: hover path highlight ─────────────────────────────────────── */
