@@ -105,6 +105,26 @@ export function findNodeInTree(nodes: MindMapNode[], id: string): MindMapNode | 
   return null
 }
 
+/**
+ * Walk a mindmap tree to find the first node whose `linkedConversationId`
+ * matches `convId`. Returns the node, or `null` if no match is found.
+ * node-llm-chat: used by MindMapTree to highlight the linked node after
+ * navigating to a conversation.
+ */
+export function findNodeByLinkedConv(
+  nodes: MindMapNode[],
+  convId: string,
+): MindMapNode | null {
+  for (const node of nodes) {
+    if (node.linkedConversationId === convId) return node
+    if (node.children.length > 0) {
+      const found = findNodeByLinkedConv(node.children, convId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 export function findParentInTree(nodes: MindMapNode[], id: string): MindMapNode | null {
   for (const n of nodes) {
     for (const c of n.children) {

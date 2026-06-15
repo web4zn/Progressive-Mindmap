@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMindmapLayout } from './useMindmapLayout'
-import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
+import { findNodeInTree, findNodeByLinkedConv, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
 import { findAncestorChain } from '@/lib/mindmap-path'
 import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
@@ -130,11 +130,75 @@ export default function MindMapTree({
   // rooted at this node. null means "show the full tree".
   const [drillNodeId, setDrillNodeId] = useState<string | null>(null)
 
+  // node-llm-chat: when navigating to a linked conversation, the linked
+  // node gets a visual highlight ring that auto-clears after 3 s.
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null)
+
+  // node-llm-chat: track the previous non-linked (global) conversation id
+  // so the user can navigate back via a canvas button.
+  const prevActiveConvIdRef = useRef<string | null>(null)
+  const previousGlobalConvIdRef = useRef<string | null>(null)
+  const [showBackToGlobal, setShowBackToGlobal] = useState(false)
+
+  // Subscribe to activeConversationId from the store so we can detect
+  // when the user navigates to a linked conversation.
+  const activeConvId = useConversationStore((s) => s.activeConversationId)
+
   // Imperative handle on FlowShell so we can drive `fitView()` / `zoomIn()` /
   // `zoomOut()` / `getIntersectingNodes()` from here. `useReactFlow()`
   // cannot be called from MindMapTree because the ReactFlowProvider only
   // lives inside FlowShell.
   const flowShellRef = useRef<FlowShellHandle | null>(null)
+
+  // node-llm-chat: when the active conversation changes to one that
+  // is linked to a node (via linkedConversationId), set the highlighted
+  // node id so the visual highlight ring appears, and center the
+  // viewport on that node. Also track the previous non-linked
+  // conversation so the user can navigate back via a canvas button.
+  useEffect(() => {
+    if (!activeConvId) {
+      setHighlightedNodeId(null)
+      setShowBackToGlobal(false)
+      return
+    }
+    const mm = useMindmapStore.getState().getActiveMindmap()
+    if (!mm) {
+      setShowBackToGlobal(false)
+      return
+    }
+    const found = findNodeByLinkedConv(mm.tree, activeConvId)
+    if (found) {
+      setHighlightedNodeId(found.id)
+      // Center the viewport on the linked node
+      flowShellRef.current?.centerOnNode(found.id, { duration: 200 })
+
+      // Save the previous non-linked conversation as the "back" target
+      if (prevActiveConvIdRef.current && prevActiveConvIdRef.current !== activeConvId) {
+        const prevLinked = findNodeByLinkedConv(mm.tree, prevActiveConvIdRef.current)
+        if (!prevLinked) {
+          previousGlobalConvIdRef.current = prevActiveConvIdRef.current
+        }
+      }
+      setShowBackToGlobal(previousGlobalConvIdRef.current !== null)
+    } else {
+      setHighlightedNodeId(null)
+      setShowBackToGlobal(false)
+    }
+  }, [activeConvId])
+
+  // Track the previous activeConversationId after every render.
+  // This runs AFTER the linking-detection effect above because it is
+  // declared later — React runs effects in declaration order.
+  useEffect(() => {
+    prevActiveConvIdRef.current = activeConvId
+  })
+
+  // Auto-clear the highlight after 3 s
+  useEffect(() => {
+    if (!highlightedNodeId) return
+    const timer = setTimeout(() => setHighlightedNodeId(null), 3000)
+    return () => clearTimeout(timer)
+  }, [highlightedNodeId])
 
   const treeRef = useRef(tree)
 
@@ -211,7 +275,28 @@ export default function MindMapTree({
   }, [collapsedIds, drillNodeId])
 
   const handleNavigateToConversation = useCallback((convId: string) => {
+    // Save the current active conversation as the "back" target if it
+    // is not itself node-linked. This covers the 💬 icon click path.
+    const currentActiveId = useConversationStore.getState().activeConversationId
+    if (currentActiveId && currentActiveId !== convId) {
+      const mm = useMindmapStore.getState().getActiveMindmap()
+      if (mm) {
+        const currentLinked = findNodeByLinkedConv(mm.tree, currentActiveId)
+        if (!currentLinked) {
+          previousGlobalConvIdRef.current = currentActiveId
+        }
+      }
+    }
     useConversationStore.getState().setActiveConversationId(convId)
+  }, [])
+
+  /** Navigate back to the previous global (non-linked) conversation. */
+  const handleBackToGlobal = useCallback(() => {
+    if (previousGlobalConvIdRef.current) {
+      const target = previousGlobalConvIdRef.current
+      previousGlobalConvIdRef.current = null
+      useConversationStore.getState().setActiveConversationId(target)
+    }
   }, [])
 
   const { nodes, edges } = useMemo(() => {
@@ -221,9 +306,10 @@ export default function MindMapTree({
       toggleCollapse,
       pattern,
       handleNavigateToConversation,
+      highlightedNodeId ?? undefined,
     )
     return { nodes: rawNodes, edges: rawEdges }
-  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern, handleNavigateToConversation])
+  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern, handleNavigateToConversation, highlightedNodeId])
 
   // Stage C: search-match set + dim set. When the search box has a
   // query, only the matching nodes stay at 100% opacity; everything
@@ -951,6 +1037,8 @@ export default function MindMapTree({
         searchMatchNodeIds={searchMatchNodeIds}
         isStreaming={isStreaming}
         background={background}
+        showBackToGlobal={showBackToGlobal}
+        onBackToGlobal={handleBackToGlobal}
         onPaneDoubleClick={() => {
           flowShellRef.current?.fitView({ padding: 0.3, duration: 200 })
         }}
