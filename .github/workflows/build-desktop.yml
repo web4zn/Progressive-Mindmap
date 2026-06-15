@@ -133,7 +133,9 @@ jobs:
 
       - name: Get version tag
         id: version
-        run: echo "TAG=v$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          VER=$(node -e "console.log(require('./package.json').version)")
+          echo "TAG=v$VER" >> "$GITHUB_OUTPUT"
 
       - name: Create or update Release
         env:
