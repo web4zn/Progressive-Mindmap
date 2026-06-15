@@ -159,17 +159,24 @@ export default function MindMapContextMenu({
     }
   }
 
-  // Click-outside dismisses the menu (mouse-only). Keyboard navigation
-  // is handled in the keydown listener below.
+  // Click-outside dismisses the menu.
+  // Uses `pointerdown` instead of `mousedown` because React Flow's canvas
+  // relies on Pointer Events — `mousedown` may not reliably reach `window`
+  // when the canvas has captured the pointer. `pointerdown` is the primary
+  // pointing event and fires before any React Flow internal handling.
+  // The `onClose` ref avoids repeatedly re-attaching the listener on every
+  // parent re-render (the prop is an inline arrow in MindMapTree).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
+        onCloseRef.current()
       }
     }
-    window.addEventListener('mousedown', handler)
-    return () => window.removeEventListener('mousedown', handler)
-  }, [onClose])
+    window.addEventListener('pointerdown', handler)
+    return () => window.removeEventListener('pointerdown', handler)
+  }, [])
 
   // Keyboard navigation. We re-render with the highlighted key first,
   // so the user sees the caret move before the action fires.
