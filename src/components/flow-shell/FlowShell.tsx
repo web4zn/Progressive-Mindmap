@@ -38,6 +38,7 @@ export interface FlowShellProps {
     import('@xyflow/react').Edge
   >
   onNodeDoubleClick?: import('@xyflow/react').NodeMouseHandler
+  onNodeClick?: import('@xyflow/react').NodeMouseHandler
   onNodeContextMenu?: import('@xyflow/react').NodeMouseHandler
   onNodeDragStop?: import('@xyflow/react').OnNodeDrag
   onNodeMouseEnter?: import('@xyflow/react').NodeMouseHandler
@@ -50,6 +51,11 @@ export interface FlowShellProps {
   background?: 'dots' | 'grid' | 'none'
   disableMiniMap?: boolean
   searchMatchNodeIds?: ReadonlySet<string>
+  /** node-llm-chat: when true, show a "back to global conversation"
+   *  button at the top-left of the canvas. */
+  showBackToGlobal?: boolean
+  /** node-llm-chat: called when the "back to global" button is clicked. */
+  onBackToGlobal?: () => void
 }
 
 export interface FlowShellHandle {
@@ -63,6 +69,10 @@ export interface FlowShellHandle {
   ) => import('@xyflow/react').Node<import('./index').FlowNodeData, string>[]
   zoomIn: () => void
   zoomOut: () => void
+  centerOnNode: (
+    nodeId: string,
+    options?: { duration?: number },
+  ) => void
 }
 
 function readDocumentTheme(): 'light' | 'dark' {
@@ -81,7 +91,12 @@ export default forwardRef<FlowShellHandle, FlowShellProps>(function FlowShell(pr
       style={{ width: '100%', height: '100%' }}
     >
       <ReactFlowProvider>
-        <CanvasLayout {...props} ref={ref} />
+        <CanvasLayout
+          {...props}
+          ref={ref}
+          showBackToGlobal={props.showBackToGlobal}
+          onBackToGlobal={props.onBackToGlobal}
+        />
       </ReactFlowProvider>
     </div>
   )

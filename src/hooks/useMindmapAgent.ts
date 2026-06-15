@@ -3,8 +3,9 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useChatStore } from '@/stores/chatStore'
-import { agentToolHandlers } from '@/lib/agent/agent-tools'
+import { agentToolHandlers, setAgentScope, clearAgentScope, getQueryTree } from '@/lib/agent/agent-tools'
 import { buildMindmapAgentPrompt } from '@/lib/agent/system-prompt'
+import { mindmapTreeToFlatContext } from '@/lib/mindmap-generator'
 import { createAgentStatusGuard } from '@/lib/agent/agent-status-guard'
 import type {
   MainToWorkerMessage,
@@ -225,12 +226,15 @@ export function useMindmapAgent() {
 
   // ── 触发脑图增强 ──
   const enhanceMessage = useCallback(
-    (conversationId: string) => {
+    (conversationId: string, scopeNodeId?: string) => {
       const worker = workerRef.current
       if (!worker) {
         console.warn(LOG, 'enhanceMessage: Worker 未初始化，跳过')
         return
       }
+
+      if (scopeNodeId) setAgentScope(scopeNodeId)
+      else clearAgentScope()
 
       const conv = useConversationStore
         .getState()
@@ -254,11 +258,13 @@ export function useMindmapAgent() {
       const provider = providers.find((p) => p.id === conv.providerId)
 
       const recentMessages = conv.messages.slice(-6)
+      const treeForContext = getQueryTree(mm.tree)
       console.log(LOG, '发送 ENHANCE_MESSAGE', {
         conversationId,
         消息数: recentMessages.length,
         脑图节点数: mm.tree.length,
         脑图模式: mm.pattern,
+        scopeNodeId: scopeNodeId ?? '（完整脑图）',
       })
 
       setAgentStatus('thinking', '准备分析对话...')
@@ -272,7 +278,7 @@ export function useMindmapAgent() {
             content: m.content,
           })),
           mindmapTreeJson:
-            mm.tree.length > 0 ? JSON.stringify(mm.tree) : '',
+            treeForContext.length > 0 ? mindmapTreeToFlatContext(treeForContext) : '',
           pattern: mm.pattern ?? 'auto',
           providerConfig: provider
             ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
@@ -286,12 +292,15 @@ export function useMindmapAgent() {
   )
 
   const mediateMessage = useCallback(
-    (content: string, conversationId: string) => {
+    (content: string, conversationId: string, scopeNodeId?: string) => {
       const worker = workerRef.current
       if (!worker) {
         console.warn(LOG, 'mediateMessage: Worker 未就绪')
         return
       }
+
+      if (scopeNodeId) setAgentScope(scopeNodeId)
+      else clearAgentScope()
 
       const conv = useConversationStore
         .getState()
@@ -309,6 +318,8 @@ export function useMindmapAgent() {
 
       setAgentStatus('thinking', '正在处理...')
 
+      const treeForContext = mm?.tree.length ? getQueryTree(mm.tree) : []
+
       const msg: MainToWorkerMessage = {
         type: 'MEDIATE_MESSAGE',
         payload: {
@@ -318,7 +329,7 @@ export function useMindmapAgent() {
             role: m.role,
             content: m.content,
           })),
-          mindmapTreeJson: mm?.tree.length ? JSON.stringify(mm.tree) : '',
+          mindmapTreeJson: treeForContext.length > 0 ? mindmapTreeToFlatContext(treeForContext) : '',
           providerConfig: provider
             ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
             : { apiEndpoint: '', apiKey: '' },

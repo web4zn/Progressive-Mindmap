@@ -5,6 +5,11 @@ import { selectNodeIcon } from '@/lib/node-icon'
 import type { MindMapNode } from '@/types/mindmap'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { cn } from '@/lib/utils'
+import {
+  FLOATING_PANEL_BASE_CLASSES,
+  FLOATING_PANEL_OPEN_CLASSES,
+  FLOATING_PANEL_CLOSED_CLASSES,
+} from './floatingPanelClasses'
 
 /**
  * Stage C → mindmap-shell-v3 (task 6 → 7): in-canvas outline.
@@ -42,6 +47,9 @@ export interface MindMapOutlineProps {
   open: boolean
   onClose: () => void
   onFocus: (nodeId: string) => void
+  /** mindmap-drill-down: optional override tree. When provided, the
+   *  outline displays this tree instead of `activeMindmap?.tree`. */
+  tree?: MindMapNode[]
 }
 
 interface OutlineRow {
@@ -52,7 +60,7 @@ interface OutlineRow {
   hasChildren: boolean
 }
 
-export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlineProps) {
+export default function MindMapOutline({ open, onClose, onFocus, tree: treeOverride }: MindMapOutlineProps) {
   const mindmaps = useMindmapStore((s) => s.mindmaps)
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const activeMindmap = useMemo(
@@ -79,7 +87,8 @@ export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlin
   }, [open, onClose])
 
   const rows = useMemo<OutlineRow[]>(() => {
-    const tree = activeMindmap?.tree ?? []
+    // mindmap-drill-down: use the override tree when provided.
+    const tree = treeOverride ?? activeMindmap?.tree ?? []
     const pattern = activeMindmap?.pattern ?? 'auto'
     const out: OutlineRow[] = []
     function walk(list: MindMapNode[], depth: number) {
@@ -98,7 +107,7 @@ export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlin
     }
     walk(tree, 0)
     return out
-  }, [activeMindmap?.tree, activeMindmap?.pattern, collapsedIds])
+  }, [treeOverride, activeMindmap?.tree, activeMindmap?.pattern, collapsedIds])
 
   const toggleCollapse = (id: string) => {
     setCollapsedIds((prev) => {
@@ -122,19 +131,9 @@ export default function MindMapOutline({ open, onClose, onFocus }: MindMapOutlin
       data-state={open ? 'open' : 'closed'}
       data-testid="mindmap-outline"
       className={cn(
-        // Absolute positioning against MindMapTree's own
-        // `position: relative` container (the canvas area). The
-        // container is mounted in *every* MindMapTree branch
-        // (error / loading / empty / live) so the outline can
-        // always be reached. Docked at top-right with a 12px
-        // inset so it doesn't fight the toolbar / Controls.
-        'absolute top-3 right-3 z-40 w-64 max-w-[85vw] max-h-[480px]',
-        'flex flex-col rounded-md border border-border',
-        'bg-popover text-popover-foreground shadow-md overflow-hidden',
-        'transition-all duration-200 ease-out',
-        open
-          ? 'opacity-100 translate-y-0 pointer-events-auto'
-          : 'opacity-0 -translate-y-2 pointer-events-none',
+        FLOATING_PANEL_BASE_CLASSES,
+        'w-64 max-w-[85vw] max-h-[480px]',
+        open ? FLOATING_PANEL_OPEN_CLASSES : FLOATING_PANEL_CLOSED_CLASSES,
       )}
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border">

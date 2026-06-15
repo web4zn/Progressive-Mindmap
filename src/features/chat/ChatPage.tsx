@@ -19,6 +19,7 @@ import EmptyState from '@/components/EmptyState'
 import NewConversationDialog from '@/features/chat/NewConversationDialog'
 import type { NewConversationResult } from '@/features/chat/NewConversationDialog'
 import MindMapPanel from '@/features/mindmap/MindMapPanel'
+import type { MindMapNode } from '@/types/mindmap'
 
 const MemoMindMapPanel = memo(MindMapPanel)
 
@@ -41,14 +42,21 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const hasProviders = providers.length > 0
 
-  const handleMindmapClose = useCallback(() => setMindmapCollapsed(true), [])
-
   // ── 使用抽取的 Chat Hook ──
   const agent = useMindmapAgent()
   const { sendMessage, stopGeneration, isGenerating } = useConversation({
     onStreamComplete: (convId, _msgId) => {
-      // AI 回答完成后 → 触发 Agent 后台增强
-      agent.enhanceMessage(convId)
+      // Check if this conversation is linked to a mindmap node → scope the agent
+      const mindmaps = useMindmapStore.getState().mindmaps
+      let scopeNodeId: string | undefined
+      for (const mm of mindmaps) {
+        const node = findNodeByLinkedConv(mm.tree, convId)
+        if (node) {
+          scopeNodeId = node.id
+          break
+        }
+      }
+      agent.enhanceMessage(convId, scopeNodeId)
     },
   })
 
@@ -71,6 +79,16 @@ export default function ChatPage() {
       const currentAgentMode = agentMode ?? 'enhance'
 
       if (currentAgentMode === 'mediate') {
+        // Detect scope from linked conversation
+        const mindmaps = useMindmapStore.getState().mindmaps
+        let scopeNodeId: string | undefined
+        for (const mm of mindmaps) {
+          const node = findNodeByLinkedConv(mm.tree, activeConversation.id)
+          if (node) {
+            scopeNodeId = node.id
+            break
+          }
+        }
         stopGeneration()
         const store = useConversationStore.getState()
         store.addMessageToConversation(activeConversation.id, {
@@ -87,7 +105,7 @@ export default function ChatPage() {
           createdAt: Date.now(),
           status: 'streaming',
         })
-        agent.mediateMessage(content, activeConversation.id)
+        agent.mediateMessage(content, activeConversation.id, scopeNodeId)
       } else {
         sendMessage(content, activeConversation.id)
       }
@@ -117,6 +135,16 @@ export default function ChatPage() {
     const agentMode = currentConv?.agentMode ?? 'enhance'
 
     if (agentMode === 'mediate') {
+      // Detect scope from linked conversation
+      const mindmaps = useMindmapStore.getState().mindmaps
+      let scopeNodeId: string | undefined
+      for (const mm of mindmaps) {
+        const node = findNodeByLinkedConv(mm.tree, convId)
+        if (node) {
+          scopeNodeId = node.id
+          break
+        }
+      }
       // Agent 模式：通过 Worker 重新生成
       const store = useConversationStore.getState()
       store.addMessageToConversation(convId, {
@@ -126,7 +154,7 @@ export default function ChatPage() {
         createdAt: Date.now(),
         status: 'streaming',
       })
-      agent.mediateMessage(lastUserMsg.content, convId)
+      agent.mediateMessage(lastUserMsg.content, convId, scopeNodeId)
     } else {
       sendMessage(lastUserMsg.content, convId)
     }
@@ -194,8 +222,8 @@ export default function ChatPage() {
           {!mindmapCollapsed && (
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
-              <div className="flex-1 h-full hidden md:block min-w-[300px]">
-                <MemoMindMapPanel onClose={handleMindmapClose} />
+              <div className="flex-1 h-full hidden md:block min-w-[640px]">
+                <MemoMindMapPanel />
               </div>
             </>
           )}
@@ -217,8 +245,8 @@ export default function ChatPage() {
           {!mindmapCollapsed && (
             <>
               <div className="w-px bg-border shrink-0 hidden md:block" />
-              <div className="flex-1 h-full hidden md:block min-w-[300px]">
-                <MemoMindMapPanel onClose={handleMindmapClose} />
+              <div className="flex-1 h-full hidden md:block min-w-[640px]">
+                <MemoMindMapPanel />
               </div>
             </>
           )}
@@ -249,8 +277,8 @@ export default function ChatPage() {
         {!mindmapCollapsed && (
           <>
             <div className="w-px bg-border shrink-0 hidden md:block" />
-            <div className="flex-1 h-full hidden md:block min-w-[300px]">
-              <MemoMindMapPanel onClose={handleMindmapClose} />
+            <div className="flex-1 h-full hidden md:block min-w-[640px]">
+              <MemoMindMapPanel />
             </div>
           </>
         )}
@@ -322,4 +350,22 @@ export default function ChatPage() {
       <ConversationSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </TooltipProvider>
   )
+}
+
+/**
+ * Walk a mindmap tree to find the first node whose `linkedConversationId`
+ * matches `convId`. Returns the node, or `null` if no match is found.
+ */
+function findNodeByLinkedConv(
+  nodes: MindMapNode[],
+  convId: string,
+): MindMapNode | null {
+  for (const node of nodes) {
+    if (node.linkedConversationId === convId) return node
+    if (node.children.length > 0) {
+      const found = findNodeByLinkedConv(node.children, convId)
+      if (found) return found
+    }
+  }
+  return null
 }

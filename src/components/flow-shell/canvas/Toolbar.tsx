@@ -14,6 +14,7 @@
  */
 import { memo, useCallback } from 'react'
 import { Panel, useReactFlow } from '@xyflow/react'
+import { ArrowLeft } from 'lucide-react'
 import type { ShapeFlowNode } from './flowShellUtils'
 
 export interface FlowShellToolbarProps {
@@ -26,6 +27,10 @@ export interface FlowShellToolbarProps {
   fitViewPadding: number
   /** Currently selected node id, or `null` for "no selection". */
   selectedNodeId: string | null
+  /** node-llm-chat: when true, show a "back to global" button. */
+  showBackToGlobal?: boolean
+  /** node-llm-chat: called when the "back to global" button is clicked. */
+  onBackToGlobal?: () => void
 }
 
 function FlowShellToolbarImpl({
@@ -33,6 +38,8 @@ function FlowShellToolbarImpl({
   resetPositions,
   fitViewPadding,
   selectedNodeId,
+  showBackToGlobal,
+  onBackToGlobal,
 }: FlowShellToolbarProps) {
   const { fitView, getNodes } = useReactFlow<ShapeFlowNode>()
 
@@ -96,6 +103,18 @@ function FlowShellToolbarImpl({
               <path d="M11 8v6" />
               <path d="M8 11h6" />
             </svg>
+          </button>
+        )}
+        {showBackToGlobal && (
+          <button
+            type="button"
+            onClick={onBackToGlobal}
+            className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap"
+            title="回到全局对话"
+            aria-label="回到全局对话"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            全局
           </button>
         )}
       </div>

@@ -111,6 +111,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     onPaneDoubleClick,
     onInit,
     onNodeDoubleClick,
+    onNodeClick,
     onNodeContextMenu,
     onNodeDragStop,
     onNodeMouseEnter,
@@ -123,6 +124,8 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     background = 'dots',
     disableMiniMap = false,
     searchMatchNodeIds,
+    showBackToGlobal,
+    onBackToGlobal,
   } = props
 
   // 1. Run the structural layout on changes to *structure*. The
@@ -191,7 +194,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
 
   // 4. Imperative handle — parent drives the camera.
   const rfInstanceRef = useRef<ReactFlowInstance<ShapeFlowNode> | null>(null)
-  const { fitView: rfFitView, getIntersectingNodes, zoomIn, zoomOut } =
+  const { fitView: rfFitView, getIntersectingNodes, zoomIn, zoomOut, setCenter, getZoom, getNode } =
     useReactFlow<ShapeFlowNode>()
 
   useImperativeHandle(
@@ -212,6 +215,16 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
           maxZoom: options?.maxZoom ?? 1.5,
         })
       },
+      centerOnNode: (nodeId: string, options?: { duration?: number }) => {
+        const node = getNode(nodeId)
+        if (!node) return
+        const cx = node.position.x + ((node.measured?.width ?? 0) / 2)
+        const cy = node.position.y + ((node.measured?.height ?? 0) / 2)
+        setCenter(cx, cy, {
+          zoom: getZoom(),
+          duration: options?.duration ?? 200,
+        })
+      },
       getIntersectingNodes: (nodeId) => {
         try {
           return getIntersectingNodes({ id: nodeId }) as ShapeFlowNode[]
@@ -226,7 +239,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
         zoomOut({ duration: 200 })
       },
     }),
-    [rfFitView, getIntersectingNodes, zoomIn, zoomOut],
+    [rfFitView, getIntersectingNodes, zoomIn, zoomOut, setCenter, getZoom, getNode],
   )
 
   const handleInit = useCallback<OnInit<ShapeFlowNode>>(
@@ -277,6 +290,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
       onEdgesChange={onEdgesChange}
       onSelectionChange={handleSelectionChange}
       onNodeDoubleClick={onNodeDoubleClick as unknown as NodeMouseHandler}
+      onNodeClick={onNodeClick as unknown as NodeMouseHandler}
       onNodeContextMenu={onNodeContextMenu as unknown as NodeMouseHandler}
       onNodeMouseEnter={onNodeMouseEnter as unknown as NodeMouseHandler}
       onNodeMouseLeave={onNodeMouseLeave as unknown as NodeMouseHandler}
@@ -311,6 +325,8 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
         resetPositions={setNodes}
         fitViewPadding={fitViewPadding}
         selectedNodeId={selectedNodeId ?? null}
+        showBackToGlobal={showBackToGlobal}
+        onBackToGlobal={onBackToGlobal}
       />
       {!disableMiniMap && (
         <FlowMiniMap nodeColor={patternNodeColor} nodeStrokeWidth={2} />

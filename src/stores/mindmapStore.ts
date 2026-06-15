@@ -7,6 +7,9 @@ import {
   migrateV1ToV2All,
 } from '@/lib/migration/mindmap-v1-to-v2'
 import {
+  migrateV2ToV3All,
+} from '@/lib/migration/mindmap-v2-to-v3'
+import {
   MINDMAP_SCHEMA_VERSION,
   type MindMap,
   type MindMapNode,
@@ -69,6 +72,8 @@ interface MindMapState {
   reparentNode: (mindmapId: string, nodeId: string, newParentId: string) => void
   addMonitoredConversation: (mindmapId: string, conversationId: string) => void
   removeMonitoredConversation: (mindmapId: string, conversationId: string) => void
+  linkNodeConversation: (mindmapId: string, nodeId: string, conversationId: string) => void
+  unlinkNodeConversation: (mindmapId: string, nodeId: string) => void
   setCollapsedNodeIds: (id: string, nodeIds: string[]) => void
 }
 
@@ -387,6 +392,39 @@ export const useMindmapStore = create<MindMapState>()(
         }))
       },
 
+      linkNodeConversation: (mindmapId, nodeId, conversationId) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) => {
+            if (m.id !== mindmapId) return m
+            return {
+              ...m,
+              tree: findAndUpdateNode(m.tree, nodeId, (node) => ({
+                ...node,
+                linkedConversationId: conversationId,
+              })),
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      unlinkNodeConversation: (mindmapId, nodeId) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) => {
+            if (m.id !== mindmapId) return m
+            return {
+              ...m,
+              tree: findAndUpdateNode(m.tree, nodeId, (node) => {
+                const { linkedConversationId: _drop, ...rest } = node
+                void _drop
+                return rest
+              }),
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
       setCollapsedNodeIds: (id, nodeIds) => {
         set((state) => ({
           mindmaps: state.mindmaps.map((m) =>
@@ -409,21 +447,28 @@ export const useMindmapStore = create<MindMapState>()(
        * via `migrateV1ToV2All`.
        *
        * `partialize` is intentionally absent — the entire `state`
-       * object is what we persist, and we want the *whole* state to
-       * be available to `migrate` (not just the slice we care about).
-       */
+        * object is what we persist, and we want the *whole* state to
+        * be available to `migrate` (not just the slice we care about).
+        *
+        * v2 → v3: declaration-only migration. The v3 model adds
+        * an optional `linkedConversationId` to `MindMapNode`;
+        * since the field is `undefined` by default, existing v2
+        * nodes pass through unchanged and only the `schemaVersion`
+        * stamp is bumped.
+        */
       migrate: (persistedState, _fromVersion) => {
         if (!persistedState || typeof persistedState !== 'object') return persistedState
         const slice = persistedState as Partial<PersistedMindMapSlice>
         if (!Array.isArray(slice.mindmaps)) return persistedState
 
-        const migrated = migrateV1ToV2All(slice.mindmaps)
+        let mindmaps = migrateV1ToV2All(slice.mindmaps)
+        mindmaps = migrateV2ToV3All(mindmaps)
 
         // Stamping the global schema version on the payload itself is
         // not part of the schema — Zustand uses its own `version`
         // for that — but we want the migration timestamp recorded
         // for debugging. `onRehydrateStorage` below awaits it.
-        return { ...slice, mindmaps: migrated }
+        return { ...slice, mindmaps }
       },
       /**
        * After a successful rehydrate, persist the migrated state

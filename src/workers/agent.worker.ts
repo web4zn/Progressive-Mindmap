@@ -34,8 +34,8 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       console.log(LOG, '初始化 Agent', { model: modelId, endpoint: providerConfig.apiEndpoint })
       try {
         const model = createModel(providerConfig.apiKey, providerConfig.apiEndpoint, modelId)
-        runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus })
-        console.log(LOG, '✅ Agent 初始化成功')
+        runner = new ReActRunner({ model, systemPrompt, tools: agentTools, onStatusReport: reportStatus, maxSteps: 15 })
+        console.log(LOG, '✅ Agent 初始化成功，已注册工具:', Object.keys(agentTools).join(', '))
         reportStatus('idle', 'Agent 就绪')
       } catch (err) {
         console.error(LOG, '❌ 初始化失败:', err)
@@ -66,9 +66,13 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       reportStatus('thinking', '开始分析对话内容...')
       try {
         const patternHint = getPatternHint(msg.payload.pattern)
+        const treeContext =
+          msg.payload.mindmapTreeJson || '(空白脑图)'
         const userPrompt = `基于以下对话内容，更新思维导图。
 
-${patternHint}
+${patternHint}当前脑图结构：
+${treeContext}
+
 对话内容：
 ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
 
@@ -77,7 +81,17 @@ ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
         const finalAnswer = await runner!.run(userPrompt)
         console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
         void finalAnswer
-        reportStatus('generating_mindmap', '脑图生成完成')
+        // Final-state handshake: report 'complete' before the
+        // AGENT_COMPLETE message so the main-thread pill flips
+        // to idle as soon as the mindmap is done. Reporting
+        // 'generating_mindmap' here used to leak — the pill
+        // would freeze on "生成中" because 'generating_mindmap'
+        // is an in-flight state with no auto-revert (only
+        // 'complete' / 'error' trigger the guard's 5 s safety
+        // net). The two messages race for the same `agentStatus`
+        // slot, and a non-terminal status arriving after the
+        // terminal AGENT_COMPLETE one wins.
+        reportStatus('complete', '脑图生成完成')
         self.postMessage({
           type: 'AGENT_COMPLETE',
           payload: { operations: [], newTreeJson: '' },
@@ -118,12 +132,17 @@ ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content}`).join('\n')}
             ? `最近对话（上下文参考）：
 ${msg.payload.recentMessages.map((m) => `[${m.role}]: ${m.content.slice(0, 500)}`).join('\n')}`
             : ''
+        const treeContext =
+          msg.payload.mindmapTreeJson || '(空白脑图)'
         const userPrompt = `用户提问：
 ${msg.payload.content}
 
+当前脑图结构：
+${treeContext}
+
 ${recentContext}
 
-请按系统指令工作：先读脑图 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
+请按系统指令工作：分析脑图结构 → 更新脑图（尽可能扩展节点、丰富内容）→ 回答用户。`
         console.log(LOG, '进入 ReAct 循环')
         const finalAnswer = await runner!.run(userPrompt)
         console.log(LOG, 'ReAct 循环结束，最终回答长度:', finalAnswer.length)
@@ -135,7 +154,13 @@ ${recentContext}
           type: 'STREAM_DONE',
           payload: { mindmapUpdated: true },
         } satisfies WorkerToMainMessage)
-        reportStatus('generating_mindmap', '完成')
+        // Same final-state handshake as the ENHANCE_MESSAGE
+        // branch above. The previous 'generating_mindmap' here
+        // raced with the STREAM_DONE-induced 'idle' on the main
+        // thread, winning the race and pinning the pill on
+        // "生成中" forever. Reporting 'complete' instead lets
+        // the safety-net guard flip it back to 'idle' 5 s later.
+        reportStatus('complete', '完成')
       } catch (err) {
         console.error(LOG, '❌ MEDIATE_MESSAGE 处理异常:', err)
         self.postMessage({

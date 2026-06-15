@@ -2,10 +2,8 @@ export interface FlowNodeData extends Record<string, unknown> {
   label: string
   summary: string
   content?: string
-  /** Stage B: 'markdown' is a third content type. The FlowNode
-   *  renders anything other than 'html' as plain text; the modal
-   *  preview (in edit mode) is the canonical markdown renderer. */
-  contentType?: 'text' | 'html' | 'markdown'
+  /** Stage B: the FlowNode renders anything other than 'html' as plain text. */
+  contentType?: 'text' | 'html'
   depth: number
   pattern: string
   editedByUser: boolean
@@ -28,6 +26,15 @@ export interface FlowNodeData extends Record<string, unknown> {
    *  click). Used to gate the collapse-out animation. */
   isCollapsingOut?: boolean
   onToggle?: (nodeId: string) => void
+  /** node-llm-chat: when set, the node shows a 💬 icon indicating a linked
+   *  conversation exists for scoped Agent interaction. */
+  linkedConversationId?: string
+  /** node-llm-chat: callback when the conversation bubble icon is clicked.
+   *  Receives the linked conversation id to navigate to. */
+  onNavigateToConversation?: (convId: string) => void
+  /** node-llm-chat: when true the node is highlighted (pattern-colored ring)
+   *  after navigating to its linked conversation. Auto-clears after 3 s. */
+  highlighted?: boolean
 }
 
 export type { FlowShellProps, FlowShellHandle } from './FlowShell'

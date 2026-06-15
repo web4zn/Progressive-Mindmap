@@ -21,7 +21,7 @@
  * a breaking shape change lands.
  */
 
-export const MINDMAP_SCHEMA_VERSION = 2
+export const MINDMAP_SCHEMA_VERSION = 3
 
 // ─── v1 (legacy) ────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ export interface MindMapNode {
   label: string
   summary: string
   content?: string
-  contentType?: 'text' | 'html' | 'markdown'
+  contentType?: 'text' | 'html'
   children: MindMapNode[]
   editedByUser: boolean
 
@@ -123,6 +123,15 @@ export interface MindMapNode {
    * write; older nodes keep it `undefined`.
    */
   updatedAt?: number
+
+  // ── v3 additions ──────────────────────────────────────────────────
+  /**
+   * ID of the conversation linked to this node. When set, the node
+   * gets a 💬 bubble icon and right-click "Ask LLM" navigates to this
+   * conversation instead of creating a new one. The Agent enhancement
+   * triggered from this conversation is scoped to this node's subtree.
+   */
+  linkedConversationId?: string
 }
 
 /**

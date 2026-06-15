@@ -1,6 +1,47 @@
 import { getDb } from './db'
 
 let warnedUnavailable = false
+let pageCloseFlushersRegistered = false
+
+/**
+ * Register `beforeunload` and `visibilitychange` listeners that flush
+ * all pending debounced writes before the page closes or becomes hidden.
+ *
+ * Without this, any state change that happens within 500 ms of a page
+ * refresh / tab close is silently lost — the debounce timer hasn't
+ * fired yet and IndexedDB never sees the write. This is the #1 cause
+ * of "edges disappear on refresh" because edges are derived from
+ * persisted parent-child node relationships.
+ *
+ * Call this once from the app entry point (e.g. App.tsx or main.tsx)
+ * after the IndexedDB adapter is wired into the Zustand stores.
+ */
+export function registerPageCloseFlushers(): void {
+  if (pageCloseFlushersRegistered) return
+  pageCloseFlushersRegistered = true
+
+  // `beforeunload` fires when the page is about to unload (refresh /
+  // close / navigation away). It's the most reliable signal but some
+  // browsers throttle async work in this handler. `pagehide` is the
+  // modern, more reliable alternative — we register both for defense
+  // in depth.
+  const flush = () => {
+    void flushPendingWrites()
+  }
+
+  window.addEventListener('beforeunload', flush)
+  window.addEventListener('pagehide', flush)
+
+  // `visibilitychange` fires when the tab becomes hidden (user
+  // switches tabs, locks phone, etc.). We treat this as a
+  // best-effort flush so writes aren't lost if the browser
+  // eventually discards the hidden page.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      void flushPendingWrites()
+    }
+  })
+}
 
 /**
  * 节流队列：高频 persist 只写最后一次，避免流式回复时频繁 IndexedDB 写入。

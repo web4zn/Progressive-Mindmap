@@ -7,7 +7,7 @@ import { z } from 'zod'
  * This is the data integrity gate — LLM output is untrusted.
  */
 export const MindmapOperationSchema = z.object({
-  type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root']),
+  type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root', 'reparent']),
   parentId: z.string().optional(),
   nodeId: z.string().optional(),
   id: z.string().optional(),
@@ -15,25 +15,17 @@ export const MindmapOperationSchema = z.object({
   summary: z.string().optional(),
   content: z.string().optional(),
   contentType: z.enum(['text', 'html']).optional(),
-  patch: z
-    .object({
-      label: z.string().optional(),
-      summary: z.string().optional(),
-      content: z.string().optional(),
-      contentType: z.enum(['text', 'html']).optional(),
-    })
-    .optional(),
 })
 
 /**
- * Array of mindmap operations, capped at 10.
+ * Array of mindmap operations, capped at 20.
  *
- * The LLM should not attempt to batch more than 10 operations in a single call.
+ * The LLM should not attempt to batch more than 20 operations in a single call.
  * If more are needed, the ReAct loop will make multiple generateMindmapOps calls.
  */
 export const OperationsArraySchema = z
   .array(MindmapOperationSchema)
-  .max(10, '每次最多 10 个操作，请拆分为多次调用')
+  .max(20, '每次最多 20 个操作，请拆分为多次调用')
 
 /** Inferred type of a parsed mindmap operation */
 export type ValidatedMindmapOperation = z.infer<typeof MindmapOperationSchema>

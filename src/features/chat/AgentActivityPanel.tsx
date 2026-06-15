@@ -11,6 +11,11 @@ const STATUS_CONFIG: Record<
     label: '读取脑图结构...',
     color: 'text-blue-500',
   },
+  reading_node: {
+    icon: '🔍',
+    label: '读取节点信息...',
+    color: 'text-blue-500',
+  },
   generating_mindmap: {
     icon: '🧠',
     label: '生成脑图...',

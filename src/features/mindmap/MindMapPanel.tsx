@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
+import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
 import { exportMindmapAsMarkdown, downloadMarkdown } from '@/lib/export'
 import { exportMindmapAsPng, exportMindmapAsSvg } from '@/lib/export-mindmap'
+import { findNodeInTree } from '@/lib/mindmap-layout'
 import MindMapTree from '@/features/mindmap/MindMapTree'
 import MindMapHeader, { type MindMapPattern } from '@/features/mindmap/MindMapHeader'
 import MindMapDrawer from '@/features/mindmap/MindMapDrawer'
 import MindMapSearch from '@/features/mindmap/MindMapSearch'
-import { MindMapFilterBody, type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
+import MindMapFilter, { type MindMapFilterValue } from '@/features/mindmap/MindMapFilter'
 import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import { matchNodes } from '@/lib/mindmap-search'
 import type { MindMap } from '@/types/mindmap'
@@ -22,61 +24,93 @@ import {
   Square,
   Sun,
   Moon,
-  MoreHorizontal,
-  Sliders,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
-
-interface MindMapPanelProps {
-  onClose: () => void
-}
 
 type BackgroundVariant = 'dots' | 'grid' | 'none'
 
 /**
- * Stage B + Stage C + Stage D + mindmap-shell-v2 (task 5): top-level
- * container.
+ * Stage B + Stage C + Stage D + mindmap-shell-v2 (task 5) +
+ * toolbar-flatten pass: top-level container.
  *
- * v2 toolbar consolidation: the middle toolbar now has 4 visible
- * chips (Undo / Redo / Outline / Search) plus a "more" dropdown
- * that holds the less-frequently-touched controls (filter,
- * background, theme). This keeps the toolbar under the 6-button
- * budget the Dify-style redesign calls for.
+ * Toolbar layout (post flatten — no more "more" dropdown):
+ *
+ *   [Undo] [Redo] | [Outline] [Search] | [Background] [Theme] | [Filter]
+ *
+ * The earlier v2 grouped Background / Filter / Theme inside a
+ * "more" dropdown. User feedback was that the dropdown felt
+ * redundant — the three controls are all small, frequently
+ * touched, and visually parallel (icon + label). They're now
+ * inline; the segmented background switcher and the depth-only
+ * filter button retain their popover where the control itself
+ * is multi-state.
  *
  * Stage D — global theme (light / dark / system). The hook is
  * mounted here (not in App.tsx) because the toggle button lives
  * in the panel's toolbar; any other component can still read the
  * current theme from `document.documentElement.dataset.theme`.
  */
-export default function MindMapPanel({ onClose }: MindMapPanelProps) {
+export default function MindMapPanel() {
   const mindmaps = useMindmapStore((s) => s.mindmaps)
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const setActiveMindmapId = useMindmapStore((s) => s.setActiveMindmapId)
   const updateMindmap = useMindmapStore((s) => s.updateMindmap)
   const updateMindmapTree = useMindmapStore((s) => s.updateMindmapTree)
   const removeMonitoredConversation = useMindmapStore((s) => s.removeMonitoredConversation)
+  const linkNodeConversation = useMindmapStore((s) => s.linkNodeConversation)
+
+  // Block render until IndexedDB rehydration completes. Without this
+  // gate the component reads `activeMindmap?.tree ?? []` before the
+  // persisted state arrives, producing an empty tree → zero edges on
+  // the first frame. ReactFlow then needs to reconcile from zero to
+  // many edges on the second frame, a fragile path that occasionally
+  // drops edge rendering.
+  const [hydrated, setHydrated] = useState(useMindmapStore.persist.hasHydrated())
+  useEffect(() => {
+    if (hydrated) return
+    const unsubFinish = useMindmapStore.persist.onFinishHydration(() => {
+      setHydrated(true)
+    })
+    // Belt-and-suspenders: Zustand's persist middleware fires
+    // `onRehydrateStorage` after set() is called, but
+    // `onFinishHydration` only fires once. If the store has
+    // already hydrated by the time this effect runs, the
+    // callback fires synchronously — no flash.
+    return () => {
+      unsubFinish()
+    }
+  }, [hydrated])
 
   const conversations = useConversationStore((s) => s.conversations)
   const activeConvId = useConversationStore((s) => s.activeConversationId)
   const agentStatus = useChatStore((s) => s.agentStatus)
-  const isAgentActive = agentStatus !== 'idle'
+  // The agent runs through six discrete statuses
+  // (idle / thinking / reading_mindmap / generating_mindmap
+  // / complete / error). The status pill on MindMapHeader only
+  // distinguishes "正在干活" from "闲着", so we treat only the
+  // three in-flight phases as active. `complete` and `error`
+  // both fall through to the idle branch — otherwise the pill
+  // would freeze on "生成中" forever after a successful run
+  // (user feedback). The error state is still surfaced via
+  // `agentMessage` in the chat panel itself.
+  const isAgentActive =
+    agentStatus === 'thinking' ||
+    agentStatus === 'reading_mindmap' ||
+    agentStatus === 'generating_mindmap'
 
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   // Stage C: top-bar / drawer state
   const [outlineOpen, setOutlineOpen] = useState(false)
+  // node-editor-card (Stage mindmap-shell-v3+): editor card
+  // state. The editor and the outline are mutually exclusive —
+  // they both anchor to the canvas's top-right corner, so they
+  // cannot be visible at the same time. MindMapPanel owns the
+  // state machine (see `openEditor` / `toggleOutline`).
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorNodeId, setEditorNodeId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<MindMapFilterValue>({
     maxDepth: 0,
@@ -153,6 +187,60 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     [activeMindmapId, removeMonitoredConversation],
   )
 
+  // node-llm-chat: handle "Ask LLM" from node context menu.
+  // If the node already has a linked conversation, navigate to it.
+  // Otherwise, create a new conversation, link it, and let the
+  // chat view open automatically (addConversation sets activeConversationId).
+  const handleAskLlm = useCallback(
+    (nodeId: string) => {
+      if (!activeMindmap) return
+
+      const node = findNodeInTree(activeMindmap.tree, nodeId)
+      if (!node) return
+
+      // Already linked → just navigate
+      if (node.linkedConversationId) {
+        useConversationStore.getState().setActiveConversationId(node.linkedConversationId)
+        return
+      }
+
+      // Create a new conversation with the first available provider
+      const providers = useProviderStore.getState().providers
+      const firstProvider = providers[0]
+      if (!firstProvider) return
+      const modelId =
+        firstProvider.models.find((m) => m.enabled)?.id ?? firstProvider.models[0]?.id ?? ''
+      if (!modelId) return
+
+      const conv = useConversationStore.getState().addConversation({
+        providerId: firstProvider.id,
+        modelId,
+      })
+
+      // Link conversation to node
+      linkNodeConversation(activeMindmap.id, nodeId, conv.id)
+      // Also add as monitored so the mindmap is associated
+      useMindmapStore.getState().addMonitoredConversation(activeMindmap.id, conv.id)
+    },
+    [activeMindmap, linkNodeConversation],
+  )
+
+  // node-editor-card: open the editor for a specific node and
+  // close the outline at the same time. Both panels anchor to
+  // the canvas's top-right corner, so the strict mutual exclusion
+  // is enforced here in a single setState batch — they flip in
+  // the same render and only one card is visible at a time.
+  const openEditor = useCallback((nodeId: string) => {
+    setEditorNodeId(nodeId)
+    setEditorOpen(true)
+    setOutlineOpen(false)
+  }, [])
+
+  const closeEditor = useCallback(() => {
+    setEditorOpen(false)
+    setEditorNodeId(null)
+  }, [])
+
   const handleExportPng = useCallback(
     (pixelRatio: 1 | 2 | 3) => {
       if (!activeMindmap) return
@@ -208,6 +296,24 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
     // (e.g. selecting the node after focusing).
   }, [])
 
+  // Hydration guard: wait until IndexedDB rehydration completes
+  // before rendering the full panel. Without this the tree reads
+  // as `[]` on first frame → zero edges → ReactFlow initialises
+  // with an empty canvas, then must reconcile to populated state
+  // when the persisted data arrives. That empty→populated
+  // transition is the source of intermittent edge disappearance.
+  if (!hydrated) {
+    return (
+      <div className="h-full flex flex-col border-l bg-sidebar text-sidebar-foreground">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-pulse text-sm text-muted-foreground">
+            加载中…
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const fullscreenClass = isFullscreen
     ? 'fixed inset-0 z-50 flex flex-col bg-background'
     : // The `relative` anchor is load-bearing — the in-panel side
@@ -234,7 +340,6 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         onExportSvg={handleExportSvg}
         onExportMd={handleExportMd}
         onToggleFullscreen={() => setIsFullscreen((v) => !v)}
-        onClose={onClose}
       />
 
       {/* mindmap-shell-v2 (task 5): consolidated toolbar.
@@ -284,7 +389,18 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         <Button
           variant={outlineOpen ? 'secondary' : 'ghost'}
           size="icon-sm"
-          onClick={() => setOutlineOpen((o) => !o)}
+          onClick={() => {
+            // node-editor-card: outline and editor are mutually
+            // exclusive. If the editor is open, treat the click as
+            // "switch to outline" (close editor, open outline).
+            // Otherwise toggle as before.
+            if (editorOpen) {
+              closeEditor()
+              setOutlineOpen(true)
+            } else {
+              setOutlineOpen((o) => !o)
+            }
+          }}
           title="大纲"
           aria-label="大纲"
           data-testid="mindmap-toolbar-outline"
@@ -300,73 +416,78 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
           compact
         />
 
-        {/* mindmap-shell-v2 (task 5): "more" dropdown for the
-            three secondary actions. Replaces the previous
-            inline BackgroundSwitcher + theme button. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors outline-none',
-              'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-              'focus-visible:ring-2 focus-visible:ring-ring/40',
-            )}
-            title="更多"
-            aria-label="更多"
-            data-testid="mindmap-toolbar-more"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56" data-testid="mindmap-toolbar-more-menu">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>画布选项</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={background}
-                onValueChange={(v) => setBackground(v as BackgroundVariant)}
+        <div className="w-px h-4 bg-border mx-0.5" />
+
+        {/* Background switcher — 3-way segmented control
+            (dots / grid / none). Pinned inline so the user can
+            see the current variant at a glance instead of
+            having to open a "more" menu (the v2 dropdown
+            hidden all three of these together; user feedback
+            was that the dropdown felt redundant). */}
+        <div
+          role="radiogroup"
+          aria-label="画布背景"
+          data-testid="background-switcher"
+          className="inline-flex items-center rounded-md border border-input bg-background p-0.5"
+        >
+          {(
+            [
+              { value: 'dots', icon: Grid3x3, label: '点阵背景' },
+              { value: 'grid', icon: Grid2x2, label: '网格背景' },
+              { value: 'none', icon: Square, label: '无背景' },
+            ] as const
+          ).map(({ value, icon: Icon, label }) => {
+            const active = background === value
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={label}
+                title={label}
+                onClick={() => setBackground(value)}
+                data-testid={`background-switcher-${value}`}
+                className={cn(
+                  'inline-flex items-center justify-center w-6 h-6 rounded transition-colors outline-none',
+                  'focus-visible:ring-2 focus-visible:ring-ring/40',
+                  active
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
               >
-                <DropdownMenuRadioItem value="dots" closeOnClick={false}>
-                  <Grid3x3 className="w-4 h-4 mr-2" />
-                  点阵背景
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="grid" closeOnClick={false}>
-                  <Grid2x2 className="w-4 h-4 mr-2" />
-                  网格背景
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="none" closeOnClick={false}>
-                  <Square className="w-4 h-4 mr-2" />
-                  无背景
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex items-center gap-1.5">
-                <Sliders className="w-3 h-3" />
-                筛选
-              </DropdownMenuLabel>
-              <div className="px-1.5 pb-1.5">
-                <MindMapFilterBody value={filter} onChange={setFilter} />
-              </div>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={cn(
-                'group/dropdown-menu-item relative flex w-full cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none',
-                'hover:bg-accent hover:text-accent-foreground',
-              )}
-              aria-pressed={theme === 'dark'}
-              data-testid="mindmap-theme-toggle"
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4 mr-2" />
-              ) : (
-                <Moon className="w-4 h-4 mr-2" />
-              )}
-              {theme === 'dark' ? '切换到浅色' : '切换到深色'}
-            </button>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Theme toggle — single button, Sun in dark mode
+            (suggests "switch to light") and Moon in light
+            mode. Pinned inline for the same discoverability
+            reason as the background switcher. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          aria-pressed={theme === 'dark'}
+          title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          data-testid="mindmap-toolbar-theme-toggle"
+        >
+          {theme === 'dark' ? (
+            <Sun className="w-3.5 h-3.5" />
+          ) : (
+            <Moon className="w-3.5 h-3.5" />
+          )}
+        </Button>
+
+        <div className="w-px h-4 bg-border mx-0.5" />
+
+        {/* Depth-only filter. The previously-also-exposed
+            "only-edited" checkbox was removed (user feedback:
+            too narrow, never useful). See `MindMapFilter`. */}
+        <MindMapFilter value={filter} onChange={setFilter} />
       </div>
 
       <MindMapTree
@@ -388,6 +509,16 @@ export default function MindMapPanel({ onClose }: MindMapPanelProps) {
         outlineOpen={outlineOpen}
         onOutlineClose={() => setOutlineOpen(false)}
         onOutlineFocus={handleOutlineFocus}
+        // node-editor-card: editor state and callbacks. The Tree
+        // mounts <NodeEditorCard> at the top-right of the canvas
+        // and routes right-click / double-click into `onEditorOpen`.
+        // The Tree never opens the editor itself — only the panel
+        // can flip the state.
+        editorOpen={editorOpen}
+        editorNodeId={editorNodeId}
+        onEditorOpen={openEditor}
+        onEditorClose={closeEditor}
+        onAskLlm={handleAskLlm}
       />
 
       <MindMapDrawer

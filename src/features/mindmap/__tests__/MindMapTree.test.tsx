@@ -1,16 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { useMindmapHistory } from '@/hooks/useMindmapHistory'
 import MindMapTree from '../MindMapTree'
 
+// The FlowShell mock exposes the onNodeDoubleClick prop as a
+// clickable testid so we can drive double-click → editor flow
+// without standing up the real React Flow renderer.
 vi.mock('@/components/flow-shell', () => ({
-  FlowShell: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="flow-shell">{children}</div>
-  ),
+  FlowShell: ({
+    children,
+    onNodeDoubleClick,
+  }: {
+    children?: React.ReactNode
+    onNodeDoubleClick?: (event: unknown, node: unknown) => void
+  }) => {
+    // Capture the prop so the test can invoke it directly.
+    if (onNodeDoubleClick) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(globalThis as any).__lastNodeDoubleClick = onNodeDoubleClick
+    }
+    return (
+      <div data-testid="flow-shell">
+        <button
+          data-testid="flow-shell-double-click-trigger"
+          onDoubleClick={() => onNodeDoubleClick?.(undefined, { id: 'root' })}
+        >
+          trigger
+        </button>
+        {children}
+      </div>
+    )
+  },
 }))
 
-vi.mock('../MindMapEditModal', () => ({ default: () => null }))
+vi.mock('../BottomDrawerReader', () => ({ default: () => null }))
 vi.mock('../MindMapContextMenu', () => ({ default: () => null }))
 vi.mock('../useMindmapLayout', () => ({
   useMindmapLayout: () => ({
@@ -106,7 +130,7 @@ describe('MindMapTree', () => {
   // mindmap-shell-v3 (task 7): the outline toggle is reachable
   // *even when the canvas isn't mounted* (error / loading / empty
   // states). Each early-return branch must wrap its content in a
-  // `position: relative` container so MindMapOutline can anchor
+  // `position: relative` container so MindCardOutline can anchor
   // to the canvas area's top-right.
   it('still renders the outline anchor in the empty state (no FlowShell)', () => {
     render(<TreeHost tree={[]} outlineOpen={true} />)
@@ -137,5 +161,21 @@ describe('MindMapTree', () => {
     )
     expect(screen.getByTestId('flow-shell')).toBeDefined()
     expect(screen.getByTestId('mindmap-outline')).toBeDefined()
+  })
+
+  // node-editor-card: double-clicking a node routes through
+  // `onEditorOpen(nodeId)`. The FlowShell mock exposes a button
+  // whose `onDoubleClick` mirrors React Flow's
+  // `onNodeDoubleClick` callback.
+  it('routes node double-click into onEditorOpen(nodeId)', () => {
+    const onEditorOpen = vi.fn()
+    render(
+      <TreeHost
+        tree={[makeNode({ id: 'root', label: 'Root' })]}
+        onEditorOpen={onEditorOpen}
+      />,
+    )
+    fireEvent.doubleClick(screen.getByTestId('flow-shell-double-click-trigger'))
+    expect(onEditorOpen).toHaveBeenCalledWith('root')
   })
 })

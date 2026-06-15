@@ -24,6 +24,8 @@ import {
   Redo2,
   Copy,
   MapPin,
+  ZoomIn,
+  MessageSquare,
 } from 'lucide-react'
 
 interface ContextMenuProps {
@@ -40,6 +42,10 @@ interface ContextMenuProps {
   /** True when the node carries a pinned `position` field that the
    *  user can reset. */
   hasPinnedPosition: boolean
+  /** True when the node has children (enables drill-down). */
+  hasChildren: boolean
+  /** node-llm-chat: true when the node has a linked conversation. */
+  hasLinkedConv: boolean
   onEdit: () => void
   onAddChild: () => void
   onMoveUp: () => void
@@ -54,16 +60,24 @@ interface ContextMenuProps {
   onResetPosition: () => void
   /** Duplicate the node as a sibling. */
   onDuplicate: () => void
+  /** mindmap-drill-down: focus the node and isolate its subtree. */
+  onDrillDown: () => void
   onDeleteRequest: () => void
   onDeleteConfirm: () => void
   onCancelDelete: () => void
   onClose: () => void
+  /** node-llm-chat: ask LLM about this node's subtree. */
+  onAskLlm: () => void
 }
 
 const MENU_ORDER = [
+  'askLlm',
   'edit',
   'addChild',
   'center',
+  'drillDown',
+  'duplicate',
+  'resetPosition',
   'moveUp',
   'moveDown',
   'undo',
@@ -83,6 +97,8 @@ export default function MindMapContextMenu({
   canRedo,
   confirmDelete,
   hasPinnedPosition,
+  hasChildren,
+  hasLinkedConv,
   onEdit,
   onAddChild,
   onMoveUp,
@@ -92,16 +108,21 @@ export default function MindMapContextMenu({
   onRedo,
   onResetPosition,
   onDuplicate,
+  onDrillDown,
   onDeleteRequest,
   onDeleteConfirm,
   onCancelDelete,
   onClose,
+  onAskLlm,
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [highlight, setHighlight] = useState<MenuKey>('edit')
+  const [highlight, setHighlight] = useState<MenuKey>('askLlm')
 
   function trigger(key: MenuKey): void {
     switch (key) {
+      case 'askLlm':
+        onAskLlm()
+        return
       case 'edit':
         onEdit()
         return
@@ -110,6 +131,15 @@ export default function MindMapContextMenu({
         return
       case 'center':
         onCenter()
+        return
+      case 'drillDown':
+        onDrillDown()
+        return
+      case 'duplicate':
+        onDuplicate()
+        return
+      case 'resetPosition':
+        onResetPosition()
         return
       case 'moveUp':
         if (canMoveUp) onMoveUp()
@@ -129,17 +159,24 @@ export default function MindMapContextMenu({
     }
   }
 
-  // Click-outside dismisses the menu (mouse-only). Keyboard navigation
-  // is handled in the keydown listener below.
+  // Click-outside dismisses the menu.
+  // Uses `pointerdown` instead of `mousedown` because React Flow's canvas
+  // relies on Pointer Events — `mousedown` may not reliably reach `window`
+  // when the canvas has captured the pointer. `pointerdown` is the primary
+  // pointing event and fires before any React Flow internal handling.
+  // The `onClose` ref avoids repeatedly re-attaching the listener on every
+  // parent re-render (the prop is an inline arrow in MindMapTree).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
+        onCloseRef.current()
       }
     }
-    window.addEventListener('mousedown', handler)
-    return () => window.removeEventListener('mousedown', handler)
-  }, [onClose])
+    window.addEventListener('pointerdown', handler)
+    return () => window.removeEventListener('pointerdown', handler)
+  }, [])
 
   // Keyboard navigation. We re-render with the highlighted key first,
   // so the user sees the caret move before the action fires.
@@ -229,7 +266,11 @@ export default function MindMapContextMenu({
     >
       {confirmDelete ? (
         <div className="mindmap-context-confirm" data-testid="mindmap-context-confirm">
-          <div className="px-3 py-2 text-xs text-muted-foreground">确认删除此节点及其子节点？</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            {hasLinkedConv
+              ? '此节点关联了对话，删除节点后对话将无法从节点访问。确认删除？'
+              : '确认删除此节点及其子节点？'}
+          </div>
           <button
             autoFocus
             className="w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-accent"
@@ -248,6 +289,17 @@ export default function MindMapContextMenu({
         </div>
       ) : (
         <>
+          <button
+            role="menuitem"
+            className={classFor('askLlm')}
+            onClick={onAskLlm}
+            onMouseEnter={() => setHighlight('askLlm')}
+            title="对此节点子树进行深度对话"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Ask LLM
+          </button>
+          <div className="border-t border-border my-1" />
           <button
             role="menuitem"
             className={classFor('edit')}
@@ -278,11 +330,24 @@ export default function MindMapContextMenu({
             <Crosshair className="w-3.5 h-3.5" />
             在画布居中
           </button>
+          {hasChildren && (
+            <button
+              role="menuitem"
+              className={classFor('drillDown')}
+              onClick={onDrillDown}
+              onMouseEnter={() => setHighlight('drillDown')}
+              title="聚焦此节点及其子树"
+              data-testid="mindmap-context-drill-down"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+              下钻到此
+            </button>
+          )}
           <button
             role="menuitem"
-            className={classFor('center')}
+            className={classFor('duplicate')}
             onClick={onDuplicate}
-            onMouseEnter={() => setHighlight('center')}
+            onMouseEnter={() => setHighlight('duplicate')}
             title="复制为兄弟节点"
             data-testid="mindmap-context-duplicate"
           >
@@ -292,9 +357,9 @@ export default function MindMapContextMenu({
           {hasPinnedPosition && (
             <button
               role="menuitem"
-              className={classFor('center')}
+              className={classFor('resetPosition')}
               onClick={onResetPosition}
-              onMouseEnter={() => setHighlight('center')}
+              onMouseEnter={() => setHighlight('resetPosition')}
               title="清除节点固定位置,让 dagre 重新排版"
               data-testid="mindmap-context-reset-position"
             >

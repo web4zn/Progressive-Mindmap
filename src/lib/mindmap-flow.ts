@@ -37,6 +37,8 @@ export function treeToFlowShell(
   collapsedIds: ReadonlySet<string>,
   toggleCollapse: (id: string) => void,
   pattern: string,
+  navigateToConversation?: (convId: string) => void,
+  highlightedNodeId?: string,
   depth = 0,
 ): { nodes: FlowShellNodes; edges: FlowShellEdges } {
   const flowNodes: FlowShellNodes = []
@@ -67,6 +69,9 @@ export function treeToFlowShell(
           hasChildren,
           collapsed: isCollapsed,
           onToggle: toggleCollapse,
+          linkedConversationId: n.linkedConversationId,
+          onNavigateToConversation: navigateToConversation,
+          highlighted: highlightedNodeId !== undefined && n.id === highlightedNodeId,
         },
       })
 
@@ -75,6 +80,7 @@ export function treeToFlowShell(
           id: `${parentId}-${n.id}`,
           source: parentId,
           target: n.id,
+          type: 'smoothstep',
         })
       }
 
@@ -91,9 +97,6 @@ export function treeToFlowShell(
 export interface ComputeNodeSizeInput {
   label: string
   summary: string
-  /** Pre-computed character length of the HTML content body (saves the caller from re-counting). */
-  contentLength?: number
-  hasHtml: boolean
   hasChildren: boolean
 }
 
@@ -103,13 +106,12 @@ export interface NodeSize {
 }
 
 /**
- * Width/height hint for dagre layout, derived from label / summary / content
- * length. Constrained to ranges that keep the dagre LR layout readable:
- * - text node: width 120-280, height 56-110
- * - HTML node: width 260-360, height min(80 + content lines, 380)
+ * Width/height hint for dagre layout, derived from label / summary length.
+ * Constrained to ranges that keep the dagre LR layout readable:
+ * - width 120-280, height 56-110
  */
 export function computeNodeSize(input: ComputeNodeSizeInput): NodeSize {
-  const { label, summary, contentLength, hasHtml, hasChildren } = input
+  const { label, summary, hasChildren } = input
 
   const labelLen = label.length
   // CJK characters count as ~2 width units; we approximate with a simple
@@ -123,16 +125,6 @@ export function computeNodeSize(input: ComputeNodeSizeInput): NodeSize {
   const contentWidth = Math.max(labelWidth, summaryWidth) + 32
   // Pad for collapse button + edit badge + a little breathing room.
   const rowPadding = hasChildren ? 48 : 32
-
-  if (hasHtml) {
-    const baseWidth = 260
-    const maxWidth = 360
-    const width = clamp(contentWidth + rowPadding, baseWidth, maxWidth)
-    // Approximate lines from content length (avg 60 chars per line at 13px).
-    const contentLines = Math.max(4, Math.ceil((contentLength ?? 200) / 60))
-    const height = clamp(80 + contentLines * 22, 140, 380)
-    return { width, height }
-  }
 
   // Text / summary node
   const baseWidth = 120

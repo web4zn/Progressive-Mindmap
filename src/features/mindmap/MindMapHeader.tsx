@@ -10,7 +10,6 @@ import {
   Scale,
   UserCircle,
   Wand2,
-  X,
   Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +39,17 @@ import type { MindMap } from '@/types/mindmap'
  *
  * The middle column centers its content; left and right align their
  * children to start / end respectively.
+ *
+ * Sizing invariant: the header's natural content width is ~620px
+ * (LEFT 206 + MIDDLE 236 + RIGHT 144 + padding 40). The `min-w-max`
+ * on the header plus the `shrink-0 whitespace-nowrap` on every pill
+ * keep the layout from collapsing when the host panel is shrunk —
+ * instead, the host panel is forced to overflow horizontally,
+ * which the parent (ChatPage) signals via a `min-w-[640px]` on
+ * the panel's container. The previous version (no min-w on the
+ * header + flex-shrink on the pills) had the MIDDLE column wrap
+ * "17 节点" into "17" / "节点" and squeeze the pattern / status
+ * labels into unreadable strips.
  */
 
 const PATTERN_OPTIONS = [
@@ -72,8 +82,16 @@ export interface MindMapHeaderProps {
   onExportSvg: () => void
   onExportMd: () => void
   onToggleFullscreen: () => void
-  onClose: () => void
 }
+
+/**
+ * The header used to carry its own "关闭面板" X button (parity
+ * with browser-tab close). ChatPage already exposes a Network
+ * toggle in the top-level app toolbar that collapses/expands
+ * the panel, so the in-panel X was redundant — the user saw
+ * two close affordances next to each other. Collapsing is now
+ * exclusively driven from the app-level toolbar.
+ */
 
 export default function MindMapHeader({
   mindmaps,
@@ -91,7 +109,6 @@ export default function MindMapHeader({
   onExportSvg,
   onExportMd,
   onToggleFullscreen,
-  onClose,
 }: MindMapHeaderProps) {
   // The combobox is a top-level import; the only thing we wrap in
   // useMemo is the `mindmaps` ref, so a fresh array doesn't churn
@@ -116,24 +133,29 @@ export default function MindMapHeader({
   return (
     <header
       className={cn(
-        'shrink-0 grid grid-cols-3 items-center gap-2 px-3 py-2',
+        // min-w-max keeps the grid from collapsing the
+        // three columns into illegible strips when the
+        // host panel is squeezed — instead, the host
+        // overflows horizontally. ChatPage enforces a
+        // matching min-w on the panel container.
+        'shrink-0 min-w-max grid grid-cols-3 items-center gap-2 px-3 py-2',
         'border-b border-sidebar-border',
       )}
       data-testid="mindmap-header"
     >
       {/* LEFT — graph selector + drawer trigger */}
-      <div className="flex items-center gap-1.5 justify-start min-w-0">
+      <div className="flex items-center gap-1.5 justify-start min-w-0 shrink-0">
         <MindMapCombobox
           mindmaps={mindmaps}
           value={activeMindmapId}
           onSelect={handleSelect}
           onRename={handleRename}
-          className="min-w-[140px] max-w-[260px]"
+          className="min-w-[140px] max-w-[260px] shrink-0"
         />
         <Button
           variant="outline"
           size="sm"
-          className="h-7 gap-1.5 text-xs shrink-0 relative"
+          className="h-7 gap-1.5 text-xs shrink-0 relative whitespace-nowrap"
           onClick={onOpenDrawer}
           aria-label={`打开关联会话（${linkedCount}）`}
           title="关联会话"
@@ -152,11 +174,11 @@ export default function MindMapHeader({
       </div>
 
       {/* MIDDLE — node count + pattern + status pill */}
-      <div className="flex items-center gap-2 justify-center min-w-0">
+      <div className="flex items-center gap-2 justify-center min-w-0 shrink-0">
         {activeMindmap ? (
           <>
             <span
-              className="inline-flex items-center h-7 px-2 rounded-md text-[11px] font-medium bg-muted/60 text-muted-foreground"
+              className="inline-flex items-center h-7 px-2 rounded-md text-[11px] font-medium bg-muted/60 text-muted-foreground whitespace-nowrap shrink-0"
               title="节点总数"
             >
               {nodeCount} 节点
@@ -164,7 +186,7 @@ export default function MindMapHeader({
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium',
+                  'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium whitespace-nowrap shrink-0',
                   'hover:bg-muted/60 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
                 )}
                 aria-label="切换 pattern"
@@ -208,7 +230,7 @@ export default function MindMapHeader({
             </DropdownMenu>
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium',
+                'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium whitespace-nowrap shrink-0',
                 isAgentActive
                   ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100'
                   : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100',
@@ -233,12 +255,12 @@ export default function MindMapHeader({
       </div>
 
       {/* RIGHT — export / fullscreen / close */}
-      <div className="flex items-center gap-1 justify-end">
+      <div className="flex items-center gap-1 justify-end shrink-0 min-w-0">
         {activeMindmap && (
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium',
+                'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium whitespace-nowrap shrink-0',
                 'hover:bg-muted/60 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
               )}
               aria-label="导出"
@@ -276,15 +298,6 @@ export default function MindMapHeader({
           aria-label={isFullscreen ? '退出全屏' : '全屏'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          title="关闭面板"
-          aria-label="关闭面板"
-        >
-          <X className="w-4 h-4" />
         </Button>
       </div>
     </header>

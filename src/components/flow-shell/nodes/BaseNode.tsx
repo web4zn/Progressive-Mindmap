@@ -24,7 +24,6 @@
  */
 import { memo, useMemo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { sanitizeHtml } from '@/lib/html-sanitizer'
 import { selectNodeIcon, type NodeIconName } from '@/lib/node-icon'
 import type { FlowNodeData } from '../index'
 import { getNodeShape } from '@/lib/shapes/registry'
@@ -157,6 +156,7 @@ function buildNodeClasses(args: {
     args.data.isDimmed ? 'dimmed' : '',
     args.data.isStreaming ? 'streaming' : '',
     args.data.isSearchMatch ? 'search-match' : '',
+    args.data.highlighted ? 'highlighted' : '',
     args.data.collapsed ? 'collapsed' : '',
   ]
     .filter(Boolean)
@@ -173,12 +173,6 @@ function BaseNodeInner({
   defaultSize,
 }: BaseNodeProps) {
   const depth = data.depth ?? 0
-  const hasHtml = data.contentType === 'html' && !!data.content
-
-  const safeHtml = useMemo(
-    () => (hasHtml ? { __html: sanitizeHtml(data.content!) } : undefined),
-    [data.content, hasHtml],
-  )
 
   // Look up the icon deterministically from the registry. The icon
   // is purely a hint; the parent owns the actual <svg>.
@@ -239,6 +233,21 @@ function BaseNodeInner({
         <span className="flow-node-label">{data.label}</span>
 
         <span className="flow-node-meta">
+          {data.linkedConversationId && (
+            <button
+              className="flow-node-linked-conv nodrag"
+              onClick={(e) => {
+                e.stopPropagation()
+                data.onNavigateToConversation?.(data.linkedConversationId!)
+              }}
+              title="跳转到关联对话"
+              aria-label="跳转到关联对话"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+          )}
           {data.editedByUser && (
             <span
               className="flow-node-edit-mark"
@@ -254,12 +263,7 @@ function BaseNodeInner({
 
       {body ?? (
         <>
-          {hasHtml ? (
-            <div
-              className="flow-node-content nowheel"
-              dangerouslySetInnerHTML={safeHtml}
-            />
-          ) : data.summary ? (
+          {data.summary ? (
             <div className="flow-node-summary">{data.summary}</div>
           ) : null}
         </>

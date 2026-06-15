@@ -21,7 +21,10 @@ describe('MindmapOperationSchema', () => {
     const result = MindmapOperationSchema.safeParse({
       type: 'update',
       nodeId: 'n1a2b3c',
-      patch: { summary: '更新后的摘要' },
+      label: '新标题',
+      summary: '新摘要',
+      content: '<p>新内容</p>',
+      contentType: 'html',
     })
     expect(result.success).toBe(true)
   })
@@ -81,14 +84,12 @@ describe('MindmapOperationSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('accepts update with content patch', () => {
+  it('accepts update with content', () => {
     const result = MindmapOperationSchema.safeParse({
       type: 'update',
       nodeId: 'n1',
-      patch: {
-        content: '<h3>Updated</h3>',
-        contentType: 'html',
-      },
+      content: '<h3>Updated</h3>',
+      contentType: 'html',
     })
     expect(result.success).toBe(true)
   })
@@ -114,11 +115,11 @@ describe('MindmapOperationSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects invalid contentType in patch', () => {
+  it('rejects invalid contentType', () => {
     const result = MindmapOperationSchema.safeParse({
       type: 'update',
       nodeId: 'n1',
-      patch: { contentType: 'xml' },
+      contentType: 'xml',
     })
     expect(result.success).toBe(false)
   })
@@ -137,7 +138,7 @@ describe('OperationsArraySchema', () => {
   it('accepts an array of valid operations', () => {
     const result = OperationsArraySchema.safeParse([
       { type: 'add_child', parentId: 'n1', label: 'A' },
-      { type: 'update', nodeId: 'n2', patch: { summary: 'B' } },
+      { type: 'update', nodeId: 'n2', label: 'B', summary: 'updated' },
     ])
     expect(result.success).toBe(true)
   })
@@ -147,8 +148,8 @@ describe('OperationsArraySchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects more than 10 operations', () => {
-    const ops = Array.from({ length: 11 }, (_, i) => ({
+  it('rejects more than 20 operations', () => {
+    const ops = Array.from({ length: 21 }, (_, i) => ({
       type: 'add_child' as const,
       parentId: `n${i}`,
       label: `Node ${i}`,
@@ -157,8 +158,8 @@ describe('OperationsArraySchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('accepts exactly 10 operations', () => {
-    const ops = Array.from({ length: 10 }, (_, i) => ({
+  it('accepts exactly 20 operations', () => {
+    const ops = Array.from({ length: 20 }, (_, i) => ({
       type: 'add_child' as const,
       parentId: `n${i}`,
       label: `Node ${i}`,

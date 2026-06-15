@@ -2,15 +2,17 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { Loader2, AlertCircle, RefreshCw, Network, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
+import { useConversationStore } from '@/stores/conversationStore'
 import { useMindmapLayout } from './useMindmapLayout'
-import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
+import { findNodeInTree, findNodeByLinkedConv, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
 import { findAncestorChain } from '@/lib/mindmap-path'
 import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
 import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
 import { FlowShell, type FlowShellHandle } from '@/components/flow-shell'
+import DrillBreadcrumb from '@/components/flow-shell/DrillBreadcrumb'
 import type { Node as FlowNode } from '@xyflow/react'
-import MindMapEditModal from './MindMapEditModal'
+import BottomDrawerReader from './BottomDrawerReader'
 import MindMapContextMenu from './MindMapContextMenu'
 import MindMapOutline from './MindMapOutline'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
@@ -48,6 +50,18 @@ interface MindMapTreeProps {
   outlineOpen?: boolean
   onOutlineClose?: () => void
   onOutlineFocus?: (nodeId: string) => void
+  /** node-editor-card: editor visibility. State and open / close
+   *  callbacks are owned by `MindMapPanel`; the Tree only renders
+   *  the card. The Tree itself never opens the editor — it routes
+   *  the trigger (double-click / context-menu) into `onEditorOpen`
+   *  and lets the panel decide. */
+  editorOpen?: boolean
+  editorNodeId?: string | null
+  onEditorOpen?: (nodeId: string) => void
+  onEditorClose?: () => void
+  /** node-llm-chat: right-click "Ask LLM" on a node. The parent
+   *  handles conversation creation / linking / navigation. */
+  onAskLlm?: (nodeId: string) => void
 }
 
 export default function MindMapTree({
@@ -65,6 +79,11 @@ export default function MindMapTree({
   outlineOpen = false,
   onOutlineClose,
   onOutlineFocus,
+  editorOpen = false,
+  editorNodeId = null,
+  onEditorOpen,
+  onEditorClose,
+  onAskLlm,
 }: MindMapTreeProps) {
   const {
     updateNode,
@@ -77,7 +96,6 @@ export default function MindMapTree({
   } = useMindmapStore()
   const { collapsedIds, toggleCollapse } = useMindmapLayout(tree)
 
-  const [editNode, setEditNode] = useState<MindMapNode | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -86,6 +104,8 @@ export default function MindMapTree({
     canMoveDown: boolean
   } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  void editorNodeId
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
@@ -99,11 +119,86 @@ export default function MindMapTree({
   // hovering one thing at a time anyway).
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null)
 
+  // bottom-drawer-reader: drawer state. The drawer shows node content
+  // in read mode (single-click) or edit mode (double-click / edit button).
+  // `drawerNodeId` is the currently open node; `drawerMode` controls
+  // whether the user is reading or editing.
+  const [drawerNodeId, setDrawerNodeId] = useState<string | null>(null)
+  const [drawerMode, setDrawerMode] = useState<'read' | 'edit'>('read')
+
+  // mindmap-drill-down: when set, the canvas only renders the subtree
+  // rooted at this node. null means "show the full tree".
+  const [drillNodeId, setDrillNodeId] = useState<string | null>(null)
+
+  // node-llm-chat: when navigating to a linked conversation, the linked
+  // node gets a visual highlight ring that auto-clears after 3 s.
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null)
+
+  // node-llm-chat: track the previous non-linked (global) conversation id
+  // so the user can navigate back via a canvas button.
+  const prevActiveConvIdRef = useRef<string | null>(null)
+  const previousGlobalConvIdRef = useRef<string | null>(null)
+  const [showBackToGlobal, setShowBackToGlobal] = useState(false)
+
+  // Subscribe to activeConversationId from the store so we can detect
+  // when the user navigates to a linked conversation.
+  const activeConvId = useConversationStore((s) => s.activeConversationId)
+
   // Imperative handle on FlowShell so we can drive `fitView()` / `zoomIn()` /
   // `zoomOut()` / `getIntersectingNodes()` from here. `useReactFlow()`
   // cannot be called from MindMapTree because the ReactFlowProvider only
   // lives inside FlowShell.
   const flowShellRef = useRef<FlowShellHandle | null>(null)
+
+  // node-llm-chat: when the active conversation changes to one that
+  // is linked to a node (via linkedConversationId), set the highlighted
+  // node id so the visual highlight ring appears, and center the
+  // viewport on that node. Also track the previous non-linked
+  // conversation so the user can navigate back via a canvas button.
+  useEffect(() => {
+    if (!activeConvId) {
+      setHighlightedNodeId(null)
+      setShowBackToGlobal(false)
+      return
+    }
+    const mm = useMindmapStore.getState().getActiveMindmap()
+    if (!mm) {
+      setShowBackToGlobal(false)
+      return
+    }
+    const found = findNodeByLinkedConv(mm.tree, activeConvId)
+    if (found) {
+      setHighlightedNodeId(found.id)
+      // Center the viewport on the linked node
+      flowShellRef.current?.centerOnNode(found.id, { duration: 200 })
+
+      // Save the previous non-linked conversation as the "back" target
+      if (prevActiveConvIdRef.current && prevActiveConvIdRef.current !== activeConvId) {
+        const prevLinked = findNodeByLinkedConv(mm.tree, prevActiveConvIdRef.current)
+        if (!prevLinked) {
+          previousGlobalConvIdRef.current = prevActiveConvIdRef.current
+        }
+      }
+      setShowBackToGlobal(previousGlobalConvIdRef.current !== null)
+    } else {
+      setHighlightedNodeId(null)
+      setShowBackToGlobal(false)
+    }
+  }, [activeConvId])
+
+  // Track the previous activeConversationId after every render.
+  // This runs AFTER the linking-detection effect above because it is
+  // declared later — React runs effects in declaration order.
+  useEffect(() => {
+    prevActiveConvIdRef.current = activeConvId
+  })
+
+  // Auto-clear the highlight after 3 s
+  useEffect(() => {
+    if (!highlightedNodeId) return
+    const timer = setTimeout(() => setHighlightedNodeId(null), 3000)
+    return () => clearTimeout(timer)
+  }, [highlightedNodeId])
 
   const treeRef = useRef(tree)
 
@@ -137,6 +232,13 @@ export default function MindMapTree({
   // node is collapsed in `collapsedIds` its descendants never reach
   // the canvas regardless of filter.
   const effectiveTree = useMemo<MindMapNode[]>(() => {
+    // mindmap-drill-down: when focused on a subtree, drill-down takes
+    // precedence over depth / edit filters — the user wants to see the
+    // full subtree rooted at the drilled node.
+    if (drillNodeId) {
+      const node = findNodeInTree(tree, drillNodeId)
+      return node ? [node] : tree
+    }
     const noFilter = filterOnlyEdited === false && (filterDepth === undefined || filterDepth === 0)
     if (noFilter) return tree
     const depthCap = filterDepth && filterDepth > 0 ? filterDepth : Infinity
@@ -160,17 +262,54 @@ export default function MindMapTree({
       return out
     }
     return walk(tree, 0)
-  }, [tree, filterDepth, filterOnlyEdited])
+  }, [tree, drillNodeId, filterDepth, filterOnlyEdited])
+
+  // mindmap-drill-down: when drilling, temporarily un-collapse the drill
+  // root so its children are visible. The store's `collapsedIds` is NOT
+  // mutated — the override only affects this render path.
+  const layoutCollapsedIds = useMemo<Set<string>>(() => {
+    if (!drillNodeId || !collapsedIds.has(drillNodeId)) return collapsedIds
+    const next = new Set(collapsedIds)
+    next.delete(drillNodeId)
+    return next
+  }, [collapsedIds, drillNodeId])
+
+  const handleNavigateToConversation = useCallback((convId: string) => {
+    // Save the current active conversation as the "back" target if it
+    // is not itself node-linked. This covers the 💬 icon click path.
+    const currentActiveId = useConversationStore.getState().activeConversationId
+    if (currentActiveId && currentActiveId !== convId) {
+      const mm = useMindmapStore.getState().getActiveMindmap()
+      if (mm) {
+        const currentLinked = findNodeByLinkedConv(mm.tree, currentActiveId)
+        if (!currentLinked) {
+          previousGlobalConvIdRef.current = currentActiveId
+        }
+      }
+    }
+    useConversationStore.getState().setActiveConversationId(convId)
+  }, [])
+
+  /** Navigate back to the previous global (non-linked) conversation. */
+  const handleBackToGlobal = useCallback(() => {
+    if (previousGlobalConvIdRef.current) {
+      const target = previousGlobalConvIdRef.current
+      previousGlobalConvIdRef.current = null
+      useConversationStore.getState().setActiveConversationId(target)
+    }
+  }, [])
 
   const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
       effectiveTree,
-      collapsedIds,
+      layoutCollapsedIds,
       toggleCollapse,
       pattern,
+      handleNavigateToConversation,
+      highlightedNodeId ?? undefined,
     )
     return { nodes: rawNodes, edges: rawEdges }
-  }, [effectiveTree, collapsedIds, toggleCollapse, pattern])
+  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern, handleNavigateToConversation, highlightedNodeId])
 
   // Stage C: search-match set + dim set. When the search box has a
   // query, only the matching nodes stay at 100% opacity; everything
@@ -178,8 +317,11 @@ export default function MindMapTree({
   // label / summary / content contain the substring (case-insensitive).
   const searchMatchNodeIds = useMemo<Set<string>>(() => {
     if (!searchQuery.trim()) return new Set()
-    return matchNodes(tree, searchQuery)
-  }, [tree, searchQuery])
+    // mindmap-drill-down: when drilling, only search within the
+    // visible subtree (effectiveTree), not the full tree.
+    const searchTree = drillNodeId ? effectiveTree : tree
+    return matchNodes(searchTree, searchQuery)
+  }, [tree, effectiveTree, drillNodeId, searchQuery])
 
   // Stage A2 + Stage C: dim everything that isn't on the ancestor chain
   // of the hovered node OR on the edge path. Edge hover wins over node
@@ -254,6 +396,8 @@ export default function MindMapTree({
     return findNodeInTree(tree, contextMenu.nodeId)
   }, [contextMenu, tree])
   const hasPinnedPosition = contextMenuTarget?.position !== undefined
+  const hasChildrenForContextNode = (contextMenuTarget?.children.length ?? 0) > 0
+  const hasLinkedConv = contextMenuTarget?.linkedConversationId !== undefined
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -265,26 +409,46 @@ export default function MindMapTree({
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx > 0
+    return idx !== -1 && idx < parent.children.length - 1
   }
 
   const checkCanMoveDown = (nodeId: string): boolean => {
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx !== -1 && idx < parent.children.length - 1
+    return idx > 0
   }
+
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: FlowNode) => {
+      // bottom-drawer-reader: single-click opens the drawer in read mode.
+      // If the drawer was already open in edit mode on the same node,
+      // switch to read mode (re-click). If opening a different node,
+      // close any edit mode first.
+      if (editorOpen) {
+        onEditorClose?.()
+      }
+      if (drawerNodeId === node.id) {
+        // Toggle-off if clicking the same node.
+        setDrawerNodeId(null)
+        return
+      }
+      setDrawerNodeId(node.id)
+      setDrawerMode('read')
+    },
+    [editorOpen, onEditorClose, drawerNodeId],
+  )
 
   const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => {
-      // Double-clicking a node opens the editor directly. The
-      // earlier Stage A1 "in-place expand" toggle was a no-op
-      // visually (RectCardNode renders the full body either way),
-      // so the v2 cleanup drops it.
-      const found = findNodeInTree(treeRef.current, node.id)
-      if (found) setEditNode(found)
+      // bottom-drawer-reader: double-click opens the drawer in edit mode.
+      // Route through `onEditorOpen` so the panel can enforce mutual
+      // exclusion with the outline.
+      setDrawerNodeId(node.id)
+      setDrawerMode('edit')
+      onEditorOpen?.(node.id)
     },
-    [],
+    [onEditorOpen],
   )
 
   const handleNodeContextMenu = useCallback(
@@ -391,22 +555,30 @@ export default function MindMapTree({
     return () => cancelLongPress()
   }, [cancelLongPress])
 
-  const handleEditConfirm = useCallback(
+  const handleDrawerSave = useCallback(
     (
       nodeId: string,
       label: string,
       summary: string,
       content?: string,
-      contentType?: 'text' | 'html' | 'markdown',
+      contentType?: 'text' | 'html',
     ) => {
       if (mindmapId) {
         history.record({ mindmapId, tree: cloneTree(treeRef.current) })
         updateNode(mindmapId, nodeId, { label, summary, content, contentType })
       }
-      setEditNode(null)
+      // After save, switch to read mode (drawer stays open).
+      // The drawer component handles its own "saved" feedback.
+      setDrawerMode('read')
     },
     [mindmapId, updateNode, history],
   )
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerNodeId(null)
+    setDrawerMode('read')
+    onEditorClose?.()
+  }, [onEditorClose])
 
   const handleAddChild = useCallback(
     (nodeId?: string) => {
@@ -423,7 +595,7 @@ export default function MindMapTree({
   const handleMoveUp = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'up')
+      moveNode(mindmapId, contextMenu.nodeId, 'down')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
@@ -431,7 +603,7 @@ export default function MindMapTree({
   const handleMoveDown = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'down')
+      moveNode(mindmapId, contextMenu.nodeId, 'up')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
@@ -618,14 +790,18 @@ export default function MindMapTree({
   )
 
   const handleCenterOnNode = useCallback(() => {
-    if (selectedNodeId) {
-      flowShellRef.current?.focusNode(selectedNodeId, {
-        padding: 0.3,
-        duration: 200,
-        maxZoom: 1.5,
-      })
+    const nodeId = contextMenu?.nodeId
+    if (nodeId) {
+      flowShellRef.current?.centerOnNode(nodeId, { duration: 200 })
+      setContextMenu(null)
     }
-  }, [selectedNodeId])
+  }, [contextMenu?.nodeId])
+
+  // mindmap-drill-down: enter drill mode for a node (via context menu).
+  const handleDrillDown = useCallback((nodeId: string) => {
+    setDrillNodeId(nodeId)
+    setContextMenu(null)
+  }, [])
 
   // Stage C: handle the top-bar "Enter" / focus-first-match on search.
   // The search box lives in MindMapPanel but calls into MindMapTree
@@ -702,7 +878,10 @@ export default function MindMapTree({
   useMindmapHotkeys({
     handlers: hotkeyHandlers,
     selectedNodeId,
-    enabled: editNode === null && contextMenu === null,
+    // node-editor-card: disable canvas hotkeys while the editor
+    // card is open (so e.g. "F2 to edit" doesn't re-fire on the
+    // textarea). Same as the previous editNode === null guard.
+    enabled: !editorOpen && contextMenu === null,
   })
 
   if (error) {
@@ -740,6 +919,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -771,6 +951,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -799,6 +980,7 @@ export default function MindMapTree({
           open={outlineOpen}
           onClose={onOutlineClose ?? (() => {})}
           onFocus={onOutlineFocus ?? (() => {})}
+          tree={drillNodeId ? effectiveTree : undefined}
         />
       </div>
     )
@@ -817,6 +999,22 @@ export default function MindMapTree({
           生成中…
         </div>
       )}
+      {/* mindmap-drill-down: breadcrumb shown when drilling into a subtree. */}
+      {drillNodeId && (
+        <DrillBreadcrumb
+          tree={tree}
+          drillNodeId={drillNodeId}
+          onNavigate={(nodeId) => {
+            setDrillNodeId(nodeId)
+            // When exiting drill (nodeId === null), fit the full tree.
+            if (nodeId === null) {
+              setTimeout(() => {
+                flowShellRef.current?.fitView({ padding: 0.3, duration: 300 })
+              }, 100)
+            }
+          }}
+        />
+      )}
       <FlowShell
         ref={flowShellRef}
         nodes={nodes}
@@ -824,6 +1022,7 @@ export default function MindMapTree({
         theme="light"
         layout="dagre-lr"
         onInit={handleInit}
+        onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeMouseEnter={handleNodeMouseEnter}
@@ -838,6 +1037,8 @@ export default function MindMapTree({
         searchMatchNodeIds={searchMatchNodeIds}
         isStreaming={isStreaming}
         background={background}
+        showBackToGlobal={showBackToGlobal}
+        onBackToGlobal={handleBackToGlobal}
         onPaneDoubleClick={() => {
           flowShellRef.current?.fitView({ padding: 0.3, duration: 200 })
         }}
@@ -860,15 +1061,25 @@ export default function MindMapTree({
         open={outlineOpen}
         onClose={onOutlineClose ?? (() => {})}
         onFocus={onOutlineFocus ?? (() => {})}
+        tree={drillNodeId ? effectiveTree : undefined}
       />
 
-      {editNode && (
-        <MindMapEditModal
-          node={editNode}
-          onConfirm={handleEditConfirm}
-          onCancel={() => setEditNode(null)}
-        />
-      )}
+      {/* bottom-drawer-reader: bottom panel for reading full node content
+       *  or editing node details. Replaces the old NodeEditorCard modal. */}
+      <BottomDrawerReader
+        node={drawerNodeId ? findNodeInTree(tree, drawerNodeId) ?? null : null}
+        mode={drawerMode}
+        onClose={handleDrawerClose}
+        onEdit={() => {
+          setDrawerMode('edit')
+          onEditorOpen?.(drawerNodeId!)
+        }}
+        onCancel={() => {
+          setDrawerMode('read')
+        }}
+        onSave={handleDrawerSave}
+        pattern={pattern}
+      />
 
       {contextMenu && (
         <MindMapContextMenu
@@ -881,9 +1092,13 @@ export default function MindMapTree({
           canRedo={history.canRedo}
           confirmDelete={confirmDelete}
           hasPinnedPosition={hasPinnedPosition}
+          hasChildren={hasChildrenForContextNode}
+          hasLinkedConv={hasLinkedConv}
           onEdit={() => {
-            const found = findNodeInTree(tree, contextMenu.nodeId)
-            if (found) setEditNode(found)
+            // bottom-drawer-reader: open drawer in edit mode directly.
+            setDrawerNodeId(contextMenu.nodeId)
+            setDrawerMode('edit')
+            onEditorOpen?.(contextMenu.nodeId)
             setContextMenu(null)
           }}
           onAddChild={() => handleAddChild()}
@@ -898,6 +1113,11 @@ export default function MindMapTree({
           }}
           onDuplicate={() => {
             handleDuplicate(contextMenu.nodeId)
+            setContextMenu(null)
+          }}
+          onDrillDown={() => handleDrillDown(contextMenu.nodeId)}
+          onAskLlm={() => {
+            onAskLlm?.(contextMenu.nodeId)
             setContextMenu(null)
           }}
           onDeleteRequest={() => setConfirmDelete(true)}
