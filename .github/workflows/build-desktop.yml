@@ -113,3 +113,42 @@ jobs:
             release/**/*.zip
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Create Release
+    needs: [build-mac, build-win, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Get version tag
+        id: version
+        run: echo "TAG=v$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.TAG }}"
+          echo "Release tag: $TAG"
+          if gh release view "$TAG" --json tagName &>/dev/null; then
+            echo "Release $TAG already exists — uploading updated artifacts"
+            gh release upload "$TAG" ./*.dmg ./*.exe ./*.AppImage ./*.zip --clobber
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              ./*.dmg ./*.exe ./*.AppImage ./*.zip \
+              --title "Progressive Mindmap $TAG" \
+              --generate-notes \
+              --target "${{ github.sha }}"
+          fi
