@@ -2,6 +2,7 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { Loader2, AlertCircle, RefreshCw, Network, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMindmapStore } from '@/stores/mindmapStore'
+import { useConversationStore } from '@/stores/conversationStore'
 import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
@@ -58,6 +59,9 @@ interface MindMapTreeProps {
   editorNodeId?: string | null
   onEditorOpen?: (nodeId: string) => void
   onEditorClose?: () => void
+  /** node-llm-chat: right-click "Ask LLM" on a node. The parent
+   *  handles conversation creation / linking / navigation. */
+  onAskLlm?: (nodeId: string) => void
 }
 
 export default function MindMapTree({
@@ -79,6 +83,7 @@ export default function MindMapTree({
   editorNodeId = null,
   onEditorOpen,
   onEditorClose,
+  onAskLlm,
 }: MindMapTreeProps) {
   const {
     updateNode,
@@ -205,15 +210,20 @@ export default function MindMapTree({
     return next
   }, [collapsedIds, drillNodeId])
 
+  const handleNavigateToConversation = useCallback((convId: string) => {
+    useConversationStore.getState().setActiveConversationId(convId)
+  }, [])
+
   const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = treeToFlowShell(
       effectiveTree,
       layoutCollapsedIds,
       toggleCollapse,
       pattern,
+      handleNavigateToConversation,
     )
     return { nodes: rawNodes, edges: rawEdges }
-  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern])
+  }, [effectiveTree, layoutCollapsedIds, toggleCollapse, pattern, handleNavigateToConversation])
 
   // Stage C: search-match set + dim set. When the search box has a
   // query, only the matching nodes stay at 100% opacity; everything
@@ -301,6 +311,7 @@ export default function MindMapTree({
   }, [contextMenu, tree])
   const hasPinnedPosition = contextMenuTarget?.position !== undefined
   const hasChildrenForContextNode = (contextMenuTarget?.children.length ?? 0) > 0
+  const hasLinkedConv = contextMenuTarget?.linkedConversationId !== undefined
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -994,6 +1005,7 @@ export default function MindMapTree({
           confirmDelete={confirmDelete}
           hasPinnedPosition={hasPinnedPosition}
           hasChildren={hasChildrenForContextNode}
+          hasLinkedConv={hasLinkedConv}
           onEdit={() => {
             // bottom-drawer-reader: open drawer in edit mode directly.
             setDrawerNodeId(contextMenu.nodeId)
@@ -1016,6 +1028,10 @@ export default function MindMapTree({
             setContextMenu(null)
           }}
           onDrillDown={() => handleDrillDown(contextMenu.nodeId)}
+          onAskLlm={() => {
+            onAskLlm?.(contextMenu.nodeId)
+            setContextMenu(null)
+          }}
           onDeleteRequest={() => setConfirmDelete(true)}
           onDeleteConfirm={handleDeleteConfirm}
           onCancelDelete={() => setConfirmDelete(false)}

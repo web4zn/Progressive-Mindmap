@@ -26,6 +26,12 @@ export interface FlowNodeData extends Record<string, unknown> {
    *  click). Used to gate the collapse-out animation. */
   isCollapsingOut?: boolean
   onToggle?: (nodeId: string) => void
+  /** node-llm-chat: when set, the node shows a 💬 icon indicating a linked
+   *  conversation exists for scoped Agent interaction. */
+  linkedConversationId?: string
+  /** node-llm-chat: callback when the conversation bubble icon is clicked.
+   *  Receives the linked conversation id to navigate to. */
+  onNavigateToConversation?: (convId: string) => void
 }
 
 export type { FlowShellProps, FlowShellHandle } from './FlowShell'

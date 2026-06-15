@@ -119,7 +119,7 @@ describe('treeToFlowShell', () => {
       }),
     ]
     // Start at depth 2 → root=2, c1=3, gc1=4
-    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto', 2)
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto', undefined, 2)
     const root = nodes.find((n) => n.id === 'root')!
     const c1 = nodes.find((n) => n.id === 'c1')!
     const gc1 = nodes.find((n) => n.id === 'gc1')!
@@ -393,11 +393,11 @@ describe('treeToFlowShell — Stage D boundary cases', () => {
     expect(a.nodes.find((n) => n.id === 'root')!.data.depth).toBe(0)
     expect(a.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(2)
     // explicit depth = -1
-    const b = treeToFlowShell(tree, new Set(), noop, 'auto', -1)
+    const b = treeToFlowShell(tree, new Set(), noop, 'auto', undefined, -1)
     expect(b.nodes.find((n) => n.id === 'root')!.data.depth).toBe(-1)
     expect(b.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(1)
     // explicit depth = 5
-    const c = treeToFlowShell(tree, new Set(), noop, 'auto', 5)
+    const c = treeToFlowShell(tree, new Set(), noop, 'auto', undefined, 5)
     expect(c.nodes.find((n) => n.id === 'root')!.data.depth).toBe(5)
     expect(c.nodes.find((n) => n.id === 'c2')!.data.depth).toBe(7)
   })

@@ -25,6 +25,7 @@ import {
   Copy,
   MapPin,
   ZoomIn,
+  MessageSquare,
 } from 'lucide-react'
 
 interface ContextMenuProps {
@@ -41,8 +42,10 @@ interface ContextMenuProps {
   /** True when the node carries a pinned `position` field that the
    *  user can reset. */
   hasPinnedPosition: boolean
-  /** mindmap-drill-down: whether the node has children (enables drill-down). */
+  /** True when the node has children (enables drill-down). */
   hasChildren: boolean
+  /** node-llm-chat: true when the node has a linked conversation. */
+  hasLinkedConv: boolean
   onEdit: () => void
   onAddChild: () => void
   onMoveUp: () => void
@@ -63,9 +66,12 @@ interface ContextMenuProps {
   onDeleteConfirm: () => void
   onCancelDelete: () => void
   onClose: () => void
+  /** node-llm-chat: ask LLM about this node's subtree. */
+  onAskLlm: () => void
 }
 
 const MENU_ORDER = [
+  'askLlm',
   'edit',
   'addChild',
   'center',
@@ -92,6 +98,7 @@ export default function MindMapContextMenu({
   confirmDelete,
   hasPinnedPosition,
   hasChildren,
+  hasLinkedConv,
   onEdit,
   onAddChild,
   onMoveUp,
@@ -106,12 +113,16 @@ export default function MindMapContextMenu({
   onDeleteConfirm,
   onCancelDelete,
   onClose,
+  onAskLlm,
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [highlight, setHighlight] = useState<MenuKey>('edit')
+  const [highlight, setHighlight] = useState<MenuKey>('askLlm')
 
   function trigger(key: MenuKey): void {
     switch (key) {
+      case 'askLlm':
+        onAskLlm()
+        return
       case 'edit':
         onEdit()
         return
@@ -248,7 +259,11 @@ export default function MindMapContextMenu({
     >
       {confirmDelete ? (
         <div className="mindmap-context-confirm" data-testid="mindmap-context-confirm">
-          <div className="px-3 py-2 text-xs text-muted-foreground">确认删除此节点及其子节点？</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            {hasLinkedConv
+              ? '此节点关联了对话，删除节点后对话将无法从节点访问。确认删除？'
+              : '确认删除此节点及其子节点？'}
+          </div>
           <button
             autoFocus
             className="w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-accent"
@@ -267,6 +282,17 @@ export default function MindMapContextMenu({
         </div>
       ) : (
         <>
+          <button
+            role="menuitem"
+            className={classFor('askLlm')}
+            onClick={onAskLlm}
+            onMouseEnter={() => setHighlight('askLlm')}
+            title="对此节点子树进行深度对话"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Ask LLM
+          </button>
+          <div className="border-t border-border my-1" />
           <button
             role="menuitem"
             className={classFor('edit')}

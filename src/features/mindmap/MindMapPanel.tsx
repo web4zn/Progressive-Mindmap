@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
+import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
 import { exportMindmapAsMarkdown, downloadMarkdown } from '@/lib/export'
 import { exportMindmapAsPng, exportMindmapAsSvg } from '@/lib/export-mindmap'
+import { findNodeInTree } from '@/lib/mindmap-layout'
 import MindMapTree from '@/features/mindmap/MindMapTree'
 import MindMapHeader, { type MindMapPattern } from '@/features/mindmap/MindMapHeader'
 import MindMapDrawer from '@/features/mindmap/MindMapDrawer'
@@ -57,6 +59,7 @@ export default function MindMapPanel() {
   const updateMindmap = useMindmapStore((s) => s.updateMindmap)
   const updateMindmapTree = useMindmapStore((s) => s.updateMindmapTree)
   const removeMonitoredConversation = useMindmapStore((s) => s.removeMonitoredConversation)
+  const linkNodeConversation = useMindmapStore((s) => s.linkNodeConversation)
 
   // Block render until IndexedDB rehydration completes. Without this
   // gate the component reads `activeMindmap?.tree ?? []` before the
@@ -182,6 +185,44 @@ export default function MindMapPanel() {
       if (activeMindmapId) removeMonitoredConversation(activeMindmapId, convId)
     },
     [activeMindmapId, removeMonitoredConversation],
+  )
+
+  // node-llm-chat: handle "Ask LLM" from node context menu.
+  // If the node already has a linked conversation, navigate to it.
+  // Otherwise, create a new conversation, link it, and let the
+  // chat view open automatically (addConversation sets activeConversationId).
+  const handleAskLlm = useCallback(
+    (nodeId: string) => {
+      if (!activeMindmap) return
+
+      const node = findNodeInTree(activeMindmap.tree, nodeId)
+      if (!node) return
+
+      // Already linked → just navigate
+      if (node.linkedConversationId) {
+        useConversationStore.getState().setActiveConversationId(node.linkedConversationId)
+        return
+      }
+
+      // Create a new conversation with the first available provider
+      const providers = useProviderStore.getState().providers
+      const firstProvider = providers[0]
+      if (!firstProvider) return
+      const modelId =
+        firstProvider.models.find((m) => m.enabled)?.id ?? firstProvider.models[0]?.id ?? ''
+      if (!modelId) return
+
+      const conv = useConversationStore.getState().addConversation({
+        providerId: firstProvider.id,
+        modelId,
+      })
+
+      // Link conversation to node
+      linkNodeConversation(activeMindmap.id, nodeId, conv.id)
+      // Also add as monitored so the mindmap is associated
+      useMindmapStore.getState().addMonitoredConversation(activeMindmap.id, conv.id)
+    },
+    [activeMindmap, linkNodeConversation],
   )
 
   // node-editor-card: open the editor for a specific node and
@@ -477,6 +518,7 @@ export default function MindMapPanel() {
         editorNodeId={editorNodeId}
         onEditorOpen={openEditor}
         onEditorClose={closeEditor}
+        onAskLlm={handleAskLlm}
       />
 
       <MindMapDrawer

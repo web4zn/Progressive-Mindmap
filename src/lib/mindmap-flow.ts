@@ -37,6 +37,7 @@ export function treeToFlowShell(
   collapsedIds: ReadonlySet<string>,
   toggleCollapse: (id: string) => void,
   pattern: string,
+  navigateToConversation?: (convId: string) => void,
   depth = 0,
 ): { nodes: FlowShellNodes; edges: FlowShellEdges } {
   const flowNodes: FlowShellNodes = []
@@ -67,6 +68,8 @@ export function treeToFlowShell(
           hasChildren,
           collapsed: isCollapsed,
           onToggle: toggleCollapse,
+          linkedConversationId: n.linkedConversationId,
+          onNavigateToConversation: navigateToConversation,
         },
       })
 
