@@ -133,7 +133,9 @@ jobs:
 
       - name: Get version tag
         id: version
-        run: echo "TAG=v$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          VER=$(node -e "console.log(require('./package.json').version)")
+          echo "TAG=v$VER" >> "$GITHUB_OUTPUT"
 
       - name: Create or update Release
         env:
@@ -141,13 +143,27 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.TAG }}"
           echo "Release tag: $TAG"
+
+          # Gather artifact files (handles spaces in filenames)
+          ARTIFACTS=()
+          while IFS= read -r -d '' f; do
+            ARTIFACTS+=("$f")
+          done < <(find . -path ./.git -prune -o -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" \) -print0 2>/dev/null)
+
+          echo "Found ${#ARTIFACTS[@]} artifact(s):"
+          printf '  %s\n' "${ARTIFACTS[@]}"
+
+          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+            echo "ERROR: no build artifacts found"
+            exit 1
+          fi
+
           if gh release view "$TAG" --json tagName &>/dev/null; then
             echo "Release $TAG already exists — uploading updated artifacts"
-            gh release upload "$TAG" ./*.dmg ./*.exe ./*.AppImage ./*.zip --clobber
+            gh release upload "$TAG" "${ARTIFACTS[@]}" --clobber
           else
             echo "Creating release $TAG"
-            gh release create "$TAG" \
-              ./*.dmg ./*.exe ./*.AppImage ./*.zip \
+            gh release create "$TAG" "${ARTIFACTS[@]}" \
               --title "Progressive Mindmap $TAG" \
               --generate-notes \
               --target "${{ github.sha }}"
