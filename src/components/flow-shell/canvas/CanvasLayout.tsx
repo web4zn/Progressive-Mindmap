@@ -124,6 +124,8 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     background = 'dots',
     disableMiniMap = false,
     searchMatchNodeIds,
+    showBackToGlobal,
+    onBackToGlobal,
   } = props
 
   // 1. Run the structural layout on changes to *structure*. The
@@ -323,6 +325,8 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
         resetPositions={setNodes}
         fitViewPadding={fitViewPadding}
         selectedNodeId={selectedNodeId ?? null}
+        showBackToGlobal={showBackToGlobal}
+        onBackToGlobal={onBackToGlobal}
       />
       {!disableMiniMap && (
         <FlowMiniMap nodeColor={patternNodeColor} nodeStrokeWidth={2} />
