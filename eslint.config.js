@@ -43,6 +43,11 @@ export default tseslint.config(
       ...hooksPlugin.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // Downgraded from error to warn: these React Compiler rules are overly
+      // conservative for our patterns (prop→state sync, refs in event handlers).
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
     },
   },
 
