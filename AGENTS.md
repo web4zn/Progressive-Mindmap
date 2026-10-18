@@ -112,7 +112,7 @@ together so the same hook serves both shadcn/Tailwind (`html.dark`) and
 FlowShell (`[data-theme]`). Persistence is `localStorage` under the key
 `progressive-mindmap:theme` — the only UI preference kept there; user
 data goes through IndexedDB. The toggle button lives in the mindmap
-panel toolbar (data-testid `mindmap-theme-toggle`).
+panel toolbar (data-testid `mindmap-toolbar-theme-toggle`).
 
 ### CSS variables (Stage D)
 

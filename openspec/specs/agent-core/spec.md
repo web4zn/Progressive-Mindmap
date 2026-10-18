@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the shared agent runtime: a `BaseAgent` LLM/tool abstraction, the `ReActRunner` reasoning loop, the separate system-prompt module, and a Worker that only routes messages.
+
+## Requirements
 
 ### Requirement: BaseAgent provides unified LLM calling
 

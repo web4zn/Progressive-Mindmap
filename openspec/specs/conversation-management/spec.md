@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Manage conversation lifecycle: creation with an optional mindmap, switching, deletion, title generation, system prompts, IndexedDB persistence, search, Markdown export, and sidebar affordances.
+
+## Requirements
 
 ### Requirement: Create conversation
 系统 SHALL 允许用户创建新的对话会话。创建新会话时 SHALL 弹出对话框，询问用户是否创建新图谱。每个会话 SHALL 关联一个模型提供商和具体模型。创建会话时 SHALL 自动设置默认的提供商和模型（用户最近使用的配置）。

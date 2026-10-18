@@ -1,7 +1,8 @@
 # quality-gates Specification
 
 ## Purpose
-TBD - created by archiving change e2e-and-ci. Update Purpose after archive.
+Keep the shipped desktop build honest: CI must build the production bundle (catching failures that type-checking and unit tests cannot see) and must exercise the packaged Electron app end-to-end, so a broken window or missing renderer entry fails the pipeline instead of the user.
+
 ## Requirements
 ### Requirement: CI verifies the production build
 

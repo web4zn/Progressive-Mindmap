@@ -5,7 +5,11 @@
 > panel-layout work; the live contract lives in the source code
 > (e.g. `MindMapPanel`, `MindMapHeader`, `MindMapDrawer`).
 
-## ADDED Requirements
+## Purpose
+
+Stage B UI shell: defines the panel's three-section header, the linked-conversation drawer, the pattern selector, and the resizable markdown edit modal that this stage introduced.
+
+## Requirements
 
 ### Requirement: Three-section header
 
@@ -53,6 +57,10 @@ The header SHALL expose a pattern dropdown with four options:
 Selecting an option SHALL update the active mindmap's
 `pattern` field.
 
+#### Scenario: Select a pattern
+- **WHEN** the user picks an option from the pattern dropdown
+- **THEN** the active mindmap's `pattern` field updates to the selected option
+
 ### Requirement: Resizable markdown edit modal
 
 The node edit modal SHALL support markdown content (in addition
@@ -66,12 +74,3 @@ bound.
 - **THEN** the modal opens with the markdown source, the live
   preview is shown side-by-side, and the user can drag the
   bottom-right handle to resize
-
-## Impact
-
-- **UI**: header is restructured from one row to a 3-column grid;
-  new drawer component; pattern dropdown; new edit modal.
-- **State**: no store changes — the existing `mindmapStore` and
-  `useMindmapStore` API is sufficient.
-- **Data model**: `MindMapNode.contentType` adds `'markdown'` as a
-  third option; old nodes still have only `'text' | 'html'`.

@@ -1,7 +1,8 @@
 # node-html-agent Specification
 
 ## Purpose
-TBD - created by archiving change node-html-content. Update Purpose after archive.
+Let the Agent produce rich node content: mindmap operations carry an optional HTML `content` field alongside the plain label, so a node can hold formatted material generated from the conversation instead of a single line of text.
+
 ## Requirements
 ### Requirement: Agent generates HTML content
 

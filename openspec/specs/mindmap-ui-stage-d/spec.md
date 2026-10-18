@@ -55,10 +55,17 @@ FlowShell's CSS variable layer). `MindMapPanel` SHALL pass the resolved theme to
 
 A theme toggle button SHALL be present in the mindmap panel
 toolbar (next to the background switcher), with
-`data-testid="mindmap-theme-toggle"`. The button shows the
+`data-testid="mindmap-toolbar-theme-toggle"`. The button shows the
 `Sun` icon when the active theme is `dark` (click to go light)
 and the `Moon` icon when the active theme is `light` (click to
 go dark).
+
+#### Scenario: Toggle from the panel toolbar
+
+- **WHEN** the user clicks the button with `data-testid="mindmap-toolbar-theme-toggle"`
+- **THEN** the theme flips and the icon swaps: `Sun` while the active theme is `dark`, `Moon` while it is `light`
+- **AND** `aria-label` / `title` read 「切换到浅色」 in dark mode and 「切换到深色」 in light mode
+- **AND** `aria-pressed` is `true` while the active theme is `dark`
 
 ### Requirement: CSS variables for colour tokens
 
@@ -69,6 +76,17 @@ colours SHALL be defined as
 `--flow-pattern-{auto|5w1h|tech|pros-cons}` tokens in
 `src/index.css` and consumed by FlowShell via
 `[data-pattern='...']` rules.
+
+#### Scenario: Theme blocks own every FlowShell colour
+
+- **WHEN** `<html data-theme>` is `light` or `dark`
+- **THEN** the matching `[data-theme='...']` block in `src/components/flow-shell/css/theme.css` supplies the FlowShell colour variables
+- **AND** no FlowShell rule hard-codes a colour literal outside those blocks
+
+#### Scenario: Pattern accent follows `data-pattern`
+
+- **WHEN** the shell wrapper carries `data-pattern="tech"` (or any other pattern value)
+- **THEN** the `.flow-shell[data-pattern='tech']` rule applies the matching `--flow-pattern-tech` accent declared in `src/index.css`
 
 ### Requirement: Animation timing tokens
 
@@ -82,6 +100,17 @@ tokens.
 A `prefers-reduced-motion: reduce` rule SHALL zero out the
 `--duration-*` tokens.
 
+#### Scenario: FlowShell styles use the duration tokens
+
+- **WHEN** a `flow-shell` rule declares a transition or animation duration
+- **THEN** it SHALL reference `var(--duration-fast | --duration-base | --duration-slow)` and `var(--ease-out)`
+- **AND** no inline duration literal SHALL be introduced in FlowShell rules
+
+#### Scenario: Reduced motion disables animation
+
+- **WHEN** the OS reports `prefers-reduced-motion: reduce`
+- **THEN** the `--duration-*` tokens SHALL resolve to `0ms`, so transitions and animations effectively do not run
+
 ### Requirement: `data-pattern` is prop-driven
 
 `FlowShell` SHALL accept a `pattern?: 'auto' | '5w1h' | 'tech'
@@ -93,6 +122,18 @@ SHALL be removed.
 `document.documentElement.dataset.pattern` whenever the active
 mindmap changes, so CSS rules outside the React tree can read
 it.
+
+#### Scenario: The prop drives the wrapper attribute
+
+- **WHEN** `FlowShell` is rendered with `pattern="pros-cons"`
+- **THEN** the shell wrapper SHALL carry `data-pattern="pros-cons"`
+- **AND** when the prop is omitted it SHALL fall back to `data-pattern="auto"` at the single prop-driven call site
+
+#### Scenario: Pattern mirrored onto the document root
+
+- **WHEN** the active mindmap's pattern changes
+- **THEN** `MindMapPanel` SHALL write it to `document.documentElement.dataset.pattern`
+- **AND** CSS outside the React tree SHALL be able to read it from `html[data-pattern]`
 
 ### Requirement: `flow-shell.css` split
 
@@ -108,6 +149,12 @@ it.
 
 The top-level `flow-shell.css` SHALL become a thin
 `@import` aggregator.
+
+#### Scenario: Partials and aggregator
+
+- **WHEN** the stylesheet is assembled
+- **THEN** `src/components/flow-shell/css/` SHALL contain `theme.css`, `node.css`, `edge.css`, `canvas.css` and `animations.css`
+- **AND** `src/components/flow-shell/flow-shell.css` SHALL contain only `@import` lines aggregating those five partials
 
 ### Requirement: `treeToFlowShell` boundary tests
 
@@ -126,6 +173,12 @@ cases covering:
 - explicit `depth` argument (default / negative / large)
 - `children: []` vs omitted (same shape)
 
+#### Scenario: Boundary cases stay covered
+
+- **WHEN** `npm test` runs `src/lib/__tests__/mindmap-flow.test.ts`
+- **THEN** each boundary case listed above SHALL have at least one assertion
+- **AND** the `toggleCollapse` assertion SHALL check reference equality is forwarded to every emitted node
+
 ### Requirement: 500-node perf budget
 
 `src/lib/__tests__/mindmap-flow.bench.test.ts` SHALL add a
@@ -133,18 +186,8 @@ benchmark that flattens a synthetic 500-node balanced tree
 within 1 s in happy-dom. The benchmark is `it.skip`-able via
 `SKIP_PERF=1`.
 
-## Impact
+#### Scenario: Benchmark stays inside the budget
 
-- **UI**: one new icon button (`mindmap-theme-toggle`) in the
-  panel toolbar.
-- **CSS**: `flow-shell.css` (800 lines) → 5 partials + a 5-line
-  aggregator. `index.css` gains ~70 lines of variable
-  definitions (including the `prefers-color-scheme: dark` and
-  `prefers-reduced-motion: reduce` blocks).
-- **Tests**: +12 boundary tests, +1 benchmark, +11 useTheme
-  tests. Test count grows from 334 → 358.
-- **Code review surface**: every file in the diff is in the
-  Stage D allow-list. The new `useTheme` hook is the only new
-  module.
-- **Performance**: no regression. `treeToFlowShell` is
-  unchanged in behaviour; the benchmark test is informational.
+- **WHEN** `src/lib/__tests__/mindmap-flow.bench.test.ts` flattens a synthetic ~500-node balanced tree
+- **THEN** the flatten SHALL complete within the 1 s budget in happy-dom
+- **AND** `SKIP_PERF=1` SHALL skip the benchmark without failing the suite

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Run the Agent in a dedicated Web Worker so reasoning never blocks the UI, using a typed main-to-worker protocol for status updates, tool round-trips, and completion.
+
+## Requirements
 
 ### Requirement: Agent runs in a dedicated Web Worker
 
