@@ -1,7 +1,8 @@
 # node-html-render Specification
 
 ## Purpose
-TBD - created by archiving change node-html-content. Update Purpose after archive.
+Render that rich node content safely: HTML is sanitized through the shared whitelist before it reaches the DOM, the whitelist is enforced for tags and attributes, and the canvas node displays the result with a readable fallback.
+
 ## Requirements
 ### Requirement: HTML content is sanitized before rendering
 

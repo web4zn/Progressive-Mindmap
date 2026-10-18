@@ -1,7 +1,8 @@
 # desktop-security Specification
 
 ## Purpose
-TBD - created by archiving change security-baseline. Update Purpose after archive.
+Constrain what the Electron renderer may run, load, navigate to and ask for: a strict CSP for both dev and production builds, an origin allow-list for in-app navigation, external links handed to the OS browser, deny-by-default permissions, and remote resources stripped from node HTML so user data stays local.
+
 ## Requirements
 ### Requirement: Renderer content security policy
 

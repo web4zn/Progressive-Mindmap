@@ -5,7 +5,11 @@
 > Stage C work; the live contract lives in the source code
 > (e.g. `MindMapTree`, `useMindmapHotkeys`, `MindMapContextMenu`).
 
-## ADDED Requirements
+## Purpose
+
+Stage C interaction layer: defines the hover, edge-hover and streaming highlights, the top-bar undo/redo and outline controls, search and filter, the background switcher, keyboard and touch navigation, and the MiniMap viewport indicator.
+
+## Requirements
 
 ### Requirement: Hover path highlight
 
@@ -27,9 +31,9 @@ The dim transition SHALL complete in 200 ms (use the
 
 ### Requirement: Edge hover
 
-When the user hovers a React Flow edge, the two endpoints
-SHALL stay at 100% opacity and the edge itself SHALL stay at
-100%; everything else dims. Edge hover wins over node hover.
+When the user hovers a React Flow edge, the two endpoints SHALL
+stay at 100% opacity and the edge itself SHALL stay at 100%;
+everything else dims. Edge hover wins over node hover.
 
 #### Scenario: Hover an edge
 - **WHEN** the user hovers the edge between `a` and `a1`
@@ -44,6 +48,12 @@ diagonal light sweep (2 s linear infinite, `flow-shimmer`
 keyframe). The animation is suppressed under
 `prefers-reduced-motion: reduce`.
 
+#### Scenario: Stream a response into the tree
+- **WHEN** the parent reports `isStreaming=true`
+- **THEN** every node at depth < 3 carries `.flow-node.streaming`
+  and shows the diagonal light sweep, which is suppressed under
+  `prefers-reduced-motion: reduce`
+
 ### Requirement: Top-bar undo / redo
 
 The panel header SHALL expose undo (↶) / redo (↷) buttons that
@@ -54,11 +64,22 @@ active mindmap's `tree` with the previous snapshot.
 The history is keyed on `activeMindmapId` — switching mindmaps
 clears the timeline.
 
+#### Scenario: Undo a tree change
+- **WHEN** the user presses ↶ while `canUndo` is true
+- **THEN** `history.undo()` replaces the active mindmap's `tree`
+  with the previous snapshot, and switching mindmaps clears the
+  timeline
+
 ### Requirement: Outline drawer
 
 The panel SHALL expose a left-side outline drawer (button in
 the top-bar) that lists every node as a flat indented list.
 Clicking an entry SHALL call `flowShellRef.focusNode(id)`.
+
+#### Scenario: Jump to a node from the outline
+- **WHEN** the user clicks an entry in the outline drawer
+- **THEN** `flowShellRef.focusNode(id)` focuses that node on the
+  canvas
 
 ### Requirement: Search box
 
@@ -84,11 +105,23 @@ before collapse-pruning. Collapsed state takes priority over
 filter — a collapsed node's children never reach the canvas
 regardless of the filter.
 
+#### Scenario: Apply filters to the canvas
+- **WHEN** the user selects patterns, a max depth, or the
+  "only edited by user" toggle
+- **THEN** non-matching nodes are hidden, while a collapsed
+  node's children never reach the canvas regardless of the
+  filter
+
 ### Requirement: Background switcher
 
 A 3-icon segmented control SHALL let the user pick the canvas
 background: `点阵` (dots), `网格` (grid), `无` (none). The
 choice is component-level state, not persisted.
+
+#### Scenario: Switch the canvas background
+- **WHEN** the user clicks one of the three background segments
+- **THEN** the canvas switches to that background, and the choice
+  is not persisted across sessions
 
 ### Requirement: Keyboard navigation
 
@@ -102,11 +135,21 @@ The canvas SHALL respond to:
 - `Delete` → confirm-delete the selected node
 - `Escape` → close any open modal / context menu
 
+#### Scenario: Navigate the canvas with the keyboard
+- **WHEN** the user presses one of the supported shortcuts
+- **THEN** the matching action runs (focus search, undo/redo,
+  directional move, tab jump, confirm-delete, or close overlay)
+
 ### Requirement: Touch long-press
 
 A long-press (800 ms) on a touch device SHALL open the context
 menu. Implemented via a `useLongPress` hook attached to the
 canvas wrapper.
+
+#### Scenario: Long-press on a touch device
+- **WHEN** the user presses and holds on the canvas for 800 ms on
+  a touch device
+- **THEN** the context menu opens
 
 ### Requirement: MiniMap viewport rectangle
 
@@ -116,12 +159,8 @@ mirrors the current React Flow viewport, so the user can see
 MiniMap SHALL move the viewport so the clicked point becomes
 the centre.
 
-## Impact
-
-- **UI**: new top-bar buttons (undo/redo/outline), new search
-  box, new filter dropdown, new background switcher, new
-  outline drawer, new MiniMap viewport indicator, new keyboard
-  shortcuts, new touch long-press handler.
-- **State**: a new `useMindmapHistory` hook (lifted to
-  `MindMapPanel`) keyed on `activeMindmapId`.
-- **Data model**: unchanged.
+#### Scenario: Click the MiniMap
+- **WHEN** the user clicks a point in the MiniMap
+- **THEN** the viewport moves so the clicked point becomes the
+  centre, and the translucent rectangle follows the current
+  viewport

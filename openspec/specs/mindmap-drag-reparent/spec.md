@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Defines how users reparent mindmap nodes by dragging them onto another node, including hit-testing on drop, the legality checks that prevent self-drops and circular references, and the persistence of the new hierarchy.
+
+## Requirements
 
 ### Requirement: Drag node to reparent
 系统 SHALL 允许用户通过拖拽将节点重新父子化。用户拖拽节点到目标节点附近区域释放时，SHALL 通过 `onNodeDragStop` 检测目标节点（BoundingRect 距离阈值 20px）。拖拽前 SHALL 验证合法性：不能放置到自身、不能放置到子孙节点（防止循环引用）。验证通过后 SHALL 调用 `mindmapStore.reparentNode` 持久化变更并触发布局重算。

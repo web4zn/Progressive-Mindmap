@@ -37,7 +37,7 @@ CI pipelines:
 - **State:** Zustand stores persisted through `src/lib/indexeddb-storage-adapter.ts` (NOT `localStorage`). Stores: `providerStore`, `conversationStore`, `mindmapStore`, `chatStore`. IndexedDB database `progressive-mindmap`, `DB_VERSION = 6` (`src/lib/db.ts`); object stores: `providers`, `conversations`, `messages`, `mindmaps`, `zustand-persist`, `mindmap-meta`.
 - **Generation — one write funnel:** the Agent emits incremental operations only — `generateMindmapOps` (tool) → Zod schema (`src/lib/agent/schema.ts`) → `applyOperations` → `useMindmapStore.updateMindmapTree`. Operation types are `add_child` / `update` / `delete_leaf` / `add_root` / `reparent`. `applyOperations` lives in `src/lib/agent/agent-tools.ts`. Nodes with `editedByUser: true` are never overwritten.
 - **Generation context:** `mindmapTreeToFlatContext` (flattened tree, capped at 200 nodes) plus the most recent messages — 6 for conversation enhancement, 4 for mediate mode.
-- **Two AI stacks:** the chat stream uses the `openai` SDK (`src/lib/llm-client.ts`); the Agent runs inside a Web Worker on the Vercel AI SDK (`ai` + `@ai-sdk/openai`, `src/lib/agent/ReActRunner.ts`) and tool calls return to the main thread via `postMessage`.
+- **Two AI stacks:** the chat stream uses the `openai` SDK (`src/lib/llm-client.ts`); the Agent runs inside a Web Worker on the Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`, `src/lib/agent/ReActRunner.ts`) and tool calls return to the main thread via `postMessage`. The Agent deliberately uses the *openai-compatible* provider: thinking-mode models (DeepSeek thinking mode, Moonshot, GLM, Qwen) return a chain of thought in `reasoning_content` and **reject with HTTP 400 any `tools`-carrying request whose earlier assistant turns omit it**, so the ReAct loop threads real `assistant` tool-call turns (reasoning + `tool_calls`) plus `tool` result turns and never fabricates assistant text for tool output. `@ai-sdk/openai` cannot round-trip that field — don't switch the agent back to it.
 - **Agent subsystem:** `src/lib/agent/` — ReAct runner, agent tools, Zod-validated schemas, "mediate mode" where the agent owns a conversation.
 - **UI:** React 18, Tailwind CSS v4 (`@tailwindcss/vite`), shadcn/ui (base-nova), `@xyflow/react` + dagre for the mindmap canvas.
 - **Path alias:** `@/` → `./src/` (resolved in both `vite.config.ts` and `vitest.config.ts`).
@@ -112,7 +112,7 @@ together so the same hook serves both shadcn/Tailwind (`html.dark`) and
 FlowShell (`[data-theme]`). Persistence is `localStorage` under the key
 `progressive-mindmap:theme` — the only UI preference kept there; user
 data goes through IndexedDB. The toggle button lives in the mindmap
-panel toolbar (data-testid `mindmap-theme-toggle`).
+panel toolbar (data-testid `mindmap-toolbar-theme-toggle`).
 
 ### CSS variables (Stage D)
 

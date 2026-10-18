@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Enforce Zod validation of mindmap operations before they are applied, and surface validation errors back to the Agent so the ReAct loop can retry with corrected input.
+
+## Requirements
 
 ### Requirement: Operations are validated before application
 

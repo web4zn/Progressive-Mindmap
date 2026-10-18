@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the integrated chat input panel that binds model selection, agent mode, and message composition to the active conversation and surfaces live Agent activity.
+
+## Requirements
 
 ### Requirement: Integrated chat input panel
 

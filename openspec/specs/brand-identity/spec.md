@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Govern the app's visual identity: Lucide icon usage and sizing, theme-adaptive color hierarchy, typography, motion, and spacing rules for chat surfaces.
+
+## Requirements
 
 ### Requirement: Icon system consistency
 全站 SHALL 使用 Lucide React 图标组件替代所有 emoji 图标。图标 SHALL 使用一致的尺寸（默认 `w-4 h-4`，小号 `w-3 h-3`）。不允许混用 emoji 和 SVG 图标。

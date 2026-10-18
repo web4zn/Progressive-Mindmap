@@ -1,7 +1,8 @@
 # runtime-performance Specification
 
 ## Purpose
-TBD - created by archiving change perf-long-conversation. Update Purpose after archive.
+Keep long conversations usable: bound the cost of re-rendering a streaming answer, throttle persistence writes while tokens arrive, virtualize the canvas so only visible nodes mount, run a single layout pass per tree change, and split vendor code so the entry chunk stays small.
+
 ## Requirements
 ### Requirement: Bounded streaming render cost
 

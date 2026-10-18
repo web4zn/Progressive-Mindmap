@@ -1,6 +1,6 @@
 {
   "name": "progressive-mindmap",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "AI-powered progressive mindmap — extract structured knowledge from LLM conversations with streaming visualization and incremental updates",
   "type": "module",
   "license": "MIT",
@@ -41,7 +41,7 @@
     "smoke:electron": "node scripts/smoke-electron.mjs"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.63",
+    "@ai-sdk/openai-compatible": "^2.0.85",
     "@base-ui/react": "^1.4.1",
     "@dagrejs/dagre": "^3.0.0",
     "@fontsource-variable/geist": "^5.2.8",

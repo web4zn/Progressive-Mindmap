@@ -1,4 +1,8 @@
-## MODIFIED Requirements
+## Purpose
+
+Live specification for the mindmap tree view: defines React Flow + dagre tree rendering, expand/collapse behavior, node visual states, empty/loading/error/streaming states, and panel layout toggling.
+
+## Requirements
 
 ### Requirement: Tree rendering
 系统 SHALL 使用 React Flow（@xyflow/react）+ dagre 布局渲染 MindMapNode 树结构，替代原有 DOM 缩进列表方式。渲染内容 SHALL 包括：自定义节点（label + summary + ✎ 编辑标记）、节点间 smoothstep 贝塞尔连接线、Background 网格、Controls 缩放控件、MiniMap 导航。树 SHALL 使用层级布局（dagre rankdir: LR，左→右）。
@@ -33,23 +37,41 @@
 - **叶子节点**: 无展开按钮
 - **Markdown 内容节点**: `contentType === 'markdown'` → 在节点内渲染 Markdown 正文（react-markdown + remarkGfm）
 
+#### Scenario: Render the node visual states
+- **WHEN** 节点满足 `editedByUser === true`、有子节点或 `contentType === 'markdown'`
+- **THEN** 分别显示 Pencil 图标、ChevronDown/ChevronRight 展开按钮，或在节点内渲染 Markdown 正文；叶子节点不显示展开按钮
+
 ### Requirement: Empty state
 tree 为空时 SHALL 显示 "此图谱暂无内容" 提示。
+
+#### Scenario: Empty tree
+- **WHEN** tree 为空
+- **THEN** 显示 "此图谱暂无内容" 提示
 
 ### Requirement: Loading state
 isGenerating 为 true 时 SHALL 显示骨架屏加载动画。
 
+#### Scenario: Loading skeleton
+- **WHEN** isGenerating 为 true
+- **THEN** 显示骨架屏加载动画
+
 ### Requirement: Error state
 error 存在时 SHALL 显示错误消息和 "重试" 按钮。
+
+#### Scenario: Error with retry
+- **WHEN** error 存在
+- **THEN** 显示错误消息和 "重试" 按钮
 
 ### Requirement: Streaming indicator
 isStreaming 为 true 时 SHALL 在画布顶部显示 "生成中…" 叠加指示。
 
+#### Scenario: Streaming overlay
+- **WHEN** isStreaming 为 true
+- **THEN** 画布顶部显示 "生成中…" 叠加指示
+
 ### Requirement: Layout switch via panel toggle
-面板已改为**默认显示**（ChatPage 中脑图 flex-1 填充右侧空间）。用户可通过 MindMapPanel 中的 ✕ 按钮折叠脑图，或通过 ⛶ 按钮进入全屏模式（fixed inset-0 z-50）。
+面板已改为**默认显示**（ChatPage 中脑图 flex-1 填充右侧空间）。用户可通过 MindMapPanel 中的 ✕ 按钮折叠脑图，或通过 ⛶ 按钮进入全屏模式（fixed inset-0 z-50）。面板 SHALL 支持折叠与全屏两种展示状态。
 
-## REMOVED Requirements
-
-### Requirement: Material selection indicator on messages
-**Reason**: 属于 mindmap-content-selection 功能
-**Migration**: 无影响
+#### Scenario: Collapse or fullscreen the panel
+- **WHEN** 用户点击 MindMapPanel 中的 ✕ 按钮或 ⛶ 按钮
+- **THEN** 脑图被折叠隐藏，或进入全屏模式（fixed inset-0 z-50）
