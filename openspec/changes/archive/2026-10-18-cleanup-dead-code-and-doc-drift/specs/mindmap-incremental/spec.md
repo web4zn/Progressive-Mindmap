@@ -23,11 +23,9 @@ The Agent SHALL produce a list of `MindmapOperation` objects rather than a compl
 - **WHEN** the mindmap is empty and a new root concept is identified
 - **THEN** it produces an operation `{ type: 'add_root', label: string, summary?: string }`
 
-## ADDED Requirements
+### Requirement: Operations are validated before application
 
-### Requirement: Operation validation and rejection
-
-系统 SHALL 在应用操作之前，对每批 `generateMindmapOps` 参数执行 Zod schema 校验（`OperationsArraySchema.safeParse`）。单批操作数 SHALL NOT 超过 20。批次中任一操作校验失败时，系统 SHALL 拒绝整批操作（不应用其中任何一条），并 SHALL 把校验错误作为工具结果回灌给 Agent。
+系统 SHALL 在应用操作之前执行两层校验：先用 Zod schema（`OperationsArraySchema.safeParse`）校验每批 `generateMindmapOps` 参数，单批操作数 SHALL NOT 超过 20，批次中任一操作校验失败时系统 SHALL 拒绝整批操作（不应用其中任何一条）并把校验错误作为工具结果回灌给 Agent；通过 schema 校验后，`applyOperations` SHALL 在应用每条操作时再次检查目标节点存在性、`delete_leaf` 的目标是否为叶子、以及 `editedByUser` 保护。
 
 #### Scenario: Batch larger than 20 operations is rejected
 - **WHEN** Agent 在一次 `generateMindmapOps` 调用中提交 21 个操作
@@ -48,6 +46,18 @@ The Agent SHALL produce a list of `MindmapOperation` objects rather than a compl
 - **WHEN** 批次中全部操作通过 Zod 校验
 - **THEN** 校验后的操作依次经 `applyOperations` 应用到当前树
 - **AND** 工具结果返回 `success: true`、更新后的节点数与已应用的操作列表
+
+#### Scenario: Invalid parentId is handled gracefully
+- **WHEN** an `add_child` operation references a `parentId` that does not exist in the current tree
+- **THEN** the operation is skipped with a warning logged to console
+
+#### Scenario: Update to non-existent nodeId is handled
+- **WHEN** an `update` operation references a `nodeId` that does not exist
+- **THEN** the operation is skipped with a warning logged
+
+#### Scenario: Delete on node with children is rejected
+- **WHEN** a `delete_leaf` operation targets a node that has children
+- **THEN** the operation is rejected with a warning (safety check)
 
 ## REMOVED Requirements
 

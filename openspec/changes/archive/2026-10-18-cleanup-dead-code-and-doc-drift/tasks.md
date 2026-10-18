@@ -83,7 +83,7 @@ Legend: `[ ]` pending · `[x]` done. Each task lists the acceptance check.
 - [x] `proposal.md` impact figures updated to measured numbers.
 - [x] All tasks above checked.
 - [x] Local commit on `opencode` (no push — requires explicit approval).
-- [ ] Archive this change (`openspec archive`) after review; that step merges
+- [x] Archive this change (`openspec archive`) after review; that step merges
       the deltas into `openspec/specs/`.
 
 ## 8. Out of scope (tracked separately)
