@@ -74,7 +74,8 @@ CI pipelines:
 ## Security
 
 - Never commit secrets — `.env` is in `.gitignore`. API keys live in `providerStore`, not in code.
-- Mindmap node content is sanitized via `src/lib/html-sanitizer.ts` (DOMPurify) before render. Don't bypass it.
+- Mindmap node content is sanitized via `src/lib/html-sanitizer.ts` (DOMPurify) before render. Don't bypass it. Remote images in node HTML are stripped (local-first privacy) and external links are externalised (`target="_blank"`).
+- The renderer runs under a CSP (production meta tag + session response header, built by `src/lib/desktop-security.ts`). Don't loosen it — in particular do not add `unsafe-eval` or widen `script-src` without a dedicated security change. Permissions are deny-by-default with `clipboard-sanitized-write` as the only exception.
 - Mindmap nodes do **not** carry an AI source annotation. The previous `[源: convId/msgId]` requirement was dropped in the mindmap-shell-v2 refactor; if a future audit / provenance layer is needed it should live in a dedicated store, not on the node.
 
 ## Phase-0 scaffolding

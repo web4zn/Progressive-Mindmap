@@ -11,12 +11,35 @@
 
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { buildContentSecurityPolicy } from './src/lib/desktop-security'
 
 const projectRoot = __dirname
 const rendererRoot = resolve(projectRoot, 'src')
 const sharedRoot = resolve(projectRoot, 'electron')
+
+/**
+ * Injects the production CSP as a `<meta>` tag into the built renderer.
+ *
+ * The main process also sends the policy as a response header, but `file://`
+ * documents do not always surface response headers, so the packaged renderer
+ * carries its own copy. Dev is untouched (the dev policy comes from the header).
+ */
+function productionCspPlugin(): Plugin {
+  return {
+    name: 'inject-production-csp',
+    apply: 'build',
+    transformIndexHtml(html) {
+      const csp = buildContentSecurityPolicy(false).replace(/"/g, '&quot;')
+      return html.replace(
+        '</head>',
+        `    <meta http-equiv="Content-Security-Policy" content="${csp}" />\n  </head>`,
+      )
+    },
+  }
+}
 
 export default defineConfig({
   main: {
@@ -82,6 +105,6 @@ export default defineConfig({
         '@': rendererRoot,
       },
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), productionCspPlugin()],
   },
 })

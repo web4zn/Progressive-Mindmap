@@ -17,11 +17,17 @@
  * of the CommonJS `__dirname` global.
  */
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, session, shell } from 'electron'
 import { join } from 'node:path'
 import { initAutoUpdater } from './updater'
 import { registerIpcHandlers } from './ipc'
 import { buildAppMenu } from './menu'
+import {
+  buildContentSecurityPolicy,
+  isAllowedAppNavigation,
+  isHttpUrl,
+  shouldAllowPermission,
+} from '../../src/lib/desktop-security'
 import {
   APP_DISPLAY_NAME,
   APP_ID,
@@ -94,15 +100,21 @@ function createMainWindow(): BrowserWindow {
   // External links must be opened via `shell.openExternal` from the
   // main process (the preload exposes `openExternal` for this).
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (isHttpUrl(url)) {
       void shell.openExternal(url)
     }
     return { action: 'deny' }
   })
 
+  const devServerUrl = process.env['ELECTRON_RENDERER_URL'] ?? DEV_SERVER_URL
   win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(DEV_SERVER_URL)) {
-      event.preventDefault()
+    // Origin allowlist, not a string prefix: `http://localhost:5173.evil.com`
+    // must not be treated as the dev server. In production only file URLs are
+    // allowed (the bundled renderer), and everything else is externalised only
+    // when it is http(s).
+    if (isAllowedAppNavigation(url, { isDev, devServerUrl })) return
+    event.preventDefault()
+    if (isHttpUrl(url)) {
       void shell.openExternal(url)
     }
   })
@@ -130,7 +142,32 @@ function createMainWindow(): BrowserWindow {
 app.setName(APP_NAME)
 app.setAppUserModelId(APP_ID)
 
+/**
+ * Renderer security baseline: CSP header, deny-by-default permissions.
+ * Kept in one place so the policy and the permission allowlist stay in sync
+ * with `src/lib/desktop-security.ts` (unit-tested).
+ */
+function hardenSession(): void {
+  const ses = session.defaultSession
+  const csp = buildContentSecurityPolicy(isDev)
+  ses.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    })
+  })
+  ses.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(shouldAllowPermission(permission))
+  })
+  ses.setPermissionCheckHandler((_contents, permission) =>
+    shouldAllowPermission(permission),
+  )
+}
+
 app.whenReady().then(() => {
+  hardenSession()
   registerIpcHandlers()
   buildAppMenu()
 
@@ -164,7 +201,7 @@ app.on('window-all-closed', () => {
 // through the OS browser, never in-app.
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (isHttpUrl(url)) {
       void shell.openExternal(url)
     }
     return { action: 'deny' }
