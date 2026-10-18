@@ -63,6 +63,7 @@ CI pipelines:
 
 - **Branch:** work on `opencode`. Never push to `main` directly, never push to remote without explicit user approval.
 - **Commits:** Conventional Commits (`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`).
+- **Version bump:** bump `package.json` `version` **before merging any change that ships code** (`fix` → patch, `feat` → minor, breaking → major). The release workflow derives the GitHub Release tag and the installer file names from this version, so merging new code without a bump silently overwrites the existing release's assets (that is how the `v1.0.0` installers got replaced). Docs / CI / chore-only changes are exempt.
 - **OpenSpec:** non-trivial changes go through `openspec/changes/<name>/` with `proposal.md` + `tasks.md` + `specs/`. Skip OpenSpec only for one-line fixes and CI / docs tweaks.
 - **PR chain:** open against `opencode`, wait for green CI (`npm ci → tsc --noEmit → eslint → vitest`), get user approval before pushing the merge back to `main`.
 - **After PR merge** — sync branches without checking out main:
