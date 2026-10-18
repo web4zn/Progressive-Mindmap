@@ -76,7 +76,7 @@ Legend: `[ ]` pending · `[x]` done.
 ## 7. Wrap-up
 
 - [x] tasks checkboxes updated.
-- [ ] Commit + push + PR (merge to `main` requires explicit approval).
+- [x] Commit + push + PR + merge to `main`.
 
 ## Notes / deliberately not covered
 
