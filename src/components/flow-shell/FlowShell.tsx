@@ -40,6 +40,7 @@ export interface FlowShellProps {
   onNodeDoubleClick?: import('@xyflow/react').NodeMouseHandler
   onNodeClick?: import('@xyflow/react').NodeMouseHandler
   onNodeContextMenu?: import('@xyflow/react').NodeMouseHandler
+  onNodeDragStart?: import('@xyflow/react').OnNodeDrag
   onNodeDragStop?: import('@xyflow/react').OnNodeDrag
   onNodeMouseEnter?: import('@xyflow/react').NodeMouseHandler
   onNodeMouseLeave?: import('@xyflow/react').NodeMouseHandler
@@ -67,6 +68,10 @@ export interface FlowShellHandle {
   getIntersectingNodes: (
     nodeId: string,
   ) => import('@xyflow/react').Node<import('./index').FlowNodeData, string>[]
+  /** Current React Flow nodes (post-drag positions included). */
+  getNodes: () => Array<
+    import('@xyflow/react').Node<import('./index').FlowNodeData, string>
+  >
   zoomIn: () => void
   zoomOut: () => void
   centerOnNode: (

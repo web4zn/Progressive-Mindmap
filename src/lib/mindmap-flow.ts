@@ -51,7 +51,9 @@ export function treeToFlowShell(
       flowNodes.push({
         id: n.id,
         type: shape,
-        position: { x: 0, y: 0 },
+        // A node the user dragged carries a pinned position; everything else
+        // starts at the origin and lets `applyDagreLayout` place it.
+        position: n.position ? { x: n.position.x, y: n.position.y } : { x: 0, y: 0 },
         data: {
           label: n.label,
           summary: n.summary,
@@ -62,6 +64,7 @@ export function treeToFlowShell(
           editedByUser: n.editedByUser,
           hasChildren,
           collapsed: isCollapsed,
+          pinned: n.position !== undefined,
           onToggle: toggleCollapse,
           linkedConversationId: n.linkedConversationId,
           onNavigateToConversation: navigateToConversation,

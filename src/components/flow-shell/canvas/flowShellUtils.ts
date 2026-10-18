@@ -55,9 +55,20 @@ export function applyDagreLayout(
   dagre.layout(g)
 
   const layoutedNodes = flowNodes.map((n) => {
+    const size = sizes.get(n.id) ?? DEFAULT_TEXT_SIZE
+    // A pinned node keeps the coordinates the user dragged it to. dagre still
+    // runs for the whole graph (so edges and unpinned siblings stay coherent),
+    // but its answer is discarded for pinned nodes.
+    if (n.data?.pinned) {
+      return {
+        ...n,
+        position: { x: n.position.x, y: n.position.y },
+        width: size.width,
+        height: size.height,
+      }
+    }
     const pos = g.node(n.id)
     if (!pos) return n
-    const size = sizes.get(n.id) ?? DEFAULT_TEXT_SIZE
     return {
       ...n,
       position: { x: pos.x - size.width / 2, y: pos.y - size.height / 2 },
@@ -178,11 +189,16 @@ export function mergeDecoratedNodes(
 
 /**
  * Reduce a list of nodes to a structural fingerprint (id list,
- * content-type, content presence, edge list).
+ * content-type, content presence, pin state, edge list).
  *
  * Used as a `useMemo` dependency key in the parent. We deliberately
  * exclude the dim/streaming flags — those change often and have
  * their own, cheaper effect.
+ *
+ * The pin flag is part of the fingerprint because pinning/unpinning
+ * changes the effective layout without changing the topology: clearing a
+ * pin has to hand the node back to dagre on the spot, and the canvas only
+ * re-syncs positions when the fingerprint changes.
  */
 export function structuralFingerprint(
   nodes: ReadonlyArray<ShapeFlowNode>,
@@ -193,6 +209,7 @@ export function structuralFingerprint(
       id: n.id,
       ct: n.data?.contentType,
       hasContent: !!n.data?.content,
+      pin: n.data?.pinned ? 1 : 0,
     })),
     e: edges.map((e) => `${e.source}→${e.target}`),
   })

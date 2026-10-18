@@ -112,6 +112,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     onNodeDoubleClick,
     onNodeClick,
     onNodeContextMenu,
+    onNodeDragStart,
     onNodeDragStop,
     onNodeMouseEnter,
     onNodeMouseLeave,
@@ -231,6 +232,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
           return []
         }
       },
+      getNodes: () => rfInstanceRef.current?.getNodes() ?? [],
       zoomIn: () => {
         zoomIn({ duration: 200 })
       },
@@ -295,6 +297,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
       onNodeMouseLeave={onNodeMouseLeave as unknown as NodeMouseHandler}
       onEdgeMouseEnter={onEdgeMouseEnter as unknown as EdgeMouseHandler}
       onEdgeMouseLeave={onEdgeMouseLeave as unknown as EdgeMouseHandler}
+      onNodeDragStart={onNodeDragStart}
       onNodeDragStop={onNodeDragStop}
       onInit={handleInit}
       onDoubleClick={handlePaneDblClick}

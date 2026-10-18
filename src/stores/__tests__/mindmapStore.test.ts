@@ -184,3 +184,56 @@ describe('monitored conversations', () => {
     expect(state.mindmaps[0]!.monitoredConversationIds).toEqual(['conv-2'])
   })
 })
+
+describe('setNodePosition', () => {
+  function seedTree() {
+    const { addMindmap, updateMindmapTree } = useMindmapStore.getState()
+    const mm = addMindmap('Pinned')
+    updateMindmapTree(mm.id, [
+      {
+        id: 'a',
+        label: 'A',
+        summary: '',
+        children: [
+          { id: 'a1', label: 'A1', summary: '', children: [], editedByUser: false },
+        ],
+        editedByUser: false,
+      },
+    ])
+    return mm.id
+  }
+
+  it('pins a position without flagging the node as user-edited', () => {
+    const mindmapId = seedTree()
+    useMindmapStore.getState().setNodePosition(mindmapId, 'a', { x: 320, y: -40 })
+
+    const node = useMindmapStore.getState().mindmaps[0]!.tree[0]!
+    expect(node.position).toEqual({ x: 320, y: -40 })
+    // Layout is not content: the edit indicator must stay off.
+    expect(node.editedByUser).toBe(false)
+  })
+
+  it('clears the pin when passed null', () => {
+    const mindmapId = seedTree()
+    const store = useMindmapStore.getState()
+    store.setNodePosition(mindmapId, 'a1', { x: 10, y: 20 })
+    expect(useMindmapStore.getState().mindmaps[0]!.tree[0]!.children[0]!.position).toEqual({
+      x: 10,
+      y: 20,
+    })
+
+    useMindmapStore.getState().setNodePosition(mindmapId, 'a1', null)
+    expect(
+      useMindmapStore.getState().mindmaps[0]!.tree[0]!.children[0]!.position,
+    ).toBeUndefined()
+  })
+
+  it('leaves the pin intact when the tree is updated elsewhere', () => {
+    const mindmapId = seedTree()
+    useMindmapStore.getState().setNodePosition(mindmapId, 'a', { x: 1, y: 2 })
+    useMindmapStore.getState().updateMindmapTree(mindmapId, [
+      ...useMindmapStore.getState().mindmaps[0]!.tree,
+    ])
+    expect(useMindmapStore.getState().mindmaps[0]!.tree[0]!.position).toEqual({ x: 1, y: 2 })
+  })
+})

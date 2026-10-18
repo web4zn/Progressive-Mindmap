@@ -130,6 +130,18 @@ are consumed by `[data-pattern=...]` rules in
 `src/components/flow-shell/css/{theme,node,edge,canvas,animations}.css`.
 Adding a new rule? Put it in the partial that matches its concern.
 
+### Layout: pinned vs automatic
+
+Dragging a node onto empty canvas **pins** it: `MindMapNode.position` is
+persisted, `treeToFlowShell` marks the flow node `pinned`, and
+`applyDagreLayout` keeps that coordinate instead of overwriting it with
+dagre's answer (unpinned nodes are still placed by dagre). Dragging a branch
+pins the subtree by the same delta. Dragging onto another node re-parents
+instead; "提升为根节点" in the node context menu is what detaches a child
+back to root level. Pins are cleared by "重置位置" (`resetNodePosition`) or
+`setNodePosition(..., null)`. The Agent never writes `position` — it is a
+layout hint, not node content.
+
 ## Adding agent rules
 
 - Project conventions belong in this file (root) — short, agent-agnostic.
