@@ -69,6 +69,11 @@ export type MainToWorkerMessage =
         model: string
       }
     }
+  | {
+      /** Cancel the active run, or a specific run when `runId` is given. */
+      type: 'CANCEL_RUN'
+      payload: { runId?: string }
+    }
 
 // ========================================
 // Worker → 主线程消息
@@ -102,6 +107,10 @@ export type WorkerToMainMessage =
   | {
       type: 'AGENT_ERROR'
       payload: { runId: string; error: string }
+    }
+  | {
+      type: 'AGENT_CANCELLED'
+      payload: { runId: string }
     }
   | {
       type: 'STREAM_TOKEN'

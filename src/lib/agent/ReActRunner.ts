@@ -72,9 +72,10 @@ export class ReActRunner {
    * Run the ReAct loop.
    *
    * @param userPrompt - The user's message / conversation context
+   * @param signal - Optional abort signal (run cancellation)
    * @returns Final LLM text response (or empty string if only tool calls were made)
    */
-  async run(userPrompt: string): Promise<string> {
+  async run(userPrompt: string, signal?: AbortSignal): Promise<string> {
     const maxSteps = this.config.maxSteps ?? 5
 
     console.log(LOG, '===== ReAct 循环开始 =====')
@@ -86,16 +87,32 @@ export class ReActRunner {
     let stepIndex = 0
 
     while (stepIndex < maxSteps) {
+      if (signal?.aborted) {
+        console.log(LOG, '运行已取消，结束循环')
+        return ''
+      }
       stepIndex++
       console.log(LOG, `--- Step ${stepIndex}/${maxSteps} ---`)
       this.config.onStatusReport('thinking', `[${stepIndex}/${maxSteps}] 分析对话，决定下一步...`)
 
-      const result = await generateText({
-        model: this.config.model,
-        system: this.config.systemPrompt,
-        messages,
-        tools: this.config.tools as never,
-      })
+      // The AI SDK's result type is generic over the tool set; let inference
+      // pick it instead of annotating (annotating narrows `tools` to never).
+      let result
+      try {
+        result = await generateText({
+          model: this.config.model,
+          system: this.config.systemPrompt,
+          messages,
+          tools: this.config.tools as never,
+          abortSignal: signal,
+        })
+      } catch (err) {
+        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          console.log(LOG, 'LLM 调用已中止（运行取消）')
+          return ''
+        }
+        throw err
+      }
 
       const text = result.text
       console.log(LOG, `LLM 回答 ${text?.length ?? 0} 字`)

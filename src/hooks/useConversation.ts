@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
-import { createClient, streamChat, isAbortError } from '@/lib/llm-client'
+import { createClient, streamChatWithRetry, isAbortError } from '@/lib/llm-client'
 import { generateId } from '@/lib/id'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import type { Message } from '@/types/message'
@@ -103,8 +103,9 @@ export function useConversation(options?: UseConversationOptions) {
         ]
 
         // 流式响应（streamChat 已按 ~50 字一批 yield，直接更新 store）
+        // 重试只在首批内容到达前发生，避免界面出现重复 token。
         let fullContent = ''
-        for await (const batch of streamChat(client, {
+        for await (const batch of streamChatWithRetry(client, {
           model: conv.modelId,
           messages,
           signal: controller.signal,

@@ -45,6 +45,8 @@ export function useMindmapAgent() {
     }),
   )
   const runContextsRef = useRef<Map<string, RunContext>>(new Map())
+  /** The most recently started run (used by the cancel button). */
+  const activeRunIdRef = useRef<string | null>(null)
 
   // ── 初始化 Worker ──
   const initialize = useCallback(() => {
@@ -155,13 +157,35 @@ export function useMindmapAgent() {
             hasTree: !!msg.payload.newTreeJson,
           })
           runContextsRef.current.delete(msg.payload.runId)
+          if (activeRunIdRef.current === msg.payload.runId) activeRunIdRef.current = null
           setAgentStatus('complete', '脑图已更新')
           guardRef.current.recordTransition('complete', AGENT_IDLE_FALLBACK_MS)
           break
 
+        case 'AGENT_CANCELLED': {
+          const ctx = getRunContext(msg.payload.runId)
+          runContextsRef.current.delete(msg.payload.runId)
+          if (activeRunIdRef.current === msg.payload.runId) activeRunIdRef.current = null
+          console.log(LOG, '⏹ 运行已取消', msg.payload.runId)
+          if (ctx?.conversationId) {
+            const state = useConversationStore.getState()
+            const conv = state.conversations.find((c) => c.id === ctx.conversationId)
+            const lastMsg = conv?.messages[conv.messages.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.status === 'streaming') {
+              state.updateMessageInConversation(ctx.conversationId, lastMsg.id, {
+                status: 'complete',
+              })
+            }
+          }
+          guardRef.current.clear()
+          setAgentStatus('idle')
+          break
+        }
+
         case 'AGENT_ERROR': {
           const ctx = getRunContext(msg.payload.runId)
           runContextsRef.current.delete(msg.payload.runId)
+          if (activeRunIdRef.current === msg.payload.runId) activeRunIdRef.current = null
           console.error(LOG, '❌ Agent 错误:', msg.payload.error)
           setAgentStatus('error', msg.payload.error)
           guardRef.current.recordTransition('error', AGENT_IDLE_FALLBACK_MS)
@@ -200,6 +224,7 @@ export function useMindmapAgent() {
         case 'STREAM_DONE': {
           const ctx = getRunContext(msg.payload.runId)
           runContextsRef.current.delete(msg.payload.runId)
+          if (activeRunIdRef.current === msg.payload.runId) activeRunIdRef.current = null
           const convId = ctx?.conversationId
           if (!convId) break
           const state = useConversationStore.getState()
@@ -287,6 +312,7 @@ export function useMindmapAgent() {
         mindmapId: mm.id,
         scopeNodeId: scope,
       })
+      activeRunIdRef.current = runId
 
       const recentMessages = conv.messages.slice(-6)
       const treeForContext = getScopedTree(mm.tree, scope)
@@ -353,6 +379,7 @@ export function useMindmapAgent() {
         mindmapId: mm?.id ?? '',
         scopeNodeId: scope,
       })
+      activeRunIdRef.current = runId
 
       setAgentStatus('thinking', '正在处理...')
 
@@ -381,6 +408,20 @@ export function useMindmapAgent() {
     [setAgentStatus],
   )
 
+  /**
+   * Cancel the most recent run (or a specific one). The worker aborts the
+   * in-flight LLM call and terminates the ReAct loop; the status returns to
+   * `idle` when `AGENT_CANCELLED` arrives.
+   */
+  const cancelAgent = useCallback(() => {
+    const worker = workerRef.current
+    const runId = activeRunIdRef.current
+    if (!worker || !runId) return
+    console.log(LOG, '⏹ 请求取消运行', runId)
+    const msg: MainToWorkerMessage = { type: 'CANCEL_RUN', payload: { runId } }
+    worker.postMessage(msg)
+  }, [])
+
   useEffect(() => {
     const guard = guardRef.current
     // Snapshot the (stable) map identity so the cleanup closure does not
@@ -403,5 +444,5 @@ export function useMindmapAgent() {
     }
   }, [setAgentStatus])
 
-  return { initialize, enhanceMessage, mediateMessage }
+  return { initialize, enhanceMessage, mediateMessage, cancelAgent }
 }

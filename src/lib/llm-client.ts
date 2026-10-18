@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import type { Provider, Model } from '../types/provider'
+import { normalizeEndpoint, resolveApiKey } from './provider-utils'
 
 export class LLMClientError extends Error {
   code: string
@@ -32,10 +33,71 @@ export function isAbortError(err: unknown): boolean {
 
 export function createClient(provider: Pick<Provider, 'apiEndpoint' | 'apiKey'>): OpenAI {
   return new OpenAI({
-    baseURL: provider.apiEndpoint.replace(/\/$/, ''),
-    apiKey: provider.apiKey,
+    baseURL: normalizeEndpoint(provider.apiEndpoint),
+    // Local endpoints may legitimately have no key; the SDK requires a
+    // non-empty string, so use a placeholder (never persisted).
+    apiKey: resolveApiKey(provider.apiEndpoint, provider.apiKey),
     dangerouslyAllowBrowser: true,
   })
+}
+
+/**
+ * Classify a streaming failure. Retryable = transient transport problems and
+ * overload responses (429 / 5xx). Aborts and 4xx are never retryable.
+ */
+export function isRetryableError(err: unknown): boolean {
+  if (isAbortError(err)) return false
+  const status = (err as { status?: unknown } | null)?.status
+  if (typeof status === 'number') return status === 429 || status >= 500
+  if (err instanceof TypeError) return true
+  const name = err instanceof Error ? err.name : ''
+  return name === 'APIConnectionError' || name === 'APIConnectionTimeoutError'
+}
+
+export interface StreamRetryOptions {
+  /** Number of retries after the initial attempt (default 2). */
+  maxRetries?: number
+  /** Backoff delays in ms; `delays.length` also caps the retry count. */
+  delaysMs?: number[]
+}
+
+const DEFAULT_RETRY_DELAYS_MS = [500, 1000]
+
+/**
+ * `streamChat` with a safe retry policy.
+ *
+ * Retries only happen **before the first batch is yielded**, because retrying
+ * after partial output would duplicate text in the UI. Aborts and
+ * non-retryable errors (401/404/…) surface immediately.
+ */
+export async function* streamChatWithRetry(
+  client: OpenAI,
+  params: {
+    model: string
+    messages: ChatCompletionMessageParam[]
+    signal?: AbortSignal
+  },
+  options: StreamRetryOptions = {},
+): AsyncIterable<string> {
+  const delays = options.delaysMs ?? DEFAULT_RETRY_DELAYS_MS
+  const maxRetries = Math.min(options.maxRetries ?? delays.length, delays.length)
+
+  for (let attempt = 0; ; attempt++) {
+    let yielded = false
+    try {
+      for await (const batch of streamChat(client, params)) {
+        yielded = true
+        yield batch
+      }
+      return
+    } catch (err) {
+      if (isAbortError(err) || yielded || attempt >= maxRetries || !isRetryableError(err)) {
+        throw err
+      }
+      const delay = delays[attempt] ?? delays[delays.length - 1] ?? 1000
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
 }
 
 export async function* streamChat(

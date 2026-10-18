@@ -269,6 +269,7 @@ export default function ChatPage() {
             <ChatInputPanel
               onSend={handleSend}
               onStop={stopGeneration}
+              onCancelAgent={agent.cancelAgent}
               isGenerating={isGenerating}
               disabled={!hasProviders || !activeConversation || activeConversation.archived === true}
             />

@@ -5,6 +5,7 @@ import { useMindmapStore } from '@/stores/mindmapStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findNodeByLinkedConv, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
+import { canMoveDown, canMoveUp } from '@/lib/mindmap-move'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
 import { findAncestorChain } from '@/lib/mindmap-path'
 import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
@@ -431,14 +432,14 @@ export default function MindMapTree({
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx !== -1 && idx < parent.children.length - 1
+    return idx !== -1 && canMoveUp(idx)
   }
 
   const checkCanMoveDown = (nodeId: string): boolean => {
     const parent = findParentInTree(treeRef.current, nodeId)
     if (!parent) return false
     const idx = parent.children.findIndex((c) => c.id === nodeId)
-    return idx > 0
+    return idx !== -1 && canMoveDown(idx, parent.children.length)
   }
 
   const handleNodeClick = useCallback(
@@ -617,7 +618,7 @@ export default function MindMapTree({
   const handleMoveUp = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'down')
+      moveNode(mindmapId, contextMenu.nodeId, 'up')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
@@ -625,7 +626,7 @@ export default function MindMapTree({
   const handleMoveDown = useCallback(() => {
     if (mindmapId && contextMenu) {
       history.record({ mindmapId, tree: cloneTree(treeRef.current) })
-      moveNode(mindmapId, contextMenu.nodeId, 'up')
+      moveNode(mindmapId, contextMenu.nodeId, 'down')
       setContextMenu(null)
     }
   }, [mindmapId, contextMenu, moveNode, history])
