@@ -60,6 +60,15 @@ export class ReActRunner {
   }
 
   /**
+   * Replace the tool set. The worker builds a fresh tool set per run so
+   * each tool call carries the run's `runId` (and therefore the right
+   * conversation / mindmap / scope context).
+   */
+  setTools(tools: ToolSet): void {
+    this.config.tools = tools
+  }
+
+  /**
    * Run the ReAct loop.
    *
    * @param userPrompt - The user's message / conversation context

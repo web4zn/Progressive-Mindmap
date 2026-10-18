@@ -202,3 +202,24 @@ describe('validateOperations', () => {
     }
   })
 })
+
+describe('reparent operation (schema drift fix)', () => {
+  it('accepts reparent with nodeId + newParentId', () => {
+    const result = MindmapOperationSchema.safeParse({
+      type: 'reparent',
+      nodeId: 'traits',
+      newParentId: 'go',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('keeps newParentId instead of stripping it', () => {
+    // Regression: the field was missing from the schema, so Zod stripped it
+    // and every reparent failed with "target parent not found".
+    const result = validateOperations([{ type: 'reparent', nodeId: 'a', newParentId: 'b' }])
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect((result.data[0] as { newParentId?: string }).newParentId).toBe('b')
+    }
+  })
+})

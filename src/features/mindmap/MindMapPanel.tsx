@@ -500,6 +500,7 @@ export default function MindMapPanel() {
         filterDepth={filter.maxDepth}
         filterOnlyEdited={filter.onlyEdited}
         history={history}
+        theme={theme}
         background={background}
         // mindmap-shell-v3 (task 7): the outline is mounted inside
         // the canvas via FlowShell's `canvasOverlay` slot (see
