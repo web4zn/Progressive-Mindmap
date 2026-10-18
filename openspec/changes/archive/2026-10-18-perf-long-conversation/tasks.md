@@ -45,7 +45,7 @@ Legend: `[ ]` pending · `[x]` done.
 
 ## 7. Wrap-up
 
-- [ ] tasks checked; commit + push + PR + merge; archive this change.
+- [x] tasks checked; commit + push + PR + merge; archive this change.
 
 ## Notes
 

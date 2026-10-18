@@ -42,10 +42,10 @@ Legend: `[ ]` pending · `[x]` done.
 - [x] `npx vitest run` → 503 tests pass (e2e excluded).
 - [x] `npm run build` passes.
 - [x] `npm run test:e2e` passes locally (Windows).
-- [ ] `npm run test:e2e` passes in CI (Linux/Xvfb) — verified by the PR run.
+- [x] `npm run test:e2e` passes in CI (Linux/Xvfb) — verified by the PR run.
 - [x] `openspec validate e2e-and-ci --strict` passes.
 - [x] Version bumped to **1.0.4** per the AGENTS.md rule.
 
 ## 6. Wrap-up
 
-- [ ] tasks checked; commit + push + PR + merge; archive this change.
+- [x] tasks checked; commit + push + PR + merge; archive this change.
