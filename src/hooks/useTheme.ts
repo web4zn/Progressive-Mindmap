@@ -52,6 +52,10 @@ export function applyTheme(theme: ThemeMode): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.classList.toggle('dark', theme === 'dark')
+  // Track the explicit light choice as a class too: `index.css` has a
+  // first-paint dark fallback scoped to `:root:not(.light)`, so without
+  // this an explicit "light" choice on a dark-OS machine was overridden.
+  root.classList.toggle('light', theme === 'light')
   root.dataset['theme'] = theme
 }
 

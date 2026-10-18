@@ -1,47 +1,31 @@
 import { useMindmapStore } from '@/stores/mindmapStore'
-import { useConversationStore } from '@/stores/conversationStore'
 import { deriveNodeId } from '@/lib/id'
 import type { MindMapNode } from '@/types/mindmap'
+import type { AgentToolContext, MindmapOperation } from './types'
 import { validateOperations } from './schema'
 import { formatHtml } from '@/lib/html-formatter'
+import { recordAgentWrite } from '@/lib/mindmap-history-bridge'
 
 const LOG = '[🧠 Tools]'
 
-// ─── Agent 作用域状态 ───
-// 当 `scopeNodeId` 非空时，所有查询工具和操作引擎只对该节点子树可见。
-// 外部流程通过 `setAgentScope`/`clearAgentScope` 控制。
-let scopeNodeId: string | null = null
-
 /**
- * Set agent query scope to a specific node subtree.
- * All subsequent query tools will only see nodes under this subtree.
+ * Return the subtree rooted at `scopeNodeId`, or the full tree when no
+ * scope is set.
+ *
+ * Pure: the scope comes from the run context (`AgentToolContext`), never
+ * from module-level state. Returns an empty array when the scope node no
+ * longer exists — callers treat that as "the run's scope is gone" rather
+ * than silently widening to the whole tree.
  */
-export function setAgentScope(nodeId: string): void {
-  scopeNodeId = nodeId
-}
-
-/**
- * Clear the agent query scope, returning to full-tree visibility.
- */
-export function clearAgentScope(): void {
-  scopeNodeId = null
-}
-
-/**
- * Given the full tree, return the subtree rooted at the scope node.
- * If no scope is set, return the full tree as-is.
- * Deep-clones to avoid accidental mutation of the store tree.
- */
-export function getQueryTree(tree: MindMapNode[]): MindMapNode[] {
+export function getScopedTree(
+  tree: MindMapNode[],
+  scopeNodeId: string | null,
+): MindMapNode[] {
   if (!scopeNodeId || tree.length === 0) return tree
 
   const cloned = JSON.parse(JSON.stringify(tree)) as MindMapNode[]
   const scopeNode = findNodeById(cloned, scopeNodeId)
-  if (!scopeNode) {
-    // Scope node not found — tree may have changed; fall back to full tree
-    return cloned
-  }
-  return [scopeNode]
+  return scopeNode ? [scopeNode] : []
 }
 
 /**
@@ -69,34 +53,45 @@ function replaceNodeInTree(
  * 3. Reinsert the updated scope node into the full tree
  *
  * If no scope is set, delegates to `applyOperations` on the full tree.
+ *
+ * When the scope node is missing the batch is aborted (the tree is
+ * returned unchanged). When the operations remove the scope root itself,
+ * the node is removed from the full tree — persisting `undefined` here
+ * used to corrupt the tree.
  */
 export function applyScopedOperations(
   tree: MindMapNode[],
-  operations: import('@/lib/agent/types').MindmapOperation[],
+  operations: MindmapOperation[],
+  scopeNodeId: string | null,
 ): MindMapNode[] {
   if (!scopeNodeId) return applyOperations(tree, operations)
 
   const scopeNode = findNodeById(tree, scopeNodeId)
   if (!scopeNode) {
-    console.warn(LOG, 'applyScopedOperations: scope node not found, falling back to full tree')
-    return applyOperations(tree, operations)
+    console.warn(LOG, 'applyScopedOperations: scope node not found, aborting batch')
+    return tree
   }
 
   // Scope node itself is the context root; wrap in an array so operations
   // that reference the scope node (e.g. add_child with parentId = scopeNodeId)
-  // find it as they would in getQueryTree's [scopeNode] view.
+  // find it as they would in getScopedTree's [scopeNode] view.
   const wrappedTree: MindMapNode[] = [scopeNode]
   const updatedWrapped = applyOperations(wrappedTree, operations)
-  const updatedScope = updatedWrapped[0]!
+  const updatedScope = updatedWrapped[0]
+
+  if (!updatedScope) {
+    const cloned = JSON.parse(JSON.stringify(tree)) as MindMapNode[]
+    removeNodeFromTree(cloned, scopeNodeId)
+    return cloned
+  }
+
   return replaceNodeInTree(tree, scopeNodeId, updatedScope)
 }
 
-// ─── 辅助: 找到与会话关联的脑图（不是当前打开的） ───
-function getMindmapForConversation(
-  conversationId: string,
-): import('@/types/mindmap').MindMap | null {
-  const mindmaps = useMindmapStore.getState().mindmaps
-  return mindmaps.find((m) => m.monitoredConversationIds?.includes(conversationId)) ?? null
+// ─── 辅助: 按 ID 找到目标脑图（来自 run context） ───
+function getMindmapById(mindmapId: string): import('@/types/mindmap').MindMap | null {
+  if (!mindmapId) return null
+  return useMindmapStore.getState().mindmaps.find((m) => m.id === mindmapId) ?? null
 }
 
 // ─── 树遍历辅助函数 ───
@@ -210,9 +205,9 @@ export function removeNodeFromTree(nodes: MindMapNode[], targetId: string): bool
 // ─── 工具处理器注册表 ───
 export const agentToolHandlers: Record<
   string,
-  (args: unknown) => Promise<unknown>
+  (args: unknown, ctx: AgentToolContext) => Promise<unknown>
 > = {
-  generateMindmapOps: async (args: unknown) => {
+  generateMindmapOps: async (args: unknown, ctx: AgentToolContext) => {
     const { operations } = args as {
       operations?: Array<{
         type: string
@@ -240,22 +235,32 @@ export const agentToolHandlers: Record<
     }
     const validatedOps = validation.data
 
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
+    const targetMindmap = getMindmapById(ctx.mindmapId)
+    if (!targetMindmap) return { error: '目标脑图不存在', success: false }
 
-    const targetMindmap = getMindmapForConversation(conv.id)
-    if (!targetMindmap) return { error: '会话未关联脑图' }
+    // A scoped run whose scope node disappeared must abort instead of
+    // widening to the full tree.
+    if (ctx.scopeNodeId && !findNodeById(targetMindmap.tree, ctx.scopeNodeId)) {
+      console.warn(LOG, '作用域节点不存在，已中止本批操作')
+      return { error: '作用域节点不存在，已中止', success: false }
+    }
 
     // 操作已通过 Zod 校验，直接使用
-    const ops = validatedOps as import('@/lib/agent/types').MindmapOperation[]
+    const ops = validatedOps as MindmapOperation[]
 
     if (ops.length === 0) {
       console.warn(LOG, '操作列表无有效操作')
       return { success: true, nodeCount: countNodes(targetMindmap.tree), operations: [] }
     }
 
-    console.log(LOG, `应用 ${ops.length} 个操作到 "${targetMindmap.title}"`)
-    const newTree = applyScopedOperations(targetMindmap.tree, ops)
+    // Record the pre-write tree on the undo timeline before mutating.
+    recordAgentWrite(targetMindmap.id, targetMindmap.tree)
+
+    console.log(
+      LOG,
+      `应用 ${ops.length} 个操作到 "${targetMindmap.title}" (scope=${ctx.scopeNodeId ?? 'full'})`,
+    )
+    const newTree = applyScopedOperations(targetMindmap.tree, ops, ctx.scopeNodeId)
     useMindmapStore.getState().updateMindmapTree(targetMindmap.id, newTree)
 
     console.log(LOG, `✅ "${targetMindmap.title}" 更新: ${countNodes(newTree)} 节点 (${ops.length} 操作)`)
@@ -263,14 +268,12 @@ export const agentToolHandlers: Record<
   },
 
   // ─── 节点级查询处理器 ───
-  getNodeDetail: async (args: unknown) => {
+  getNodeDetail: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId } = args as { nodeId: string }
     console.log(LOG, 'getNodeDetail:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const queryTree = getQueryTree(mm.tree)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const queryTree = getScopedTree(mm.tree, ctx.scopeNodeId)
     const node = findNodeById(queryTree, nodeId)
     if (!node) return { error: `未找到节点: ${nodeId}` }
     return {
@@ -287,14 +290,12 @@ export const agentToolHandlers: Record<
     }
   },
 
-  getChildren: async (args: unknown) => {
+  getChildren: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId } = args as { nodeId: string }
     console.log(LOG, 'getChildren:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const node = findNodeById(getQueryTree(mm.tree), nodeId)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const node = findNodeById(getScopedTree(mm.tree, ctx.scopeNodeId), nodeId)
     if (!node) return { error: `未找到节点: ${nodeId}` }
     return {
       parentLabel: node.label,
@@ -307,14 +308,12 @@ export const agentToolHandlers: Record<
     }
   },
 
-  getParent: async (args: unknown) => {
+  getParent: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId } = args as { nodeId: string }
     console.log(LOG, 'getParent:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const queryTree = getQueryTree(mm.tree)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const queryTree = getScopedTree(mm.tree, ctx.scopeNodeId)
     const node = findNodeById(queryTree, nodeId)
     if (!node) return { error: `未找到节点: ${nodeId}` }
     const parentResult = findParentNode(queryTree, nodeId)
@@ -325,14 +324,12 @@ export const agentToolHandlers: Record<
     }
   },
 
-  getSiblings: async (args: unknown) => {
+  getSiblings: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId } = args as { nodeId: string }
     console.log(LOG, 'getSiblings:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const queryTree = getQueryTree(mm.tree)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const queryTree = getScopedTree(mm.tree, ctx.scopeNodeId)
     const node = findNodeById(queryTree, nodeId)
     if (!node) return { error: `未找到节点: ${nodeId}` }
     const parentResult = findParentNode(queryTree, nodeId)
@@ -352,41 +349,35 @@ export const agentToolHandlers: Record<
     }
   },
 
-  getAncestors: async (args: unknown) => {
+  getAncestors: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId } = args as { nodeId: string }
     console.log(LOG, 'getAncestors:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const path = getAncestorPath(getQueryTree(mm.tree), nodeId)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const path = getAncestorPath(getScopedTree(mm.tree, ctx.scopeNodeId), nodeId)
     if (path.length === 0) return { error: `未找到节点: ${nodeId}` }
     return { path }
   },
 
-  getSubtree: async (args: unknown) => {
+  getSubtree: async (args: unknown, ctx: AgentToolContext) => {
     const { nodeId, depth } = args as { nodeId: string; depth?: number }
     console.log(LOG, 'getSubtree:', nodeId)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
-    const node = findNodeById(getQueryTree(mm.tree), nodeId)
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
+    const node = findNodeById(getScopedTree(mm.tree, ctx.scopeNodeId), nodeId)
     if (!node) return { error: `未找到节点: ${nodeId}` }
     const d = typeof depth === 'number' && depth >= 1 && depth <= 5 ? depth : 2
     const subtree = buildSubtree(node, d)
     return { root: subtree, nodeCount: countNodes([subtree]) }
   },
 
-  searchNodes: async (args: unknown) => {
+  searchNodes: async (args: unknown, ctx: AgentToolContext) => {
     const { query } = args as { query: string }
     console.log(LOG, 'searchNodes:', query)
-    const conv = useConversationStore.getState().getActiveConversation()
-    if (!conv) return { error: '无活跃会话' }
-    const mm = getMindmapForConversation(conv.id)
-    if (!mm) return { error: '会话未关联脑图' }
+    const mm = getMindmapById(ctx.mindmapId)
+    if (!mm) return { error: '目标脑图不存在' }
     if (!query || query.trim().length === 0) return { matches: [] }
-    const matches = searchTree(getQueryTree(mm.tree), query.trim(), [])
+    const matches = searchTree(getScopedTree(mm.tree, ctx.scopeNodeId), query.trim(), [])
     return { matches: matches.slice(0, 20) }
   },
 }

@@ -3,11 +3,13 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useMindmapStore } from '@/stores/mindmapStore'
 import { useChatStore } from '@/stores/chatStore'
-import { agentToolHandlers, setAgentScope, clearAgentScope, getQueryTree } from '@/lib/agent/agent-tools'
+import { agentToolHandlers, getScopedTree } from '@/lib/agent/agent-tools'
 import { buildMindmapAgentPrompt } from '@/lib/agent/system-prompt'
 import { mindmapTreeToFlatContext } from '@/lib/mindmap-generator'
+import { generateId } from '@/lib/id'
 import { createAgentStatusGuard } from '@/lib/agent/agent-status-guard'
 import type {
+  AgentToolContext,
   MainToWorkerMessage,
   WorkerToMainMessage,
   MainToWorkerResponse,
@@ -23,13 +25,26 @@ const LOG = '[🧠 Agent]'
 // "the indicator doesn't get stuck if a message is dropped".
 const AGENT_IDLE_FALLBACK_MS = 5000
 
+/**
+ * One immutable context per run. Captured when the run starts so a
+ * conversation switch mid-run cannot redirect the agent's tools.
+ */
+type RunContext = AgentToolContext
+
 export function useMindmapAgent() {
   const workerRef = useRef<Worker | null>(null)
   const setAgentStatus = useChatStore((s) => s.setAgentStatus)
-  // Phase 1 fix (Bug 3): guard owns the safety-net timer. The guard is
-  // created once per hook instance and disposed in the cleanup effect
-  // below so a stale timer never fires after unmount.
-  const guardRef = useRef(createAgentStatusGuard(setAgentStatus))
+  // Bug 3 fix: guard owns the safety-net timer. The guard is created once
+  // per hook instance and disposed in the cleanup effect below so a stale
+  // timer never fires after unmount. `getStatus` must be wired: without it
+  // the guard compares against a hard-coded 'idle' and never reverts a
+  // terminal `complete` / `error` state.
+  const guardRef = useRef(
+    createAgentStatusGuard(setAgentStatus, {
+      getStatus: () => useChatStore.getState().agentStatus,
+    }),
+  )
+  const runContextsRef = useRef<Map<string, RunContext>>(new Map())
 
   // ── 初始化 Worker ──
   const initialize = useCallback(() => {
@@ -66,6 +81,9 @@ export function useMindmapAgent() {
       { type: 'module' },
     )
 
+    const getRunContext = (runId: string): RunContext | null =>
+      runContextsRef.current.get(runId) ?? null
+
     worker.onmessage = (event: MessageEvent<WorkerToMainMessage>) => {
       const msg = event.data
 
@@ -79,30 +97,14 @@ export function useMindmapAgent() {
           break
 
         case 'TOOL_RESULT_NEEDED': {
+          const ctx = getRunContext(msg.payload.runId)
           console.log(LOG, `← Worker 请求工具: ${msg.payload.toolName}`, {
             args: msg.payload.args,
             callId: msg.payload.callId,
+            runId: msg.payload.runId,
           })
           const handler = agentToolHandlers[msg.payload.toolName]
-          if (handler) {
-            handler(msg.payload.args)
-              .then((result) => {
-                console.log(LOG, `→ 工具 ${msg.payload.toolName} 结果:`, result)
-                const response: MainToWorkerResponse = {
-                  type: 'TOOL_RESULT',
-                  payload: { callId: msg.payload.callId, result },
-                }
-                worker.postMessage(response)
-              })
-              .catch((err) => {
-                console.error(LOG, `工具 ${msg.payload.toolName} 错误:`, err)
-                const response: MainToWorkerResponse = {
-                  type: 'TOOL_ERROR',
-                  payload: { callId: msg.payload.callId, error: String(err) },
-                }
-                worker.postMessage(response)
-              })
-          } else {
+          if (!handler) {
             console.error(LOG, `未知工具: ${msg.payload.toolName}`)
             const response: MainToWorkerResponse = {
               type: 'TOOL_ERROR',
@@ -112,50 +114,77 @@ export function useMindmapAgent() {
               },
             }
             worker.postMessage(response)
+            break
           }
+          if (!ctx) {
+            // The run context vanished (worker restarted, hook remounted, or
+            // a stale message). Refuse to execute rather than guessing which
+            // conversation is meant.
+            console.error(LOG, `拒绝工具调用: 未找到 runId ${msg.payload.runId} 的上下文`)
+            const response: MainToWorkerResponse = {
+              type: 'TOOL_ERROR',
+              payload: { callId: msg.payload.callId, error: '工具运行上下文已丢失' },
+            }
+            worker.postMessage(response)
+            break
+          }
+          handler(msg.payload.args, ctx)
+            .then((result) => {
+              console.log(LOG, `→ 工具 ${msg.payload.toolName} 结果:`, result)
+              const response: MainToWorkerResponse = {
+                type: 'TOOL_RESULT',
+                payload: { callId: msg.payload.callId, result },
+              }
+              worker.postMessage(response)
+            })
+            .catch((err) => {
+              console.error(LOG, `工具 ${msg.payload.toolName} 错误:`, err)
+              const response: MainToWorkerResponse = {
+                type: 'TOOL_ERROR',
+                payload: { callId: msg.payload.callId, error: String(err) },
+              }
+              worker.postMessage(response)
+            })
           break
         }
 
         case 'AGENT_COMPLETE':
           console.log(LOG, '✅ Agent 完成', {
+            runId: msg.payload.runId,
             operations: msg.payload.operations.length,
             hasTree: !!msg.payload.newTreeJson,
           })
+          runContextsRef.current.delete(msg.payload.runId)
           setAgentStatus('complete', '脑图已更新')
-          // Phase 1 fix (Bug 3): schedule a wall-clock safety net
-          // (replaces the old ad-hoc 3 s setTimeout). The guard
-          // cancels any prior pending timer, so back-to-back
-          // completions don't stack timers.
           guardRef.current.recordTransition('complete', AGENT_IDLE_FALLBACK_MS)
           break
 
-        case 'AGENT_ERROR':
+        case 'AGENT_ERROR': {
+          const ctx = getRunContext(msg.payload.runId)
+          runContextsRef.current.delete(msg.payload.runId)
           console.error(LOG, '❌ Agent 错误:', msg.payload.error)
           setAgentStatus('error', msg.payload.error)
-          // Phase 1 fix (Bug 3): the `AGENT_ERROR` branch previously
-          // never returned to `idle` — that's the bug. The guard
-          // makes the error indicator auto-clear after
-          // AGENT_IDLE_FALLBACK_MS, the same way `complete` does.
           guardRef.current.recordTransition('error', AGENT_IDLE_FALLBACK_MS)
-          {
+          const convId = ctx?.conversationId
+          if (convId) {
             const state = useConversationStore.getState()
-            const convId = state.activeConversationId
-            if (convId) {
-              const conv = state.conversations.find((c) => c.id === convId)
-              const lastMsg = conv?.messages[conv.messages.length - 1]
-              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.status === 'streaming') {
-                state.updateMessageInConversation(convId, lastMsg.id, {
-                  content: msg.payload.error,
-                  status: 'error',
-                })
-              }
+            const conv = state.conversations.find((c) => c.id === convId)
+            const lastMsg = conv?.messages[conv.messages.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.status === 'streaming') {
+              state.updateMessageInConversation(convId, lastMsg.id, {
+                content: msg.payload.error,
+                status: 'error',
+              })
             }
           }
           break
+        }
 
         case 'STREAM_TOKEN': {
-          // 中介模式：流式更新 assistant 消息
-          const convId = useConversationStore.getState().activeConversationId
+          // 中介模式：流式更新 assistant 消息。Route by run context — the
+          // user may have switched conversations while the run was in flight.
+          const ctx = getRunContext(msg.payload.runId)
+          const convId = ctx?.conversationId
           if (!convId) break
           const state = useConversationStore.getState()
           const conv = state.conversations.find((c) => c.id === convId)
@@ -169,7 +198,9 @@ export function useMindmapAgent() {
         }
 
         case 'STREAM_DONE': {
-          const convId = useConversationStore.getState().activeConversationId
+          const ctx = getRunContext(msg.payload.runId)
+          runContextsRef.current.delete(msg.payload.runId)
+          const convId = ctx?.conversationId
           if (!convId) break
           const state = useConversationStore.getState()
           const conv = state.conversations.find((c) => c.id === convId)
@@ -192,10 +223,7 @@ export function useMindmapAgent() {
     // Phase 1 fix (Bug 3): the previous code only listened to
     // `onerror`. We now also listen to `onmessageerror` (fired when
     // a posted message can't be deserialised) so any *reported*
-    // worker error flips the indicator to a non-stuck state. Note
-    // that the standard `Worker` type does not have an `onclose`
-    // event — the close path is covered by the 5 s safety-net
-    // timer and the cleanup effect below.
+    // worker error flips the indicator to a non-stuck state.
     worker.onerror = (err) => {
       console.error(LOG, 'Worker 运行时错误:', err)
       setAgentStatus('error', 'Worker 内部错误')
@@ -233,9 +261,6 @@ export function useMindmapAgent() {
         return
       }
 
-      if (scopeNodeId) setAgentScope(scopeNodeId)
-      else clearAgentScope()
-
       const conv = useConversationStore
         .getState()
         .conversations.find((c) => c.id === conversationId)
@@ -246,9 +271,7 @@ export function useMindmapAgent() {
 
       const mm = useMindmapStore
         .getState()
-        .mindmaps.find((m) =>
-          m.monitoredConversationIds?.includes(conversationId),
-        )
+        .mindmaps.find((m) => m.monitoredConversationIds?.includes(conversationId))
       if (!mm) {
         console.log(LOG, `enhanceMessage: 会话 ${conversationId} 未关联脑图，跳过`)
         return
@@ -257,14 +280,23 @@ export function useMindmapAgent() {
       const providers = useProviderStore.getState().providers
       const provider = providers.find((p) => p.id === conv.providerId)
 
+      const scope = scopeNodeId ?? null
+      const runId = generateId()
+      runContextsRef.current.set(runId, {
+        conversationId,
+        mindmapId: mm.id,
+        scopeNodeId: scope,
+      })
+
       const recentMessages = conv.messages.slice(-6)
-      const treeForContext = getQueryTree(mm.tree)
+      const treeForContext = getScopedTree(mm.tree, scope)
       console.log(LOG, '发送 ENHANCE_MESSAGE', {
+        runId,
         conversationId,
         消息数: recentMessages.length,
         脑图节点数: mm.tree.length,
         脑图模式: mm.pattern,
-        scopeNodeId: scopeNodeId ?? '（完整脑图）',
+        scopeNodeId: scope ?? '（完整脑图）',
       })
 
       setAgentStatus('thinking', '准备分析对话...')
@@ -272,6 +304,7 @@ export function useMindmapAgent() {
       const msg: MainToWorkerMessage = {
         type: 'ENHANCE_MESSAGE',
         payload: {
+          runId,
           conversationId,
           recentMessages: recentMessages.map((m) => ({
             role: m.role,
@@ -299,9 +332,6 @@ export function useMindmapAgent() {
         return
       }
 
-      if (scopeNodeId) setAgentScope(scopeNodeId)
-      else clearAgentScope()
-
       const conv = useConversationStore
         .getState()
         .conversations.find((c) => c.id === conversationId)
@@ -309,27 +339,37 @@ export function useMindmapAgent() {
 
       const mm = useMindmapStore
         .getState()
-        .mindmaps.find((m) =>
-          m.monitoredConversationIds?.includes(conversationId),
-        )
+        .mindmaps.find((m) => m.monitoredConversationIds?.includes(conversationId))
 
       const providers = useProviderStore.getState().providers
       const provider = providers.find((p) => p.id === conv.providerId)
 
+      const scope = scopeNodeId ?? null
+      const runId = generateId()
+      runContextsRef.current.set(runId, {
+        conversationId,
+        // An unlinked conversation can still chat, but write tools will
+        // report "目标脑图不存在" instead of picking another conversation's map.
+        mindmapId: mm?.id ?? '',
+        scopeNodeId: scope,
+      })
+
       setAgentStatus('thinking', '正在处理...')
 
-      const treeForContext = mm?.tree.length ? getQueryTree(mm.tree) : []
+      const treeForContext = mm ? getScopedTree(mm.tree, scope) : []
 
       const msg: MainToWorkerMessage = {
         type: 'MEDIATE_MESSAGE',
         payload: {
+          runId,
           conversationId,
           content,
           recentMessages: conv.messages.slice(-4).map((m) => ({
             role: m.role,
             content: m.content,
           })),
-          mindmapTreeJson: treeForContext.length > 0 ? mindmapTreeToFlatContext(treeForContext) : '',
+          mindmapTreeJson:
+            treeForContext.length > 0 ? mindmapTreeToFlatContext(treeForContext) : '',
           providerConfig: provider
             ? { apiEndpoint: provider.apiEndpoint, apiKey: provider.apiKey }
             : { apiEndpoint: '', apiKey: '' },
@@ -342,24 +382,21 @@ export function useMindmapAgent() {
   )
 
   useEffect(() => {
-    // Snapshot the refs and store handle at mount time so the cleanup
-    // closure is stable even if the refs are reassigned (the
-    // react-hooks/exhaustive-deps rule would otherwise warn that
-    // `ref.current` may have changed between render and cleanup).
     const guard = guardRef.current
-    const workerAtMount = workerRef.current
+    // Snapshot the (stable) map identity so the cleanup closure does not
+    // read `ref.current` after the component is gone.
+    const runContexts = runContextsRef.current
     return () => {
-      if (workerAtMount) {
+      // Terminate whatever worker is current at unmount. The previous
+      // implementation snapshotted `workerRef.current` at mount time (when
+      // it is always null) and therefore never terminated the worker.
+      const worker = workerRef.current
+      if (worker) {
         console.log(LOG, '清理 Worker')
-        workerAtMount.terminate()
+        worker.terminate()
       }
       workerRef.current = null
-      // Phase 1 fix (Bug 3): make absolutely sure no pending
-      // safety-net timer fires after the hook unmounts, and that
-      // the indicator never lingers on 'thinking' / 'generating' /
-      // 'complete' / 'error' if the consumer has gone away (e.g.
-      // user navigates away, switches conversation, or the panel
-      // unmounts on a hot-reload).
+      runContexts.clear()
       guard.clear()
       guard.dispose()
       setAgentStatus('idle')

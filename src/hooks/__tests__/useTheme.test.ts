@@ -62,6 +62,14 @@ describe('applyTheme (DOM helper)', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(document.documentElement.dataset['theme']).toBe('light')
   })
+
+  it('toggles the explicit light class so the OS dark fallback is disabled', () => {
+    applyTheme('light')
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    applyTheme('dark')
+    expect(document.documentElement.classList.contains('light')).toBe(false)
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+  })
 })
 
 describe('useTheme', () => {

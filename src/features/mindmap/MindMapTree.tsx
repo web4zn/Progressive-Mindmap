@@ -17,6 +17,7 @@ import MindMapContextMenu from './MindMapContextMenu'
 import MindMapOutline from './MindMapOutline'
 import { useMindmapHotkeys, type MindmapHotkeyHandlers } from '@/hooks/useMindmapHotkeys'
 import type { UseMindmapHistoryResult } from '@/hooks/useMindmapHistory'
+import { registerMindmapHistoryRecorder } from '@/lib/mindmap-history-bridge'
 import type { MindMapNode } from '@/types/mindmap'
 
 interface MindMapTreeProps {
@@ -40,6 +41,9 @@ interface MindMapTreeProps {
   /** Stage C: undo / redo controller. Lifted to the parent so the
    *  top-bar ↶ / ↷ buttons can read canUndo / canRedo. */
   history: UseMindmapHistoryResult
+  /** Resolved app theme. The canvas must follow it instead of hard-coding
+   *  a light surface (dark mode used to only theme the surrounding shell). */
+  theme?: 'light' | 'dark'
   /** Stage C: background variant (dots / grid / none). Drives the
    *  FlowShell `Background` component. */
   background?: 'dots' | 'grid' | 'none'
@@ -75,6 +79,7 @@ export default function MindMapTree({
   filterDepth,
   filterOnlyEdited = false,
   history,
+  theme,
   background = 'dots',
   outlineOpen = false,
   onOutlineClose,
@@ -201,10 +206,27 @@ export default function MindMapTree({
   }, [highlightedNodeId])
 
   const treeRef = useRef(tree)
+  const historyRef = useRef(history)
 
   useEffect(() => {
     treeRef.current = tree
   })
+
+  // Keep the ref fresh so the bridge callback (registered once per mindmap)
+  // always records through the latest history instance.
+  useEffect(() => {
+    historyRef.current = history
+  })
+
+  // Agent writes happen outside React. Register the undo-timeline recorder so
+  // an AI edit can be undone exactly like a user edit.
+  useEffect(() => {
+    registerMindmapHistoryRecorder((targetMindmapId, treeBefore) => {
+      if (!mindmapId || targetMindmapId !== mindmapId) return
+      historyRef.current.record({ mindmapId: targetMindmapId, tree: treeBefore })
+    })
+    return () => registerMindmapHistoryRecorder(null)
+  }, [mindmapId])
 
   // Reset the history timeline whenever the active mindmap changes —
   // undoing a snapshot from a different tree is not meaningful and
@@ -1019,7 +1041,7 @@ export default function MindMapTree({
         ref={flowShellRef}
         nodes={nodes}
         edges={edges}
-        theme="light"
+        theme={theme}
         layout="dagre-lr"
         onInit={handleInit}
         onNodeClick={handleNodeClick}

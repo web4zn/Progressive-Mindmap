@@ -21,6 +21,18 @@ export type AgentStatus =
   | 'complete'
   | 'error'
 
+/**
+ * Immutable per-run execution context captured by the main thread when a
+ * run starts. Tool handlers resolve their target mindmap and scope from
+ * this context — never from the "currently active" conversation.
+ */
+export interface AgentToolContext {
+  conversationId: string
+  mindmapId: string
+  /** When set, the run may only read/apply within this node's subtree. */
+  scopeNodeId: string | null
+}
+
 // ========================================
 // 主线程 → Worker 消息
 // ========================================
@@ -36,6 +48,7 @@ export type MainToWorkerMessage =
   | {
       type: 'ENHANCE_MESSAGE'
       payload: {
+        runId: string
         conversationId: string
         recentMessages: { role: string; content: string }[]
         mindmapTreeJson: string
@@ -47,6 +60,7 @@ export type MainToWorkerMessage =
   | {
       type: 'MEDIATE_MESSAGE'
       payload: {
+        runId: string
         conversationId: string
         content: string
         recentMessages: { role: string; content: string }[]
@@ -65,6 +79,7 @@ export type WorkerToMainMessage =
       payload: {
         status: AgentStatus
         message?: string
+        runId?: string
       }
     }
   | {
@@ -73,26 +88,28 @@ export type WorkerToMainMessage =
         callId: string
         toolName: string
         args: unknown
+        runId: string
       }
     }
   | {
       type: 'AGENT_COMPLETE'
       payload: {
+        runId: string
         operations: MindmapOperation[]
         newTreeJson: string
       }
     }
   | {
       type: 'AGENT_ERROR'
-      payload: { error: string }
+      payload: { runId: string; error: string }
     }
   | {
       type: 'STREAM_TOKEN'
-      payload: { token: string }
+      payload: { runId: string; token: string }
     }
   | {
       type: 'STREAM_DONE'
-      payload: { mindmapUpdated: boolean }
+      payload: { runId: string; mindmapUpdated: boolean }
     }
 
 // ========================================

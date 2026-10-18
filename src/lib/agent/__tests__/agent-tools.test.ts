@@ -1,6 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   applyOperations,
+  applyScopedOperations,
+  getScopedTree,
+  agentToolHandlers,
   findNodeById,
   findParentNode,
   getAncestorPath,
@@ -8,7 +11,12 @@ import {
   searchTree,
   removeNodeFromTree,
 } from '../agent-tools'
-import type { MindMapNode } from '@/types/mindmap'
+import { registerMindmapHistoryRecorder } from '@/lib/mindmap-history-bridge'
+import { useMindmapStore } from '@/stores/mindmapStore'
+import { useConversationStore } from '@/stores/conversationStore'
+import type { AgentToolContext } from '../types'
+import type { MindMap, MindMapNode } from '@/types/mindmap'
+import type { Conversation } from '@/types/conversation'
 import type { MindmapOperation } from '../types'
 
 function makeNode(
@@ -444,5 +452,204 @@ describe('applyOperations — reparent', () => {
     expect(newParent!.children[0]!.id).toBe('b')
     // b is no longer a root
     expect(result.find((n) => n.id === 'b')).toBeUndefined()
+  })
+})
+
+// ─── Run-scoped context (P0 regressions) ──────────────────────────
+
+function makeConversation(id: string): Conversation {
+  return {
+    id,
+    title: id,
+    providerId: 'prov-1',
+    modelId: 'model-1',
+    systemPrompt: '',
+    messages: [],
+    createdAt: 0,
+    updatedAt: 0,
+  }
+}
+
+function makeMindmap(id: string, tree: MindMapNode[], convIds: string[] = []): MindMap {
+  return {
+    id,
+    title: id,
+    tree,
+    monitoredConversationIds: convIds,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+}
+
+function makeRunContext(overrides: Partial<AgentToolContext> = {}): AgentToolContext {
+  return {
+    conversationId: 'conv-b',
+    mindmapId: 'mm-b',
+    scopeNodeId: null,
+    ...overrides,
+  }
+}
+
+function seedTwoConversations(): void {
+  useConversationStore.setState({
+    conversations: [makeConversation('conv-a'), makeConversation('conv-b')],
+    activeConversationId: 'conv-a',
+  })
+  useMindmapStore.setState({
+    mindmaps: [
+      makeMindmap('mm-a', [makeNode('a-root', 'A Root')], ['conv-a']),
+      makeMindmap('mm-b', [makeNode('b-root', 'B Root')], ['conv-b']),
+    ],
+    activeMindmapId: 'mm-a',
+  })
+}
+
+describe('agentToolHandlers — run-scoped context', () => {
+  beforeEach(() => {
+    seedTwoConversations()
+  })
+
+  afterEach(() => {
+    registerMindmapHistoryRecorder(null)
+    useConversationStore.setState({ conversations: [], activeConversationId: null })
+    useMindmapStore.setState({ mindmaps: [], activeMindmapId: null })
+  })
+
+  it('writes to the run context mindmap, not the active conversation (P0)', async () => {
+    const handler = agentToolHandlers['generateMindmapOps']!
+    const result = (await handler(
+      { operations: [{ type: 'add_child', parentId: 'b-root', label: 'New B' }] },
+      makeRunContext(),
+    )) as { success?: boolean }
+
+    expect(result.success).toBe(true)
+    const state = useMindmapStore.getState()
+    const mmB = state.mindmaps.find((m) => m.id === 'mm-b')!
+    const mmA = state.mindmaps.find((m) => m.id === 'mm-a')!
+    expect(mmB.tree[0]!.children.map((c) => c.label)).toEqual(['New B'])
+    expect(mmA.tree).toEqual([makeNode('a-root', 'A Root')])
+  })
+
+  it('resolves query tools from the run context too', async () => {
+    const handler = agentToolHandlers['getNodeDetail']!
+    const result = (await handler({ nodeId: 'b-root' }, makeRunContext())) as {
+      node?: { id: string }
+    }
+    // If the handler used the active conversation (conv-a) this would fail
+    // with "目标脑图不存在"-style errors instead of returning B's node.
+    expect(result.node?.id).toBe('b-root')
+  })
+
+  it('applies reparent end-to-end through the validated handler', async () => {
+    useMindmapStore.setState({
+      mindmaps: [
+        makeMindmap(
+          'mm-b',
+          [makeNode('root', 'Root', [makeNode('a', 'A'), makeNode('b', 'B')])],
+          ['conv-b'],
+        ),
+      ],
+      activeMindmapId: 'mm-b',
+    })
+    const handler = agentToolHandlers['generateMindmapOps']!
+    const result = (await handler(
+      { operations: [{ type: 'reparent', nodeId: 'b', newParentId: 'a' }] },
+      makeRunContext(),
+    )) as { success?: boolean }
+
+    expect(result.success).toBe(true)
+    const tree = useMindmapStore.getState().mindmaps[0]!.tree
+    expect(tree[0]!.children.map((c) => c.id)).toEqual(['a'])
+    expect(findNodeById(tree, 'a')!.children.map((c) => c.id)).toEqual(['b'])
+  })
+
+  it('records the pre-write snapshot for the undo timeline', async () => {
+    const recorded: Array<{ mindmapId: string; tree: MindMapNode[] }> = []
+    registerMindmapHistoryRecorder((mindmapId, tree) => recorded.push({ mindmapId, tree }))
+
+    const before = useMindmapStore.getState().mindmaps.find((m) => m.id === 'mm-b')!.tree
+    const handler = agentToolHandlers['generateMindmapOps']!
+    await handler(
+      { operations: [{ type: 'add_child', parentId: 'b-root', label: 'New B' }] },
+      makeRunContext(),
+    )
+
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0]!.mindmapId).toBe('mm-b')
+    expect(recorded[0]!.tree).toEqual(before)
+  })
+})
+
+describe('scoped operations', () => {
+  const scopedTree = (): MindMapNode[] => [
+    makeNode('root', 'Root', [
+      makeNode('scope', 'Scope', [makeNode('s1', 'S1')]),
+      makeNode('outside', 'Outside'),
+    ]),
+  ]
+
+  it('getScopedTree returns the scope subtree and [] when the scope is missing', () => {
+    const scoped = getScopedTree(scopedTree(), 'scope')
+    expect(scoped).toHaveLength(1)
+    expect(scoped[0]!.id).toBe('scope')
+    expect(getScopedTree(scopedTree(), 'ghost')).toEqual([])
+  })
+
+  it('does not apply operations outside the scope subtree', () => {
+    const result = applyScopedOperations(
+      scopedTree(),
+      [{ type: 'add_child', parentId: 'outside', label: 'X' }],
+      'scope',
+    )
+    expect(findNodeById(result, 'outside')!.children).toEqual([])
+  })
+
+  it('applies operations inside the scope subtree', () => {
+    const result = applyScopedOperations(
+      scopedTree(),
+      [{ type: 'add_child', parentId: 'scope', label: 'Y' }],
+      'scope',
+    )
+    expect(findNodeById(result, 'scope')!.children.map((c) => c.label)).toEqual(['S1', 'Y'])
+  })
+
+  it('removes the scope root instead of persisting an undefined node', () => {
+    const result = applyScopedOperations(
+      [makeNode('root', 'Root', [makeNode('scope', 'Scope')])],
+      [{ type: 'delete_leaf', nodeId: 'scope' }],
+      'scope',
+    )
+    expect(result[0]!.children).toEqual([])
+    expect(result.every((n) => n && typeof n.id === 'string')).toBe(true)
+  })
+
+  it('aborts the batch when the scope node is missing', () => {
+    const tree = scopedTree()
+    const result = applyScopedOperations(
+      tree,
+      [{ type: 'add_root', label: 'Leak' }],
+      'ghost',
+    )
+    expect(result).toEqual(tree)
+  })
+
+  it('handler refuses a scoped batch whose scope node is gone', async () => {
+    useConversationStore.setState({
+      conversations: [makeConversation('conv-b')],
+      activeConversationId: 'conv-b',
+    })
+    useMindmapStore.setState({
+      mindmaps: [makeMindmap('mm-b', [makeNode('root', 'Root')], ['conv-b'])],
+      activeMindmapId: 'mm-b',
+    })
+    const handler = agentToolHandlers['generateMindmapOps']!
+    const result = (await handler(
+      { operations: [{ type: 'add_root', label: 'Leak' }] },
+      makeRunContext({ scopeNodeId: 'ghost' }),
+    )) as { success?: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('作用域')
+    expect(useMindmapStore.getState().mindmaps[0]!.tree).toHaveLength(1)
   })
 })

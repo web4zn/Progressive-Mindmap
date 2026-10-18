@@ -10,6 +10,7 @@ export const MindmapOperationSchema = z.object({
   type: z.enum(['add_child', 'update', 'delete_leaf', 'add_root', 'reparent']),
   parentId: z.string().optional(),
   nodeId: z.string().optional(),
+  newParentId: z.string().optional(),
   id: z.string().optional(),
   label: z.string().optional(),
   summary: z.string().optional(),
