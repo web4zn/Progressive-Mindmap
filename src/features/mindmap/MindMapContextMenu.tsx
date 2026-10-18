@@ -26,6 +26,7 @@ import {
   MapPin,
   ZoomIn,
   MessageSquare,
+  ArrowUpRight,
 } from 'lucide-react'
 
 interface ContextMenuProps {
@@ -44,6 +45,8 @@ interface ContextMenuProps {
   hasPinnedPosition: boolean
   /** True when the node has children (enables drill-down). */
   hasChildren: boolean
+  /** True when the node hangs under a parent (enables promote-to-root). */
+  hasParent: boolean
   /** node-llm-chat: true when the node has a linked conversation. */
   hasLinkedConv: boolean
   onEdit: () => void
@@ -60,6 +63,8 @@ interface ContextMenuProps {
   onResetPosition: () => void
   /** Duplicate the node as a sibling. */
   onDuplicate: () => void
+  /** Detach the node from its parent and make it a root node. */
+  onPromoteToRoot: () => void
   /** mindmap-drill-down: focus the node and isolate its subtree. */
   onDrillDown: () => void
   onDeleteRequest: () => void
@@ -77,6 +82,7 @@ const MENU_ORDER = [
   'center',
   'drillDown',
   'duplicate',
+  'promoteToRoot',
   'resetPosition',
   'moveUp',
   'moveDown',
@@ -98,6 +104,7 @@ export default function MindMapContextMenu({
   confirmDelete,
   hasPinnedPosition,
   hasChildren,
+  hasParent,
   hasLinkedConv,
   onEdit,
   onAddChild,
@@ -108,6 +115,7 @@ export default function MindMapContextMenu({
   onRedo,
   onResetPosition,
   onDuplicate,
+  onPromoteToRoot,
   onDrillDown,
   onDeleteRequest,
   onDeleteConfirm,
@@ -137,6 +145,9 @@ export default function MindMapContextMenu({
         return
       case 'duplicate':
         onDuplicate()
+        return
+      case 'promoteToRoot':
+        if (hasParent) onPromoteToRoot()
         return
       case 'resetPosition':
         onResetPosition()
@@ -354,6 +365,19 @@ export default function MindMapContextMenu({
             <Copy className="w-3.5 h-3.5" />
             复制节点
           </button>
+          {hasParent && (
+            <button
+              role="menuitem"
+              className={classFor('promoteToRoot')}
+              onClick={onPromoteToRoot}
+              onMouseEnter={() => setHighlight('promoteToRoot')}
+              title="脱离父节点，成为独立分支"
+              data-testid="mindmap-context-promote-to-root"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              提升为根节点
+            </button>
+          )}
           {hasPinnedPosition && (
             <button
               role="menuitem"

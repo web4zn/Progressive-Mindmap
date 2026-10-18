@@ -7,6 +7,7 @@ import { useMindmapLayout } from './useMindmapLayout'
 import { findNodeInTree, findNodeByLinkedConv, findParentInTree, isDescendantOf } from '@/lib/mindmap-layout'
 import { canMoveDown, canMoveUp } from '@/lib/mindmap-move'
 import { treeToFlowShell } from '@/lib/mindmap-flow'
+import { pickReparentTarget, collectSubtreeIds } from '@/lib/mindmap-drag'
 import { findAncestorChain } from '@/lib/mindmap-path'
 import { matchNodes, matchNodesInOrder, searchTree } from '@/lib/mindmap-search'
 import { arrowJumpInTree, tabJumpInTree, nearestNodeInDirection } from '@/lib/mindmap-navigate'
@@ -94,6 +95,8 @@ export default function MindMapTree({
   const {
     updateNode,
     resetNodePosition,
+    setNodePosition,
+    setNodePositions,
     addChildNode,
     deleteNode,
     moveNode,
@@ -208,6 +211,8 @@ export default function MindMapTree({
 
   const treeRef = useRef(tree)
   const historyRef = useRef(history)
+  /** Start position of the in-flight node drag (for branch-wide moves). */
+  const dragStartRef = useRef<{ nodeId: string; position: { x: number; y: number } } | null>(null)
 
   useEffect(() => {
     treeRef.current = tree
@@ -421,6 +426,11 @@ export default function MindMapTree({
   const hasPinnedPosition = contextMenuTarget?.position !== undefined
   const hasChildrenForContextNode = (contextMenuTarget?.children.length ?? 0) > 0
   const hasLinkedConv = contextMenuTarget?.linkedConversationId !== undefined
+  // A node can only be promoted to a root when it currently has a parent.
+  const hasParentForContextNode = useMemo(
+    () => (contextMenu ? findParentInTree(tree, contextMenu.nodeId) !== null : false),
+    [contextMenu, tree],
+  )
 
   const handleInit = useCallback((instance: unknown) => {
     ;(window as unknown as Record<string, unknown>).__mindmapGetNodes = () => {
@@ -651,6 +661,20 @@ export default function MindMapTree({
     [mindmapId, resetNodePosition, history],
   )
 
+  // Promote a child node to a root. This used to be the (undocumented)
+  // side effect of dragging a node onto empty canvas; now that dragging
+  // onto empty canvas pins the node's position instead, the gesture
+  // lives here so the capability is not lost.
+  const handlePromoteToRoot = useCallback(
+    (nodeId: string) => {
+      if (!mindmapId) return
+      history.record({ mindmapId, tree: cloneTree(treeRef.current) })
+      reparentNode(mindmapId, nodeId, '')
+      setNodePosition(mindmapId, nodeId, null)
+    },
+    [mindmapId, reparentNode, setNodePosition, history],
+  )
+
   // mindmap-shell-v2 (task 5): duplicate a node as a sibling. The
   // store does not have a dedicated `duplicateNode` action, so we
   // patch the tree in-place: clone the node (with a fresh id),
@@ -683,46 +707,91 @@ export default function MindMapTree({
     [mindmapId, updateMindmapTree, history],
   )
 
+  /**
+   * Re-parent a dragged node. Returns `true` only when the tree actually
+   * changed, so the drag handler can tell a re-parent gesture from a plain
+   * reposition.
+   */
   const handleReparent = useCallback(
-    (mindmapIdArg: string, draggedId: string, targetId: string) => {
-      if (!mindmapIdArg) return
+    (mindmapIdArg: string, draggedId: string, targetId: string): boolean => {
+      if (!mindmapIdArg) return false
       const dragged = findNodeInTree(treeRef.current, draggedId)
-      if (!dragged) return
+      if (!dragged) return false
       if (targetId) {
         const target = findNodeInTree(treeRef.current, targetId)
-        if (!target) return
-        if (isDescendantOf(dragged, targetId) || targetId === draggedId) return
+        if (!target) return false
+        if (isDescendantOf(dragged, targetId) || targetId === draggedId) return false
         const oldParent = findParentInTree(treeRef.current, draggedId)
-        if (oldParent?.id === targetId) return
+        if (oldParent?.id === targetId) return false
       } else {
         const oldParent = findParentInTree(treeRef.current, draggedId)
-        if (!oldParent) return
+        if (!oldParent) return false
       }
       history.record({ mindmapId: mindmapIdArg, tree: cloneTree(treeRef.current) })
       reparentNode(mindmapIdArg, draggedId, targetId)
+      return true
     },
     [reparentNode, history],
   )
+
+  const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: FlowNode) => {
+    // Remember where the drag started so the drop can move the whole branch by
+    // the same delta (React Flow does not move children with their parent).
+    dragStartRef.current = { nodeId: node.id, position: { ...node.position } }
+  }, [])
 
   const handleNodeDragStop = useCallback(
     (_event: React.MouseEvent, draggedNode: FlowNode) => {
       if (!mindmapId) return
       const intersecting = flowShellRef.current?.getIntersectingNodes(draggedNode.id) ?? []
       const dragged = findNodeInTree(treeRef.current, draggedNode.id)
+      const dragStart = dragStartRef.current
+      dragStartRef.current = null
       if (!dragged) return
       const oldParent = findParentInTree(treeRef.current, draggedNode.id)
 
-      let targetId = ''
-      for (const cand of intersecting) {
-        if (cand.id === draggedNode.id) continue
-        if (oldParent && cand.id === oldParent.id) continue
-        if (isDescendantOf(dragged, cand.id)) continue
-        targetId = cand.id
-        break
+      const targetId = pickReparentTarget(
+        intersecting.map((candidate) => candidate.id),
+        draggedNode.id,
+        dragged,
+        oldParent?.id,
+      )
+
+      if (targetId && handleReparent(mindmapId, draggedNode.id, targetId)) {
+        // The node hangs under a new parent now. A pin from an earlier drag
+        // would leave it floating at its old coordinates, so drop it and let
+        // the layout place the node under its new parent.
+        if (dragged.position) setNodePosition(mindmapId, draggedNode.id, null)
+        return
       }
-      handleReparent(mindmapId, draggedNode.id, targetId)
+
+      // No re-parent: the gesture is a reposition, so remember where the user
+      // dropped the node. Descendants are moved by the same delta (their live
+      // positions come from React Flow; collapsed nodes are not rendered and
+      // are therefore skipped, which lets the layout place them on expand).
+      const delta =
+        dragStart && dragStart.nodeId === draggedNode.id
+          ? {
+              x: draggedNode.position.x - dragStart.position.x,
+              y: draggedNode.position.y - dragStart.position.y,
+            }
+          : { x: 0, y: 0 }
+      const livePositions = new Map(
+        (flowShellRef.current?.getNodes() ?? []).map((liveNode) => [liveNode.id, liveNode.position]),
+      )
+      const updates = collectSubtreeIds(dragged).flatMap((nodeId) => {
+        if (nodeId === draggedNode.id) {
+          return [{ nodeId, position: { ...draggedNode.position } }]
+        }
+        const live = livePositions.get(nodeId)
+        if (!live) return []
+        return [{ nodeId, position: { x: live.x + delta.x, y: live.y + delta.y } }]
+      })
+
+      history.record({ mindmapId, tree: cloneTree(treeRef.current) })
+      setNodePositions(mindmapId, updates)
     },
-    [mindmapId, handleReparent],
+    [mindmapId, handleReparent, setNodePosition, setNodePositions, history],
   )
 
   // ── Hotkey handlers ────────────────────────────────────────────────────
@@ -1052,6 +1121,7 @@ export default function MindMapTree({
         onNodeMouseLeave={handleNodeMouseLeave}
         onEdgeMouseEnter={handleEdgeMouseEnter}
         onEdgeMouseLeave={handleEdgeMouseLeave}
+        onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         onSelectionChange={setSelectedNodeId}
         selectedNodeId={selectedNodeId}
@@ -1117,6 +1187,7 @@ export default function MindMapTree({
           hasPinnedPosition={hasPinnedPosition}
           hasChildren={hasChildrenForContextNode}
           hasLinkedConv={hasLinkedConv}
+          hasParent={hasParentForContextNode}
           onEdit={() => {
             // bottom-drawer-reader: open drawer in edit mode directly.
             setDrawerNodeId(contextMenu.nodeId)
@@ -1136,6 +1207,10 @@ export default function MindMapTree({
           }}
           onDuplicate={() => {
             handleDuplicate(contextMenu.nodeId)
+            setContextMenu(null)
+          }}
+          onPromoteToRoot={() => {
+            handlePromoteToRoot(contextMenu.nodeId)
             setContextMenu(null)
           }}
           onDrillDown={() => handleDrillDown(contextMenu.nodeId)}

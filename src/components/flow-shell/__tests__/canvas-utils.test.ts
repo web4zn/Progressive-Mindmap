@@ -171,6 +171,14 @@ describe('structuralFingerprint', () => {
     const b = [makeNode('a', { isDimmed: true })]
     expect(structuralFingerprint(a, [])).toBe(structuralFingerprint(b, []))
   })
+
+  it('differs when a node becomes pinned or unpinned', () => {
+    const unpinned = [makeNode('a', { pinned: false })]
+    const pinned = [makeNode('a', { pinned: true })]
+    // Clearing a pin has to re-sync positions, otherwise the node would stay
+    // at its pinned coordinates instead of returning to dagre.
+    expect(structuralFingerprint(unpinned, [])).not.toBe(structuralFingerprint(pinned, []))
+  })
 })
 
 describe('resolveBackgroundVariant', () => {
@@ -264,5 +272,43 @@ describe('mergeDecoratedNodes', () => {
     }
     const merged = mergeDecoratedNodes([a], [decorated])
     expect(merged[0]).toBe(a)
+  })
+})
+
+describe('applyDagreLayout with pinned nodes', () => {
+  it('keeps a pinned node exactly where the user dropped it', () => {
+    const pinned = {
+      ...makeNode('a', { hasChildren: true, pinned: true }),
+      position: { x: 250, y: -75 },
+    } as ShapeFlowNode
+    const free = makeNode('b')
+    const edges: Edge[] = [{ id: 'a-b', source: 'a', target: 'b' }] as Edge[]
+
+    const { nodes: laid } = applyDagreLayout([pinned, free], edges, 'dagre-lr')
+
+    expect(laid.find((n) => n.id === 'a')?.position).toEqual({ x: 250, y: -75 })
+    // The unpinned node still gets a dagre-computed position.
+    const freeLaid = laid.find((n) => n.id === 'b')
+    expect(freeLaid).toBeDefined()
+    expect(freeLaid?.position.x !== 0 || freeLaid?.position.y !== 0).toBe(true)
+  })
+
+  it('sizes pinned nodes even though dagre does not place them', () => {
+    const pinned = {
+      ...makeNode('a', { pinned: true }),
+      position: { x: 5, y: 6 },
+    } as ShapeFlowNode
+    const { nodes: laid } = applyDagreLayout([pinned], [], 'dagre-lr')
+    expect(laid[0]?.width).toBeGreaterThan(0)
+    expect(laid[0]?.height).toBeGreaterThan(0)
+  })
+
+  it('does not mutate the input nodes', () => {
+    const pinned = {
+      ...makeNode('a', { pinned: true }),
+      position: { x: 7, y: 8 },
+    } as ShapeFlowNode
+    applyDagreLayout([pinned], [], 'dagre-lr')
+    expect(pinned.position).toEqual({ x: 7, y: 8 })
   })
 })

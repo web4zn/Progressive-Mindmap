@@ -11,6 +11,7 @@ function makeNode(overrides: Partial<MindMapNode> = {}): MindMapNode {
     contentType: overrides.contentType,
     children: overrides.children ?? [],
     editedByUser: overrides.editedByUser ?? false,
+    position: overrides.position,
   }
 }
 
@@ -412,5 +413,36 @@ describe('treeToFlowShell — Stage D boundary cases', () => {
     // No edges in either case.
     expect(na).toHaveLength(1)
     expect(nb).toHaveLength(1)
+  })
+})
+
+describe('treeToFlowShell pinned positions', () => {
+  it('carries a stored position onto the flow node and flags it as pinned', () => {
+    const tree = [makeNode({ id: 'a', position: { x: 240, y: -60 } })]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes[0]?.position).toEqual({ x: 240, y: -60 })
+    expect(nodes[0]?.data.pinned).toBe(true)
+  })
+
+  it('leaves unpinned nodes at the origin for the layout pass to place', () => {
+    const tree = [makeNode({ id: 'a' })]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes[0]?.position).toEqual({ x: 0, y: 0 })
+    expect(nodes[0]?.data.pinned).toBe(false)
+  })
+
+  it('keeps pinned and unpinned siblings independent', () => {
+    const tree = [
+      makeNode({
+        id: 'root',
+        children: [
+          makeNode({ id: 'pinned', position: { x: 10, y: 20 } }),
+          makeNode({ id: 'free' }),
+        ],
+      }),
+    ]
+    const { nodes } = treeToFlowShell(tree, new Set(), noop, 'auto')
+    expect(nodes.find((n) => n.id === 'pinned')?.data.pinned).toBe(true)
+    expect(nodes.find((n) => n.id === 'free')?.data.pinned).toBe(false)
   })
 })

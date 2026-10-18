@@ -11,6 +11,10 @@ export interface FlowNodeData extends Record<string, unknown> {
   collapsed: boolean
   /** Stage A1: optional override for runtime width/height hint from the layout. */
   size?: { width: number; height: number }
+  /** Pinned layout: the user dragged this node to a specific spot, so the
+   *  layout pass must keep its stored position instead of placing it with
+   *  dagre. Mirrors `MindMapNode.position` (unset = dagre decides). */
+  pinned?: boolean
   /** Stage A2: hover-path highlight. When true the node is rendered with
    *  reduced opacity (`.flow-node.dimmed`). */
   isDimmed?: boolean

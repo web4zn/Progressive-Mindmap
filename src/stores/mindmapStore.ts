@@ -60,6 +60,27 @@ interface MindMapState {
     patch: Partial<Pick<MindMapNode, 'label' | 'summary' | 'content' | 'contentType'>>,
   ) => void
   /**
+   * Pin a node to a concrete canvas position (or clear the pin with
+   * `null`). Pinned nodes keep their coordinates across reloads and
+   * across structural changes; unpinned nodes are placed by dagre.
+   * Layout is not content, so `editedByUser` is deliberately left
+   * untouched here (unlike `resetNodePosition`).
+   */
+  setNodePosition: (
+    mindmapId: string,
+    nodeId: string,
+    position: { x: number; y: number } | null,
+  ) => void
+  /**
+   * Pin several nodes in one store write (dragging a branch pins the
+   * node plus its visible descendants so the subtree keeps its shape).
+   * Nodes missing from the list keep their current pin state.
+   */
+  setNodePositions: (
+    mindmapId: string,
+    updates: ReadonlyArray<{ nodeId: string; position: { x: number; y: number } }>,
+  ) => void
+  /**
    * Reset a node's pinned position so the dagre layout takes over
    * again. We drop `node.position` rather than setting it to
    * (0, 0) so the dagre pass in `applyDagreLayout` has a clear
@@ -214,6 +235,59 @@ export const useMindmapStore = create<MindMapState>()(
               })),
               updatedAt: Date.now(),
             }
+          }),
+        }))
+      },
+
+      setNodePosition: (mindmapId, nodeId, position) => {
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) => {
+            if (m.id !== mindmapId) return m
+            return {
+              ...m,
+              tree: findAndUpdateNode(m.tree, nodeId, (node) => {
+                if (!position) {
+                  // `null` clears the pin: drop the field entirely so
+                  // `applyDagreLayout` sees an unconstrained node again.
+                  const { position: _drop, ...rest } = node
+                  void _drop
+                  return { ...rest, updatedAt: Date.now() }
+                }
+                return {
+                  ...node,
+                  position: { x: position.x, y: position.y },
+                  updatedAt: Date.now(),
+                }
+              }),
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      setNodePositions: (mindmapId, updates) => {
+        if (updates.length === 0) return
+        const byId = new Map(updates.map((update) => [update.nodeId, update.position]))
+        const now = Date.now()
+        const applyPositions = (nodes: MindMapNode[]): MindMapNode[] =>
+          nodes.map((node) => {
+            const pinned = byId.get(node.id)
+            const children =
+              node.children.length > 0 ? applyPositions(node.children) : node.children
+            if (!pinned) {
+              return children === node.children ? node : { ...node, children }
+            }
+            return {
+              ...node,
+              position: { x: pinned.x, y: pinned.y },
+              updatedAt: now,
+              children,
+            }
+          })
+        set((state) => ({
+          mindmaps: state.mindmaps.map((m) => {
+            if (m.id !== mindmapId) return m
+            return { ...m, tree: applyPositions(m.tree), updatedAt: now }
           }),
         }))
       },
