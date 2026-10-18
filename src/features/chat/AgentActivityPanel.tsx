@@ -25,15 +25,25 @@ const STATUS_CONFIG: Record<
   error: { icon: '❌', label: '生成失败', color: 'text-red-500' },
 }
 
+const IN_FLIGHT_STATUSES: AgentStatus[] = [
+  'thinking',
+  'reading_mindmap',
+  'reading_node',
+  'generating_mindmap',
+]
+
 interface AgentActivityPanelProps {
   status: AgentStatus
   message: string | null
+  /** Provided when the run can be cancelled (agent-runtime-hardening). */
+  onCancel?: () => void
 }
 
-export function AgentActivityPanel({ status, message }: AgentActivityPanelProps) {
+export function AgentActivityPanel({ status, message, onCancel }: AgentActivityPanelProps) {
   if (status === 'idle') return null
 
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.idle
+  const canCancel = Boolean(onCancel) && IN_FLIGHT_STATUSES.includes(status)
 
   return (
     <div
@@ -44,7 +54,17 @@ export function AgentActivityPanel({ status, message }: AgentActivityPanelProps)
       {message && message !== config.label && (
         <span className="text-muted-foreground truncate">— {message}</span>
       )}
-      {status === 'generating_mindmap' && (
+      {canCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="ml-auto shrink-0 rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
+          title="取消 Agent 运行"
+        >
+          取消
+        </button>
+      )}
+      {!canCancel && status === 'generating_mindmap' && (
         <span className="ml-auto">
           <span className="animate-ping">.</span>
         </span>

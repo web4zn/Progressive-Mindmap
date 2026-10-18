@@ -21,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useProviderStore } from '@/stores/providerStore'
 import type { Provider } from '@/types/provider'
 import { createClient, fetchModels } from '@/lib/llm-client'
+import { requiresApiKey } from '@/lib/provider-utils'
 
 const PRESETS = [
   {
@@ -202,7 +203,9 @@ function ProviderForm({
     if (!form.name.trim()) e.name = '请输入提供商名称'
     if (!form.apiEndpoint.trim()) e.apiEndpoint = '请输入 API 端点'
     else if (!/^https?:\/\/.+/.test(form.apiEndpoint.trim())) e.apiEndpoint = '请输入有效的 URL'
-    if (!form.apiKey.trim()) e.apiKey = '请输入 API 密钥'
+    if (!form.apiKey.trim() && requiresApiKey(form.apiEndpoint.trim())) {
+      e.apiKey = '远端提供商需要 API 密钥（本地端点可留空）'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -219,7 +222,7 @@ function ProviderForm({
   }
 
   const handleFetchModels = async () => {
-    if (!form.apiEndpoint.trim() || !form.apiKey.trim()) return
+    if (!form.apiEndpoint.trim()) return
     setFetching(true)
     try {
       const client = createClient({
@@ -309,7 +312,7 @@ function ProviderForm({
           type="password"
           value={form.apiKey}
           onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-          placeholder="sk-..."
+          placeholder="sk-...（本地端点可留空）"
         />
         {errors.apiKey && <p className="text-xs text-destructive mt-1">{errors.apiKey}</p>}
       </div>

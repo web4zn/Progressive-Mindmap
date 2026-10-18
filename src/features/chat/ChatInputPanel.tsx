@@ -11,6 +11,8 @@ import { AgentActivityPanel } from '@/features/chat/AgentActivityPanel'
 interface ChatInputPanelProps {
   onSend: (content: string) => void
   onStop?: () => void
+  /** Cancel an in-flight Agent run (enhance mode activity panel). */
+  onCancelAgent?: () => void
   isGenerating?: boolean
   disabled?: boolean
 }
@@ -18,6 +20,7 @@ interface ChatInputPanelProps {
 export default function ChatInputPanel({
   onSend,
   onStop,
+  onCancelAgent,
   isGenerating,
   disabled,
 }: ChatInputPanelProps) {
@@ -150,7 +153,11 @@ export default function ChatInputPanel({
 
       {/* Agent 活动指示器 — 增强模式且非 idle 时显示 */}
       {agentMode === 'enhance' && (
-        <AgentActivityPanel status={agentStatus} message={agentMessage} />
+        <AgentActivityPanel
+          status={agentStatus}
+          message={agentMessage}
+          onCancel={onCancelAgent}
+        />
       )}
     </div>
   )
