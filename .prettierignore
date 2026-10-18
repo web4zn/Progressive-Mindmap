@@ -1,9 +1,15 @@
 dist
+out
+release
 node_modules
 .vite
 package-lock.json
 tsconfig.tsbuildinfo
 .opencode
 .agents
+.mavis
+.omo
+.codebuddy
+dsh-plugin
 openspec
 .github

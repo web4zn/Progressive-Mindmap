@@ -51,22 +51,6 @@ const W_RULES: readonly IconRule[] = [
   { icon: 'CircleHelp', keywords: ['how', '如何', '怎么', '方法', '步骤', '过程', '方式'] },
 ]
 
-/** Lookup table consumed by the renderer — kept here so test assertions can
- *  import the exact same mapping without a React component dependency. */
-export const NODE_ICON_COMPONENTS: Readonly<
-  Record<Exclude<NodeIconName, null>, string>
-> = {
-  User: 'User',
-  HelpCircle: 'HelpCircle',
-  Lightbulb: 'Lightbulb',
-  MapPin: 'MapPin',
-  Clock: 'Clock',
-  CircleHelp: 'CircleHelp',
-  Zap: 'Zap',
-  Scale: 'Scale',
-  Circle: 'Circle',
-}
-
 export function selectNodeIcon({ pattern, label }: NodeIconInput): NodeIconName {
   const normalized = label.trim().toLowerCase()
   if (!normalized) return null

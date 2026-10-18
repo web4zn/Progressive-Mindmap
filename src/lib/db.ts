@@ -75,18 +75,3 @@ export async function recordMigrationTimestamp(): Promise<void> {
     console.error('[mindmap-db] failed to record migration timestamp:', err)
   }
 }
-
-/**
- * Read the most recent migration timestamp, or `null` if the meta
- * store is missing / the key has never been written.
- */
-export async function readMigrationTimestamp(): Promise<number | null> {
-  if (typeof indexedDB === 'undefined') return null
-  try {
-    const db = await getDb()
-    const value = await db.get('mindmap-meta', 'lastMigratedAt')
-    return typeof value === 'number' ? value : null
-  } catch {
-    return null
-  }
-}

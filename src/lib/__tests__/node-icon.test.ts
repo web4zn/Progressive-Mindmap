@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectNodeIcon, NODE_ICON_COMPONENTS } from '../node-icon'
+import { selectNodeIcon } from '../node-icon'
 
 describe('selectNodeIcon', () => {
   it('auto pattern never returns an icon', () => {
@@ -34,20 +34,5 @@ describe('selectNodeIcon', () => {
 
   it('empty label returns null even for non-auto patterns', () => {
     expect(selectNodeIcon({ pattern: '5w1h', label: '   ' })).toBeNull()
-  })
-
-  it('NODE_ICON_COMPONENTS table contains every returned icon', () => {
-    const sampleLabels = [
-      'Who', 'What', 'When', 'Where', 'Why', 'How',
-      'foo', 'bar', '技术', '时间', '原因',
-    ]
-    for (const pat of ['auto', '5w1h', 'tech', 'pros-cons']) {
-      for (const label of sampleLabels) {
-        const icon = selectNodeIcon({ pattern: pat, label })
-        if (icon !== null) {
-          expect(NODE_ICON_COMPONENTS[icon]).toBeDefined()
-        }
-      }
-    }
   })
 })

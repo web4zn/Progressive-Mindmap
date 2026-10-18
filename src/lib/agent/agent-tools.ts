@@ -28,13 +28,6 @@ export function clearAgentScope(): void {
 }
 
 /**
- * Get the current scope node ID (if any).
- */
-export function getAgentScope(): string | null {
-  return scopeNodeId
-}
-
-/**
  * Given the full tree, return the subtree rooted at the scope node.
  * If no scope is set, return the full tree as-is.
  * Deep-clones to avoid accidental mutation of the store tree.

@@ -7,18 +7,12 @@ import { resolveShapeName } from './shapes/types'
  * Output types for treeToFlowShell — narrowed React Flow shapes.
  *
  * `mindmap-shell-v2` (task 4): the per-node `type` literal is
- * the node's `shape` name (e.g. `'rect'`, `'chip'`, `'circle'`,
- * `'stadium'`), not the v1 hardcoded `'flow'`. React Flow looks
- * the component up by this key in `FlowShell`'s `nodeTypes` map.
- *
- * `Readonly` views are exported for callers that need to pass
- * these into a React Flow provider without losing type info.
- * The mutable variants are kept for internal accumulator use.
+ * the node's `shape` name (e.g. `'rect'`), not the v1 hardcoded
+ * `'flow'`. React Flow looks the component up by this key in
+ * `FlowShell`'s `nodeTypes` map.
  */
 export type FlowShellNodes = Node<FlowNodeData, NodeShapeName>[]
 export type FlowShellEdges = Edge[]
-export type ReadonlyFlowShellNodes = ReadonlyArray<Node<FlowNodeData, NodeShapeName>>
-export type ReadonlyFlowShellEdges = ReadonlyArray<Edge>
 
 /**
  * Flatten a MindMapNode tree into a React Flow (nodes, edges) pair, honoring

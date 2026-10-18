@@ -33,7 +33,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  ReactFlowProvider,
   applyNodeChanges,
   applyEdgeChanges,
   useReactFlow,
@@ -172,7 +171,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
 
   useEffect(() => {
     initialPositionsRef.current = layoutResult.nodes
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setNodes(layoutResult.nodes)
     setEdges(layoutResult.edges)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,7 +186,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     // the previous bug that made the canvas feel "stuck" when
     // dragging. `mergeDecoratedNodes` keeps the current
     // `position` for every node and only patches `data`.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setNodes((prev) => mergeDecoratedNodes(prev, decoratedNodes))
     setEdges(decoratedEdges)
   }, [decoratedNodes, decoratedEdges])
@@ -334,17 +333,3 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
     </ReactFlow>
   )
 })
-
-/**
- * Standalone wrapper that mounts a `ReactFlowProvider` around a
- * `CanvasLayout`. Useful for Storybook / tests that need a
- * fully-isolated canvas without the outer `FlowShell` (theme,
- * pattern, etc.).
- */
-export function CanvasLayoutWithProvider(props: FlowShellProps) {
-  return (
-    <ReactFlowProvider>
-      <CanvasLayout {...props} />
-    </ReactFlowProvider>
-  )
-}

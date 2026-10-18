@@ -31,18 +31,12 @@ export const IpcInvokeChannel = {
   GetPlatformInfo: 'app:get-platform',
 } as const
 
-export type IpcInvokeChannelName =
-  (typeof IpcInvokeChannel)[keyof typeof IpcInvokeChannel]
-
 /** Main → renderer (send / on) channels. */
 export const IpcEventChannel = {
   Notify: 'app:notify',
   Log: 'app:log',
   MenuAction: 'app:menu-action',
 } as const
-
-export type IpcEventChannelName =
-  (typeof IpcEventChannel)[keyof typeof IpcEventChannel]
 
 /* -------------------------------------------------------------------------- */
 /*                            IPC payload interfaces                            */

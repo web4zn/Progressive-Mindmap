@@ -39,22 +39,3 @@ export const isElectron: boolean =
 export function getElectronAPI(): ElectronAPI | null {
   return window.api ?? null
 }
-
-/**
- * True when the host OS is macOS. Useful for keyboard-shortcut hints
- * and platform-specific UI affordances.
- */
-export const isMacOS: boolean = (() => {
-  if (isElectron) {
-    const api = window.api
-    if (api?.platform) {
-      return api.platform === 'darwin'
-    }
-  }
-  // Fallback: best-effort detection from the browser.
-  if (typeof navigator === 'undefined') return false
-  const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } })
-    .userAgentData
-  const platform = uaData?.platform ?? navigator.platform ?? ''
-  return platform.toLowerCase().includes('mac')
-})()

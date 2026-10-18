@@ -13,7 +13,21 @@ export default tseslint.config(
     // `release` is the electron-builder installer output — new in
     //   Phase 0. Without these, `npm run build && npm run lint`
     //   reports ~2000 false errors from the bundled output.
-    ignores: ['dist', 'out', 'release', 'dist-electron', 'node_modules', '.vite'],
+    // Local/untracked tooling directories (an in-progress DSH plugin,
+    //   agent scratch dirs) are ignored so a local `npm run lint`
+    //   matches CI, which never sees them.
+    ignores: [
+      'dist',
+      'out',
+      'release',
+      'dist-electron',
+      'node_modules',
+      '.vite',
+      'dsh-plugin',
+      '.omo',
+      '.codebuddy',
+      '.mavis',
+    ],
   },
 
   js.configs.recommended,
