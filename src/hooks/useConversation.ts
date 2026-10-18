@@ -52,9 +52,7 @@ export function useConversation(options?: UseConversationOptions) {
         .getState()
         .conversations.find((c) => c.id === conversationId)
       if (!conv) return
-      const prov = useProviderStore
-        .getState()
-        .providers.find((p) => p.id === conv.providerId)
+      const prov = useProviderStore.getState().providers.find((p) => p.id === conv.providerId)
       if (!prov) return
       if (useChatStore.getState().isGenerating) return
 
@@ -83,6 +81,9 @@ export function useConversation(options?: UseConversationOptions) {
       // 开始生成
       const controller = startGeneration()
       abortRef.current = controller
+      // Accumulated streamed content lives outside the try so the abort path can
+      // flush it before marking the message complete.
+      let fullContent = ''
 
       try {
         const client = createClient(prov)
@@ -94,8 +95,7 @@ export function useConversation(options?: UseConversationOptions) {
           }))
 
         // 纯聊天 system prompt — 不含脑图指令
-        const systemContent =
-          conv.systemPrompt || '你是一个有用的 AI 助手。请用中文回答。'
+        const systemContent = conv.systemPrompt || '你是一个有用的 AI 助手。请用中文回答。'
 
         const messages: ChatCompletionMessageParam[] = [
           { role: 'system', content: systemContent },
@@ -104,20 +104,28 @@ export function useConversation(options?: UseConversationOptions) {
 
         // 流式响应（streamChat 已按 ~50 字一批 yield，直接更新 store）
         // 重试只在首批内容到达前发生，避免界面出现重复 token。
-        let fullContent = ''
+        // 写 store 会触发 zustand persist（整份 conversations 序列化 + IDB
+        // 写入），所以流式期间把 UI 更新节流到 ~10 次/秒，结束时再补最终内容。
+        const STREAM_PERSIST_INTERVAL_MS = 100
+        let lastFlushAt = 0
         for await (const batch of streamChatWithRetry(client, {
           model: conv.modelId,
           messages,
           signal: controller.signal,
         })) {
           fullContent += batch
-          store.updateMessageInConversation(conversationId, assistantMsg.id, {
-            content: fullContent,
-          })
+          const now = Date.now()
+          if (now - lastFlushAt >= STREAM_PERSIST_INTERVAL_MS) {
+            lastFlushAt = now
+            store.updateMessageInConversation(conversationId, assistantMsg.id, {
+              content: fullContent,
+            })
+          }
         }
 
-        // 标记完成
+        // 最终内容 + 完成状态一次写入
         store.updateMessageInConversation(conversationId, assistantMsg.id, {
+          content: fullContent,
           status: 'complete',
         })
 
@@ -126,6 +134,7 @@ export function useConversation(options?: UseConversationOptions) {
       } catch (err) {
         if (isAbortError(err)) {
           store.updateMessageInConversation(conversationId, assistantMsg.id, {
+            content: fullContent,
             status: 'complete',
           })
         } else {

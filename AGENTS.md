@@ -11,6 +11,7 @@ npm run build     # npm run typecheck && electron-vite build → out/{main,prelo
 npm run preview   # electron-vite preview (run the production build)
 npm run typecheck # tsc --noEmit (renderer) + tsc --noEmit -p electron/tsconfig.json
 npm test          # vitest run (happy-dom — no jsdom)
+npm run test:e2e  # Playwright Electron smoke; run `npm run build` first
 npm run lint      # eslint . (TypeScript + react-hooks + react-refresh)
 npm run format    # prettier --write . (no semi, singleQuote, trailingComma: all)
 npm run smoke:electron # main-process smoke test (scripts/smoke-electron.mjs)
@@ -26,7 +27,7 @@ npm run build:linux    # .AppImage
 
 CI pipelines:
 
-- `.github/workflows/ci.yml` (push / PR to `main`): `npm ci → npx tsc --noEmit → npx eslint . → npm test`.
+- `.github/workflows/ci.yml` (push / PR to `main`): `npm ci → npx tsc --noEmit → npx eslint . → npm run build → npm test`, plus an `e2e` job (`npm ci → npm run build → xvfb-run -a npm run test:e2e`).
 - `.github/workflows/build-desktop.yml` (push / PR to `opencode`): `npm ci → npm run typecheck (both tsconfigs) → npm run lint → npm run build:{mac,win,linux}` and uploads installers; **it does not run the test suite**. Version-tag pushes also create / update the GitHub Release.
 
 ## Architecture
