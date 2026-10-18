@@ -39,10 +39,13 @@ Legend: `[ ]` pending · `[x]` done. Each task lists the acceptance check.
 
 ## 4. Dependencies and toolchain
 
-- [x] `package.json`: removed `shadcn`, `electron-updater`, `rehype-highlight`,
-      `marked`, `turndown`, `@playwright/test`, `@types/dompurify`; added
-      `globals` (imported by `eslint.config.js`, previously transitive-only).
-- [x] `package-lock.json` regenerated (lockfile v3, 861 entries, `npm ci` in sync).
+- [x] `package.json`: removed `electron-updater`, `rehype-highlight`, `marked`,
+      `turndown`, `@playwright/test`, `@types/dompurify`; added `globals`
+      (imported by `eslint.config.js`, previously transitive-only).
+- [x] `shadcn` restored after the CI desktop build reported
+      `Can't resolve 'shadcn/tailwind.css'` — `src/index.css` imports its
+      Tailwind layer, so it is a build-time CSS dependency, not a dead CLI.
+- [x] `package-lock.json` regenerated (lockfile v3, `npm ci` in sync).
 - [x] `eslint.config.js` ignores `dsh-plugin`, `.omo`, `.codebuddy`, `.mavis`.
 - [x] `.prettierignore` adds the same dirs + `out`, `release`.
 - [x] `.prettierrc` sets `endOfLine: "auto"` (CRLF working tree no longer fails
@@ -70,6 +73,8 @@ Legend: `[ ]` pending · `[x]` done. Each task lists the acceptance check.
 - [x] `npx tsc --noEmit -p electron/tsconfig.json` → 0 errors.
 - [x] `npx eslint .` → 0 errors / 7 warnings (all pre-existing, untouched files).
 - [x] `npx vitest run` → 41 files / 457 tests passed, no skips.
+- [x] `npm run build` → electron-vite production build succeeds (added after the
+      CI-only-shadcn regression; tsc + vitest do not resolve CSS imports).
 - [x] `package-lock.json` parses and is `npm ci`-compatible.
 - [x] No remaining reference to any removed symbol (grep over `src/` + `electron/`).
 - [x] Removed `@types/dompurify` from the local tree and re-ran typecheck to
@@ -85,6 +90,8 @@ Legend: `[ ]` pending · `[x]` done. Each task lists the acceptance check.
 - [x] Local commit on `opencode` (no push — requires explicit approval).
 - [x] Archive this change (`openspec archive`) after review; that step merges
       the deltas into `openspec/specs/`.
+- [x] Post-archive correction: restore `shadcn`, record it here and in
+      `proposal.md`, and add `npm run build` to the verification matrix.
 
 ## 8. Out of scope (tracked separately)
 

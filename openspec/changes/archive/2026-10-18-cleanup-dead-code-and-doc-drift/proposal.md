@@ -82,11 +82,18 @@ nobody references.
 
 ### 2. Remove dead dependencies
 
-`shadcn` (CLI, not a runtime dep), `electron-updater` (the updater is a
-documented Phase-0 no-op), `rehype-highlight`, `marked`, `turndown`,
-`@playwright/test` (no config and no specs), `@types/dompurify` (DOMPurify 3
-ships its own types). `globals` is imported by `eslint.config.js` but missing
-from `devDependencies`; it is added. `package-lock.json` is regenerated.
+`electron-updater` (the updater is a documented Phase-0 no-op), `rehype-highlight`,
+`marked`, `turndown`, `@playwright/test` (no config and no specs), and
+`@types/dompurify` (DOMPurify 3 ships its own types) were removed. `globals` is
+imported by `eslint.config.js` but missing from `devDependencies`; it is added.
+`package-lock.json` is regenerated.
+
+**Post-archive correction:** `shadcn` was initially removed as an unused CLI
+package. The TypeScript/test gates cannot see CSS resolution, so the first CI
+desktop build caught it: `src/index.css` imports `shadcn/tailwind.css`. The
+package is restored as a runtime CSS dependency, and `npm run build` (the
+Electron production build) was added to the verification matrix. Net dependency
+change: **6 removed, 1 added**.
 
 ### 3. Toolchain and repository hygiene
 
@@ -146,7 +153,8 @@ from `devDependencies`; it is added. `package-lock.json` is regenerated.
   (`mindmap-generator.test.ts` now covers the kept flat-context serializer);
   2 test files trimmed (`node-icon.test.ts`, `ChatPage.test.tsx` mock); 23
   exports removed.
-- Dependencies: 7 removed, 1 added. `package-lock.json` is in sync
+- Dependencies: 6 removed, 1 added (`globals`); `shadcn` was briefly removed and
+  restored as a CSS build dependency (see §2). `package-lock.json` is in sync
   (`npm ci` compatible).
 - `npm test`: 44 files / 491 tests → 41 files / 457 tests. No test is skipped.
 - `eslint .`: 58 problems (48 errors) → 0 errors / 7 warnings (all pre-existing
@@ -166,5 +174,6 @@ npx tsc --noEmit                          # 0 errors
 npx tsc --noEmit -p electron/tsconfig.json # 0 errors
 npx eslint .                              # 0 errors, 7 pre-existing warnings
 npx vitest run                            # 41 files / 457 tests passed
+npm run build                             # electron-vite production build OK
 node -e "require('./package-lock.json')"  # lockfile v3, in sync
 ```
