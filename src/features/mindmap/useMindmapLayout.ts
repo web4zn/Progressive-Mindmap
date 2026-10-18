@@ -1,12 +1,16 @@
 import { useCallback, useMemo } from 'react'
-import type { MindMapNode } from '@/types/mindmap'
-import { getLayoutedFlow } from '@/lib/mindmap-layout'
 import { useMindmapStore } from '@/stores/mindmapStore'
-import type { MindMapFlowNode, MindMapFlowEdge } from './types'
 
 const EMPTY_ARRAY: string[] = []
 
-export function useMindmapLayout(tree: MindMapNode[]) {
+/**
+ * Collapse state for the active mindmap.
+ *
+ * This hook used to also run a full dagre layout (`getLayoutedFlow`) whose
+ * output no caller read — the canvas runs the layout that actually renders.
+ * That was a second layout pass on every tree change; it has been removed.
+ */
+export function useMindmapLayout() {
   const activeMindmapId = useMindmapStore((s) => s.activeMindmapId)
   const collapsedNodeIds = useMindmapStore((s) => {
     if (!s.activeMindmapId) return EMPTY_ARRAY
@@ -15,8 +19,6 @@ export function useMindmapLayout(tree: MindMapNode[]) {
   const setCollapsedNodeIds = useMindmapStore((s) => s.setCollapsedNodeIds)
 
   const collapsedIds = useMemo(() => new Set(collapsedNodeIds), [collapsedNodeIds])
-
-  const { nodes, edges } = useMemo(() => getLayoutedFlow(tree, collapsedIds), [tree, collapsedIds])
 
   const toggleCollapse = useCallback(
     (id: string) => {
@@ -38,8 +40,6 @@ export function useMindmapLayout(tree: MindMapNode[]) {
   }, [activeMindmapId, setCollapsedNodeIds])
 
   return {
-    nodes: nodes as MindMapFlowNode[],
-    edges: edges as MindMapFlowEdge[],
     collapsedIds,
     toggleCollapse,
     resetCollapse,

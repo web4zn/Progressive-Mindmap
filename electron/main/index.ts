@@ -91,7 +91,9 @@ function createMainWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => {
     win.show()
-    if (isDev) {
+    // e2e runs in dev mode too; a detached devtools window would add a second
+    // page and slow the smoke test down.
+    if (isDev && !process.env['E2E']) {
       win.webContents.openDevTools({ mode: 'detach' })
     }
   })
@@ -161,9 +163,7 @@ function hardenSession(): void {
   ses.setPermissionRequestHandler((_contents, permission, callback) => {
     callback(shouldAllowPermission(permission))
   })
-  ses.setPermissionCheckHandler((_contents, permission) =>
-    shouldAllowPermission(permission),
-  )
+  ses.setPermissionCheckHandler((_contents, permission) => shouldAllowPermission(permission))
 }
 
 app.whenReady().then(() => {

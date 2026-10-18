@@ -98,6 +98,34 @@ export default defineConfig({
         input: {
           index: resolve(projectRoot, 'index.html'),
         },
+        output: {
+          // Split the ~2.7 MB single bundle into cacheable vendor chunks.
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('@xyflow') || id.includes('@dagrejs') || id.includes('/d3-')) {
+              return 'vendor-flow'
+            }
+            if (
+              id.includes('react-markdown') ||
+              id.includes('remark-') ||
+              id.includes('rehype-') ||
+              id.includes('micromark') ||
+              id.includes('mdast-') ||
+              id.includes('hast-') ||
+              id.includes('unified') ||
+              id.includes('vfile')
+            ) {
+              return 'vendor-markdown'
+            }
+            if (id.includes('/react/') || id.includes('react-dom') || id.includes('/scheduler/')) {
+              return 'vendor-react'
+            }
+            if (id.includes('@ai-sdk') || id.includes('/ai/') || id.includes('/openai/')) {
+              return 'vendor-ai'
+            }
+            return undefined
+          },
+        },
       },
     },
     resolve: {

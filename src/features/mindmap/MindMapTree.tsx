@@ -100,7 +100,7 @@ export default function MindMapTree({
     reparentNode,
     updateMindmapTree,
   } = useMindmapStore()
-  const { collapsedIds, toggleCollapse } = useMindmapLayout(tree)
+  const { collapsedIds, toggleCollapse } = useMindmapLayout()
 
   const [contextMenu, setContextMenu] = useState<{
     x: number

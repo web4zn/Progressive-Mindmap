@@ -14,7 +14,7 @@
  * fingerprint". The character extraction is delegated to
  * `previewLabel` so the rule is unit-testable in isolation.
  */
-import { memo, useCallback, useState, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   MiniMap as XYFlowMiniMap,
   useReactFlow,
@@ -79,7 +79,12 @@ function FlowMiniMapImpl({
   const currentNodes = getNodes()
 
   // ResizeObserver attached via ref callback (NOT a setState in effect).
+  // The observer is stored so it can be disconnected on unmount — the old
+  // ref-callback-only version leaked one observer per mount.
+  const observerRef = useRef<ResizeObserver | null>(null)
   const wrapperRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
     if (!node) return
     const update = () => {
       const rect = node.getBoundingClientRect()
@@ -88,6 +93,14 @@ function FlowMiniMapImpl({
     update()
     const ro = new ResizeObserver(update)
     ro.observe(node)
+    observerRef.current = ro
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect()
+      observerRef.current = null
+    }
   }, [])
 
   const onClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -152,10 +165,8 @@ function FlowMiniMapImpl({
       if (w * sx < 14 || h * sy < 14) continue
       const char = previewLabel(n)
       if (!char) continue
-      const cx =
-        ((n.position.x + w / 2 - currentBounds.x) / currentBounds.width) * wrapperSize.w
-      const cy =
-        ((n.position.y + h / 2 - currentBounds.y) / currentBounds.height) * wrapperSize.h
+      const cx = ((n.position.x + w / 2 - currentBounds.x) / currentBounds.width) * wrapperSize.w
+      const cy = ((n.position.y + h / 2 - currentBounds.y) / currentBounds.height) * wrapperSize.h
       labelEntries.push({ x: cx, y: cy, text: char })
     }
   }

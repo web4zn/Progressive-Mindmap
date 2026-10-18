@@ -14,6 +14,7 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
-
+    // Playwright owns e2e/; its specs must not be collected by Vitest.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/release/**', 'e2e/**'],
   },
 })

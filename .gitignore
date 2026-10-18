@@ -39,6 +39,10 @@ temp/
 *.log
 npm-debug.log*
 
+# Playwright
+test-results/
+playwright-report/
+
 # Tooling
 .agents/
 skills-lock.json

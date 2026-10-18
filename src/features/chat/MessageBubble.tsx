@@ -47,6 +47,11 @@ function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
         >
           {isUser ? (
             <span className="whitespace-pre-wrap">{message.content}</span>
+          ) : isStreaming ? (
+            // Streaming renders as plain text: re-parsing the markdown of the
+            // whole message on every batch is O(n²) for long answers. The
+            // completed message is rendered as Markdown below.
+            <span className="whitespace-pre-wrap">{message.content || ''}</span>
           ) : (
             <Markdown remarkPlugins={[remarkGfm]}>{message.content || ''}</Markdown>
           )}

@@ -308,6 +308,7 @@ export const CanvasLayout = forwardRef<FlowShellHandle, FlowShellProps>(function
       nodesDraggable={nodesDraggable}
       nodesConnectable={nodesConnectable}
       elementsSelectable={elementsSelectable}
+      onlyRenderVisibleElements
       deleteKeyCode={deleteKeyCode}
       noWheelClassName="nowheel"
     >
