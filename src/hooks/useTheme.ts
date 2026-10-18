@@ -82,17 +82,6 @@ function writeStoredTheme(theme: ThemeMode): void {
   }
 }
 
-/**
- * Read the *currently applied* theme from the DOM. Exported for the
- * benefit of a future pre-hydration script that needs to detect what
- * the user already has set (e.g. before this hook mounts, when
- * `useTheme` is not yet in scope).
- */
-export function readAppliedTheme(): ThemeMode {
-  if (typeof document === 'undefined') return 'light'
-  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-}
-
 export function useTheme(): UseThemeResult {
   // Initial state comes from localStorage first, falling back to
   // the system preference. We intentionally do NOT read from

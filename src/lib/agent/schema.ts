@@ -27,9 +27,6 @@ export const OperationsArraySchema = z
   .array(MindmapOperationSchema)
   .max(20, '每次最多 20 个操作，请拆分为多次调用')
 
-/** Inferred type of a parsed mindmap operation */
-export type ValidatedMindmapOperation = z.infer<typeof MindmapOperationSchema>
-
 /** Inferred type of a parsed operations array */
 export type ValidatedOperationsArray = z.infer<typeof OperationsArraySchema>
 

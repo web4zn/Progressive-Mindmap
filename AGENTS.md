@@ -1,26 +1,43 @@
 # Progressive Mindmap — Agent Guide
 
-A local-first React 18 + TypeScript SPA that turns LLM conversations into editable mindmaps. All data lives in the browser (IndexedDB); there is no backend.
+An Electron desktop app (macOS `.dmg` / Windows NSIS + portable / Linux AppImage) that turns LLM conversations into editable mindmaps. The renderer is React 18 + TypeScript; all data lives locally in IndexedDB and there is no backend.
 
 ## Commands
 
 ```bash
 npm ci            # install (CI does this; locally prefer over npm install)
-npm run dev       # Vite dev server → http://localhost:5173
-npm run build     # tsc -b && vite build (typecheck then build)
+npm run dev       # electron-vite dev — starts main + preload + renderer and opens the Electron window
+npm run build     # npm run typecheck && electron-vite build → out/{main,preload,renderer}
+npm run preview   # electron-vite preview (run the production build)
+npm run typecheck # tsc --noEmit (renderer) + tsc --noEmit -p electron/tsconfig.json
 npm test          # vitest run (happy-dom — no jsdom)
 npm run lint      # eslint . (TypeScript + react-hooks + react-refresh)
 npm run format    # prettier --write . (no semi, singleQuote, trailingComma: all)
+npm run smoke:electron # main-process smoke test (scripts/smoke-electron.mjs)
 ```
 
-CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx eslint . → npm test`
+Platform packaging (output `release/${version}`):
+
+```bash
+npm run build:win      # NSIS installer + portable .exe
+npm run build:mac      # .dmg (x64 + arm64)
+npm run build:linux    # .AppImage
+```
+
+CI pipelines:
+
+- `.github/workflows/ci.yml` (push / PR to `main`): `npm ci → npx tsc --noEmit → npx eslint . → npm test`.
+- `.github/workflows/build-desktop.yml` (push / PR to `opencode`): `npm ci → npm run typecheck (both tsconfigs) → npm run lint → npm run build:{mac,win,linux}` and uploads installers; **it does not run the test suite**. Version-tag pushes also create / update the GitHub Release.
 
 ## Architecture
 
+- **Electron three-process split:** `electron/main/` (window, menu, IPC, updater stub), `electron/preload/` (typed `window.api` bridge), renderer (React 18). `BrowserWindow` is created with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. The preload bridge is Phase-0 scaffolding; the renderer does not call it yet.
 - **4 feature modules:** `src/features/{chat,conversation,mindmap,provider}`. Pure logic in `src/lib/`, types in `src/types/`, workers in `src/workers/`.
-- **State:** Zustand stores persisted through `src/lib/indexeddb-storage-adapter.ts` (NOT `localStorage`). Stores: `providerStore`, `conversationStore`, `mindmapStore`, `chatStore`. DB version 5 (`src/lib/db.ts`); object stores: `providers`, `conversations`, `messages`, `mindmaps`, `zustand-persist`.
-- **AI generation:** `src/lib/mindmap-generator.ts` — `full` rebuild + `incremental` ops (`add_child` / `update` / `merge` / `delete_leaf` / `noop`). Nodes with `editedByUser: true` are never overwritten (`applyOperations` is the only sanctioned writer).
-- **Agent subsystem:** `src/lib/agent/` — ReAct runner, BaseAgent, Zod-validated tool schemas, "mediate mode" where the agent owns a conversation.
+- **State:** Zustand stores persisted through `src/lib/indexeddb-storage-adapter.ts` (NOT `localStorage`). Stores: `providerStore`, `conversationStore`, `mindmapStore`, `chatStore`. IndexedDB database `progressive-mindmap`, `DB_VERSION = 6` (`src/lib/db.ts`); object stores: `providers`, `conversations`, `messages`, `mindmaps`, `zustand-persist`, `mindmap-meta`.
+- **Generation — one write funnel:** the Agent emits incremental operations only — `generateMindmapOps` (tool) → Zod schema (`src/lib/agent/schema.ts`) → `applyOperations` → `useMindmapStore.updateMindmapTree`. Operation types are `add_child` / `update` / `delete_leaf` / `add_root` / `reparent`. `applyOperations` lives in `src/lib/agent/agent-tools.ts`. Nodes with `editedByUser: true` are never overwritten.
+- **Generation context:** `mindmapTreeToFlatContext` (flattened tree, capped at 200 nodes) plus the most recent messages — 6 for conversation enhancement, 4 for mediate mode.
+- **Two AI stacks:** the chat stream uses the `openai` SDK (`src/lib/llm-client.ts`); the Agent runs inside a Web Worker on the Vercel AI SDK (`ai` + `@ai-sdk/openai`, `src/lib/agent/ReActRunner.ts`) and tool calls return to the main thread via `postMessage`.
+- **Agent subsystem:** `src/lib/agent/` — ReAct runner, agent tools, Zod-validated schemas, "mediate mode" where the agent owns a conversation.
 - **UI:** React 18, Tailwind CSS v4 (`@tailwindcss/vite`), shadcn/ui (base-nova), `@xyflow/react` + dagre for the mindmap canvas.
 - **Path alias:** `@/` → `./src/` (resolved in both `vite.config.ts` and `vitest.config.ts`).
 - **Generation prompts are in Chinese.** Keep them in Chinese when modifying.
@@ -32,7 +49,7 @@ CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx e
 - ESLint `@typescript-eslint/no-unused-vars: error` with `argsIgnorePattern: ^_`.
 - `react-refresh/only-export-components: warn` (off for `src/components/ui/`).
 - **No** `as any`, **no** `// @ts-ignore`, **no** `// @ts-expect-error` without a justifying comment and a linked follow-up.
-- Prettier: `semi: false`, `singleQuote: true`, `tabWidth: 2`, `trailingComma: all`, `printWidth: 100`.
+- Prettier: `semi: false`, `singleQuote: true`, `tabWidth: 2`, `trailingComma: all`, `printWidth: 100`, `endOfLine: auto` (the Windows checkout is CRLF; `auto` keeps both CRLF and LF working).
 
 ## Testing
 
@@ -59,6 +76,11 @@ CI pipeline (`.github/workflows/ci.yml`): `npm ci → npx tsc --noEmit → npx e
 - Mindmap node content is sanitized via `src/lib/html-sanitizer.ts` (DOMPurify) before render. Don't bypass it.
 - Mindmap nodes do **not** carry an AI source annotation. The previous `[源: convId/msgId]` requirement was dropped in the mindmap-shell-v2 refactor; if a future audit / provenance layer is needed it should live in a dedicated store, not on the node.
 
+## Phase-0 scaffolding
+
+- `electron/preload/index.ts` (`window.api`), `src/lib/electron.ts` (renderer-side accessor), `src/types/electron.d.ts`, and `electron/main/updater.ts` (no-op stub) are surfaces reserved for Phase 1. Don't wire them into renderer features without a Phase 1 plan.
+- `dsh-plugin/` is a local, untracked experiment. It is not part of the build and is ignored by ESLint / Prettier; never import from it into `src/` or `electron/`.
+
 ## Project context
 
 - **Solo project.** Author = reviewer. The `code-reviewer` rein still runs its hard-reject checklist (`as any`, raw `localStorage`, hard-coded keys, etc.) as a self-check, but no second pair of eyes is required. If you later add collaborators, re-tighten that gate.
@@ -69,23 +91,25 @@ The mindmap UI ships in four engineering waves. Each is locked by
 a `feat(mindmap-ui): stage <letter>` commit and has a corresponding
 `openspec/specs/mindmap-ui-stage-<letter>/spec.md`.
 
-| Stage | Commit   | Scope                                                                 |
-| ----- | -------- | --------------------------------------------------------------------- |
-| A1    | bda78e1  | React Flow canvas + dagre LR + collapse / expand + node affordance   |
-| A2    | b5ee851  | Hover path highlight + streaming shimmer + search-match outline      |
-| B     | ec4f5f7  | 3-section header + combobox + drawer + resizable markdown modal       |
-| C     | 0cda8a1  | Path / edge highlight + undo top-bar + outline + search + filter + background switcher + keyboard nav + touch long-press + MiniMap viewport |
-| D     | (this)   | Dark theme + CSS variables + animation tokens + `data-pattern` prop + style split + boundary tests + type tightening |
+| Stage | Commit  | Scope                                                                                                                                       |
+| ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1    | bda78e1 | React Flow canvas + dagre LR + collapse / expand + node affordance                                                                          |
+| A2    | b5ee851 | Hover path highlight + streaming shimmer + search-match outline                                                                             |
+| B     | ec4f5f7 | 3-section header + combobox + drawer + resizable markdown modal                                                                             |
+| C     | 0cda8a1 | Path / edge highlight + undo top-bar + outline + search + filter + background switcher + keyboard nav + touch long-press + MiniMap viewport |
+| D     | (this)  | Dark theme + CSS variables + animation tokens + `data-pattern` prop + style split + boundary tests + type tightening                        |
 
 ### Theme (Stage D)
 
-The app has a single global theme (`light` / `dark` / system) managed
-by `useTheme()` (`src/hooks/useTheme.ts`). It toggles
-`html.dark` and `html[data-theme]` together so the same hook
-serves both shadcn/Tailwind (`html.dark`) and FlowShell
-(`[data-theme]`). Persistence is `localStorage` under the key
-`progressive-mindmap:theme`. The toggle button lives in the
-mindmap panel toolbar (data-testid `mindmap-theme-toggle`).
+`useTheme()` (`src/hooks/useTheme.ts`) is a two-mode toggle:
+`light` ↔ `dark`. When no preference has been stored yet, the
+initial resolve falls back to the OS `prefers-color-scheme`; after
+that, the explicit choice wins. It toggles `html.dark` and `html[data-theme]`
+together so the same hook serves both shadcn/Tailwind (`html.dark`) and
+FlowShell (`[data-theme]`). Persistence is `localStorage` under the key
+`progressive-mindmap:theme` — the only UI preference kept there; user
+data goes through IndexedDB. The toggle button lives in the mindmap
+panel toolbar (data-testid `mindmap-theme-toggle`).
 
 ### CSS variables (Stage D)
 
@@ -102,8 +126,6 @@ are consumed by `[data-pattern=...]` rules in
 `@import` aggregator; the real rules live in
 `src/components/flow-shell/css/{theme,node,edge,canvas,animations}.css`.
 Adding a new rule? Put it in the partial that matches its concern.
-
-
 
 ## Adding agent rules
 

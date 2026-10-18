@@ -31,21 +31,6 @@ export type EdgeMarker = 'arrow' | 'dot' | 'none'
 export type EdgeAnimationCapability = 'none' | 'flow' | 'pulse'
 
 /**
- * Pure data input for an edge's per-instance size hint. The
- * strategy is *visual* — sizing is mostly determined by the two
- * endpoints, but we expose this so a strategy can e.g. add bend
- * padding.
- */
-export interface EdgeStyleInput {
-  /** Source node id. The renderer can look up its position. */
-  sourceId: string
-  /** Target node id. */
-  targetId: string
-  /** Whether the source has the streaming class on. */
-  isStreaming: boolean
-}
-
-/**
  * The edge strategy contract. Like `NodeShape`, the JSX component
  * is stored as `unknown` here; task 3 narrows it where the
  * renderer needs it.

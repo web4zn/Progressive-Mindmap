@@ -156,31 +156,3 @@ export interface MindMap {
   createdAt: number
   updatedAt: number
 }
-
-// ─── Helpers ────────────────────────────────────────────────────────
-
-/**
- * Type-guard: is this a v2 mindmap (i.e. does it carry the
- * `schemaVersion` field, and is that field equal to the current
- * canonical version)?
- *
- * Note: an older v2 with `schemaVersion === 1` is *not* "v2" by this
- * guard. The migration layer is responsible for normalising those
- * older v2 values forward.
- */
-export function isV2MindMap(m: MindMap | MindMapV1): m is MindMap {
-  return (m as MindMap).schemaVersion === MINDMAP_SCHEMA_VERSION
-}
-
-/**
- * Type-guard: the persisted data is on the v1 shape (no
- * `schemaVersion` field at all). v2 data that hasn't been
- * re-persisted yet will *also* lack the field, so callers must use
- * the migration function rather than relying on this guard alone.
- */
-export function isV1MindMap(m: unknown): m is MindMapV1 {
-  if (typeof m !== 'object' || m === null) return false
-  const obj = m as Record<string, unknown>
-  if (!('tree' in obj) || !Array.isArray(obj['tree'])) return false
-  return !('schemaVersion' in obj)
-}

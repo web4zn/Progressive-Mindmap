@@ -7,7 +7,8 @@ import { useChatStore } from '@/stores/chatStore'
 
 vi.mock('@/lib/llm-client', () => ({
   createClient: vi.fn(() => ({})),
-  streamChatWithRetry: vi.fn(),
+  streamChat: vi.fn(),
+  isAbortError: () => false,
   LLMClientError: class LLMClientError extends Error {
     code: string
     retryable: boolean

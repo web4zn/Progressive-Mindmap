@@ -45,3 +45,6 @@ skills-lock.json
 .sisyphus/
 .opencode/
 .mavis/
+.omo/
+.codebuddy/
+dsh-plugin/
