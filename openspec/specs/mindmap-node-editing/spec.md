@@ -1,9 +1,7 @@
 ## Purpose
 
 Allow users to edit mindmap node labels, summaries, and Markdown content through a modal dialog, with validation and user-edit tracking.
-
 ## Requirements
-
 ### Requirement: Node edit mode
 系统 SHALL 允许用户双击节点进入编辑模式。编辑模式下 SHALL 弹出居中 Modal 弹窗（`MindMapEditModal`），包含 label 输入框、summary 文本域，以及当 `contentType` 为 `'markdown'` 时的 content Markdown 编辑器与预览切换按钮。按 Enter 确认编辑并调用 `mindmapStore.updateNode`，按 Escape 或点击 Modal 外区域取消编辑。确认后节点 `editedByUser` 标记为 true。
 
@@ -33,3 +31,30 @@ Allow users to edit mindmap node labels, summaries, and Markdown content through
 #### Scenario: Add child via context menu
 - **WHEN** 用户右键选择「添加子节点」
 - **THEN** `mindmapStore.addChildNode` 调用，新节点创建后 dagre 重新布局
+
+### Requirement: Move up / move down direction
+
+The node context menu SHALL move a node within its sibling order:
+
+- 上移 SHALL swap the node with its previous sibling (index − 1),
+- 下移 SHALL swap the node with its next sibling (index + 1).
+
+The corresponding menu items SHALL be disabled when the node is already first /
+last among its siblings. The operation SHALL be recorded in the undo timeline.
+
+#### Scenario: Move a middle node up
+
+- **WHEN** a node is the second of three siblings and the user clicks 上移
+- **THEN** it swaps with the first sibling and becomes first
+- **AND** the move can be undone
+
+#### Scenario: Move a middle node down
+
+- **WHEN** a node is the second of three siblings and the user clicks 下移
+- **THEN** it swaps with the third sibling and becomes last
+
+#### Scenario: Disable at the edges
+
+- **WHEN** a node is the first (or last) among its siblings
+- **THEN** 上移 (or 下移) is disabled
+

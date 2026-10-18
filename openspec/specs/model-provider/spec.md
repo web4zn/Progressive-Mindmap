@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Model providers: provider data model, add/edit/delete flows, preset templates, key handling and model selection.
+## Requirements
 ### Requirement: Provider data model
 系统 SHALL 使用以下数据模型表示模型提供商：
 
@@ -27,19 +29,31 @@ Model {
 - **THEN** 系统生成唯一 ID，记录创建和更新时间，存储所有必填字段
 
 ### Requirement: Add provider
-系统 SHALL 允许用户添加自定义模型提供商。用户 MUST 提供提供商名称、API 端点 URL 和 API 密钥。用户 SHALL 可选择手动输入模型列表，或通过 API 自动获取可用模型列表（如果端点支持）。
+
+系统 SHALL 允许用户添加自定义模型提供商。用户 MUST 提供提供商名称和 API 端点 URL；API 密钥 SHALL 对远端端点必填，对本地端点（`localhost`、`127.0.0.1`、`::1`、`0.0.0.0`）可留空。用户 SHALL 可手动输入模型列表，或通过 API 自动获取可用模型列表（如果端点支持）；本地端点在密钥为空时 SHALL 仍允许"获取模型列表"。
+
+系统 SHALL 在构造客户端时规范化端点（去掉末尾 `/`）。对本地端点且密钥为空的情况，系统 SHALL 使用占位密钥以满足 OpenAI SDK 的非空要求，且 SHALL NOT 将其持久化为用户密钥。
 
 #### Scenario: Add provider with valid configuration
+
 - **WHEN** 用户填写提供商名称、API 端点和 API 密钥，并提交
 - **THEN** 系统保存提供商配置，并显示在提供商列表中
 
+#### Scenario: Add a local provider without an API key
+
+- **WHEN** 用户添加端点为 `http://localhost:11434/v1` 的提供商且不填写 API 密钥
+- **THEN** 校验通过并保存提供商配置
+- **AND** "获取模型列表"按钮可用
+
 #### Scenario: Add provider and auto-fetch models
+
 - **WHEN** 用户添加提供商后选择"获取模型列表"
-- **THEN** 系统调用该提供商的 /models 端点获取可用模型列表，并填充到模型列表中
+- **THEN** 系统调用该提供商的 `/models` 端点获取可用模型列表，并填充到模型列表中
 
 #### Scenario: Add provider with manual model entry
-- **WHEN** 提供商端点不支持 /models API
-- **THEN** 用户可手动输入模型 ID 添加到模型列表
+
+- **WHEN** 用户手动输入模型列表并提交
+- **THEN** 系统保存提供商配置，并在模型选择器中显示这些模型
 
 ### Requirement: Edit provider
 系统 SHALL 允许用户编辑已有的提供商配置。可修改的字段 SHALL 包括名称、API 端点、API 密钥和模型列表。
@@ -107,3 +121,4 @@ Model {
 #### Scenario: No available models
 - **WHEN** 用户未配置任何提供商或所有模型均被禁用
 - **THEN** 模型选择器显示提示"请先配置模型提供商"，发送按钮禁用
+

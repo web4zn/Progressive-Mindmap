@@ -184,4 +184,39 @@ describe('sanitizeHtml', () => {
       expect(result).toContain('&gt;')
     })
   })
+
+  describe('remote resource isolation', () => {
+    it('strips the src of remote images but keeps the element and alt text', () => {
+      const result = sanitizeHtml(
+        '<img src="https://tracker.example/pixel.png" alt="diagram">',
+      )
+      expect(result).toContain('<img')
+      expect(result).toContain('alt="diagram"')
+      expect(result).not.toContain('tracker.example')
+      expect(result).not.toContain('src=')
+    })
+
+    it('keeps data: and blob: image sources', () => {
+      const data = sanitizeHtml('<img src="data:image/png;base64,AAAA" alt="x">')
+      expect(data).toContain('src="data:image/png;base64,AAAA"')
+      const blob = sanitizeHtml('<img src="blob:http://localhost/abc" alt="y">')
+      expect(blob).toContain('src="blob:http://localhost/abc"')
+    })
+
+    it('externalises http(s) links so they open outside the app window', () => {
+      const result = sanitizeHtml('<a href="https://example.com">link</a>')
+      expect(result).toContain('target="_blank"')
+      expect(result).toContain('rel="noopener noreferrer"')
+    })
+
+    it('does not mark relative or fragment links as external', () => {
+      const result = sanitizeHtml('<a href="#section">jump</a>')
+      expect(result).not.toContain('target="_blank"')
+    })
+
+    it('strips data:/blob: hrefs from links', () => {
+      const result = sanitizeHtml('<a href="data:text/html,<b>x</b>">x</a>')
+      expect(result).not.toContain('href="data:')
+    })
+  })
 })

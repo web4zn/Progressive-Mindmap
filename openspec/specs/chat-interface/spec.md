@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Chat interface: message input/submission, streaming display, markdown rendering, message actions and the layout shell.
+## Requirements
 ### Requirement: Message input and submission
 系统 SHALL 提供消息输入区域，用户可输入文本并提交发送给当前选中的 LLM 模型。提交方式 SHALL 支持点击发送按钮和 Enter 键。Shift+Enter SHALL 插入换行而非提交。输入区域 SHALL 支持多行文本，并随内容自动调整高度。
 
@@ -127,3 +129,33 @@
 #### Scenario: Narrow screen full width
 - **WHEN** 用户在小屏幕（<768px）上使用应用
 - **THEN** 图谱面板隐藏，消息列表和输入栏占满可用宽度
+
+### Requirement: Streaming retry policy
+
+The system SHALL retry a failed streaming chat request only when all of the
+following hold:
+
+- no content has been delivered to the UI yet (retrying after a partial stream
+  would duplicate tokens),
+- the failure is retryable (connection error, HTTP 429, or HTTP 5xx),
+- the request was not aborted by the user.
+
+At most two retries SHALL be attempted, with exponential backoff (500 ms, then
+1 s). Non-retryable failures (e.g. HTTP 401/404) SHALL surface immediately.
+
+#### Scenario: Retry before any content arrives
+
+- **WHEN** the first streaming attempt fails with a retryable error before any token is shown
+- **THEN** the system retries after the backoff delay
+- **AND** the successful attempt streams normally
+
+#### Scenario: Do not retry after partial output
+
+- **WHEN** the stream fails after content has already been displayed
+- **THEN** no retry is attempted and the message is marked as an error
+
+#### Scenario: Do not retry an abort
+
+- **WHEN** the user stops generation
+- **THEN** the abort is not retried and the partial content is kept as complete
+
