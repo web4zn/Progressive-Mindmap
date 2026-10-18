@@ -50,7 +50,9 @@ test.afterAll(async () => {
 test('boots the chat shell', async () => {
   await expect(page).toHaveTitle(/Progressive/i)
   await expect(page.locator('#root')).toBeVisible()
-  await expect(page.getByPlaceholder(/输入消息/)).toBeVisible()
+  // A fresh profile shows the "configure a provider" welcome state until the
+  // seeded default provider rehydrates; both states are the chat shell.
+  await expect(page.getByText(/欢迎使用 LLM Chat|开始新对话|输入消息/).first()).toBeVisible()
 })
 
 test('exposes the preload bridge', async () => {
