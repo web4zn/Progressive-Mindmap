@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { MainToWorkerMessage, WorkerToMainMessage } from '../lib/agent/types'
 import { ReActRunner } from '../lib/agent/ReActRunner'
 import { normalizeEndpoint, resolveApiKey } from '../lib/provider-utils'
@@ -36,13 +36,20 @@ function getPatternHint(pattern: string): string {
 }
 
 function createModel(apiKey: string, apiEndpoint: string, modelId: string) {
-  const openaiProvider = createOpenAI({
+  // `@ai-sdk/openai-compatible` — NOT `@ai-sdk/openai` — because the agent has
+  // to round-trip thinking-mode `reasoning_content`. Thinking models (DeepSeek
+  // thinking mode, Moonshot, GLM, Qwen …) reject a `tools`-carrying request
+  // whose earlier assistant turns omit their reasoning, and only the
+  // OpenAI-compatible provider maps reasoning parts to `reasoning_content`
+  // and parses it back out of the response.
+  const provider = createOpenAICompatible({
+    name: 'progressive-mindmap',
     // Local OpenAI-compatible servers may not use a key; the SDK requires a
     // non-empty string, so resolve it the same way the chat client does.
     apiKey: resolveApiKey(apiEndpoint, apiKey),
     baseURL: normalizeEndpoint(apiEndpoint),
   })
-  return openaiProvider.chat(modelId) as never
+  return provider.chatModel(modelId)
 }
 
 function errorMessage(runId: string, error: string): WorkerToMainMessage {
